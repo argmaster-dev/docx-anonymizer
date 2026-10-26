@@ -71,8 +71,9 @@ function passportParts(text, ctx) {
     let line = text.slice(at, at + 200).split('\n')[0];
     const df = DATE_FIRST_RE.exec(line);
     if (df) {
+      // дата перед органом — вместе с «г.» / «года» («выдан 12.03.2006 г. ОВД …»): ничего между датой и органом не остаётся
       const d = DATE_IN_TEXT_RE.exec(line);
-      add('PASSPORT_DATE', at + d.index, at + d.index + d[0].length);
+      add('PASSPORT_DATE', at + d.index, at + df[0].replace(/[ \u00a0,]+$/u, '').length);
       at += df[0].length;
       line = line.slice(df[0].length);
     }

@@ -313,11 +313,14 @@ function medical(kit, name, variant) {
     p(r(`Пациент: ${per(d, x)}, дата рождения: ${d.add('BIRTHDATE', date(d, 1960, 2005))}`)),
     p(r(`Полис ОМС ${val.oms(d)}, СНИЛС ${val.snils(d)}.`)),
     p(r(`Адрес: ${address(d, city, 'кв.')}.`)),
+    // до сведений о здоровье: в PDF абзацы склеиваются, а значение здоровья идёт до конца строки
+    p(r(`${neg(d, 'Приём 12.03.2026 в 10:30', 'HEALTH')}, ${neg(d, 'рост 178 см', 'HEALTH')}.`)),
   ];
   if (variant === 'discharge') {
     body.push(
       p(r(`Основной диагноз: ${d.add('HEALTH', `${code} ${text}`)}.`)),
-      p(r(`Сопутствующий диагноз: ${d.add('HEALTH', text2)}; рекомендовано наблюдение.`)),
+      // «;» и следующая фраза — продолжение сведений о здоровье (второе ревью WP12-C): значение до конца строки
+      p(r(`Сопутствующий диагноз: ${d.add('HEALTH', `${text2}; рекомендовано наблюдение`)}.`)),
       p(r(`Код МКБ-10: ${d.add('HEALTH', code2)}`)),
     );
   } else if (variant === 'driver') {
@@ -336,7 +339,7 @@ function medical(kit, name, variant) {
       ),
     );
   }
-  body.push(p(r(`${neg(d, 'Приём 12.03.2026 в 10:30', 'HEALTH')}, ${neg(d, 'рост 178 см', 'HEALTH')}.`)), p(r(`Врач: ${per(d, doc)}`)));
+  body.push(p(r(`Врач: ${per(d, doc)}`)));
   return finish(d, body.join(''), { docTitle: 'Справка', creator: per(d, doc) });
 }
 

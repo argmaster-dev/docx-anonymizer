@@ -711,10 +711,9 @@ export function detectNamesAndKb(doc, entities, ctx = {}) {
   // 4г. Значение под меткой строки таблицы «Фамилия | Чернышева», «Имя | Ангелина», «ФИО | Иванов Иван Иванович», «Surname |
   //     Smith» (анкеты; WP11-E): одно слово с заглавной, ФИО и полное имя — до 3 слов; PERSON labeled
   if (wantP) {
-    const { row: rows, head: headRows } = tableHeaders(doc);
+    const rows = tableHeaders(doc).row;
     for (const s of streams) {
-      // строка заголовка таблицы из 3+ столбцов («Ф.И.О. | Диагноз | Госномер») — не «метка | значение» (0.5, WP12-C)
-      const head = s.type === 'live' && s.pid && !headRows.has(s.pid) ? rows.get(s.pid) : undefined;
+      const head = s.type === 'live' && s.pid ? rows.get(s.pid) : undefined;
       if (!head || head.length > 30) continue;
       const lab = ROW_PERSON_LABEL_RE.exec(head.trim());
       if (!lab) continue;

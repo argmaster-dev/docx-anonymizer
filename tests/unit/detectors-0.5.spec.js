@@ -126,10 +126,10 @@ describe('ревью WP12-C: таблицы и контекст', () => {
     expect(run('IP', '10.4.12.200', { columnHeader: 'Версия' })).toEqual([]);
     expect(run('IP', '10.4.12.200', { columnHeader: 'IP-адрес' }).length).toBe(1);
   });
-  it('строка заголовка таблицы: ячейка слева — не метка («Ф.И.О. | Диагноз | Госномер»)', () => {
-    expect(run('HEALTH', 'Госномер', { rowHeader: 'Диагноз', headerRow: true })).toEqual([]);
-    expect(run('HEALTH', 'Примечание', { rowHeader: 'Диагноз', headerRow: true })).toEqual([]);
-    expect(run('HEALTH', 'Госномер', { rowHeader: 'Диагноз' })).toEqual([]); // ячейка — сама метка
+  // заголовок таблицы по строке не определяется (ревью 2: «Паспорт | 4506 123456 | Дата рождения | …» — тоже первая строка);
+  // ячейка, которая сама начинается с метки, — название столбца, а не значение
+  it('ячейка-метка в строке таблицы — не значение соседней метки («Ф.И.О. | Диагноз | Госномер»)', () => {
+    expect(run('HEALTH', 'Госномер', { rowHeader: 'Диагноз' })).toEqual([]);
     expect(run('HEALTH', 'J45.0 Бронхиальная астма', { rowHeader: 'Диагноз' })[0]).toMatchObject({ start: 0, end: 24 });
   });
   it('таблица PDF целиком: заголовки на месте, значения под ними замаскированы, коды ОКПД2 — нет', async () => {
@@ -145,7 +145,8 @@ describe('ревью WP12-C: таблицы и контекст', () => {
     const doc = fromText(blocks, { name: 'a.pdf', size: 1 });
     const a = await analyze(doc, defaultSettings());
     const out = new TextDecoder().decode(applyDecisions(doc, a.groups, { placeholderLanguage: 'ru', textFormat: 'md' }).bytes);
-    expect(out).toContain('| Ф.И.О. | Диагноз | Госномер | VIN | Код ОКПД2 |');
+    // «Диагноз» под «Ф.И.О.» — ФИО анкеты (как в 0.4: лишнее маскирование заголовка дешевле утечки первой строки данных)
+    expect(out).toMatch(/\| Ф\.И\.О\. \| [^|]+ \| Госномер \| VIN \| Код ОКПД2 \|/);
     for (const v of ['Иванов', 'J45.0', 'А123ВС77', 'XTA21099071234567']) expect(out).not.toContain(v);
     expect(out).toContain('26.20.11.110');
     // вернуть реестр помощника detect(): только детекторы идентификаторов

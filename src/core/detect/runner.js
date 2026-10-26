@@ -102,8 +102,6 @@ export async function analyze(doc, settings, opts = {}) {
       attrKind: stream.attrKind,
       columnHeader: headers.column.get(stream.pid),
       rowHeader: headers.row.get(stream.pid),
-      // строка заголовка таблицы из 3+ столбцов: ячейка слева — не метка значения (0.5, WP12-C)
-      headerRow: headers.head.has(stream.pid) || undefined,
     };
     for (const [categoryId, list] of detectors) {
       if (!isEnabled(categoryId)) continue;

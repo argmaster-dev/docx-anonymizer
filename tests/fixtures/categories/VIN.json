@@ -34,7 +34,7 @@
       "expect": [
         {
           "text": "XTA210990Y1234567",
-          "level": "labeled"
+          "level": "validated"
         }
       ]
     },
@@ -118,6 +118,55 @@
           "level": "labeled"
         }
       ]
+    },
+    {
+      "text": "код ТС XTA21099071234567",
+      "expect": [
+        {
+          "text": "XTA21099071234567",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "Идентификационный код автомобиля WVWZZZ1JZXW000001",
+      "expect": [
+        {
+          "text": "WVWZZZ1JZXW000001",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "партия автомобилей: XTA219010K0123456 и XTA219010K0123457",
+      "expect": [
+        {
+          "text": "XTA219010K0123456",
+          "level": "validated"
+        },
+        {
+          "text": "XTA219010K0123457",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "VIN: XTA-21099-071234567",
+      "expect": [
+        {
+          "text": "XTA-21099-071234567",
+          "level": "labeled"
+        }
+      ]
+    },
+    {
+      "text": "Номер кузова Z94CB41AAER123456",
+      "expect": [
+        {
+          "text": "Z94CB41AAER123456",
+          "level": "validated"
+        }
+      ]
     }
   ],
   "negative": [
@@ -159,6 +208,12 @@
     },
     {
       "text": "Партия LOT2026AB1234567 годна до 2027"
+    },
+    {
+      "text": "арт. XTA21099071234567"
+    },
+    {
+      "text": "S/N WVWZZZ1JZXW000001"
     }
   ]
 }

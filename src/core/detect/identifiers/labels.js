@@ -125,7 +125,7 @@ export const EXTRA_RX = {
   INVOICE_NO: `(?:номер${W})?сч[её]т${A}(?:-фактур${A}|${W}на${W}оплату)?|упд|invoice`,
   CLIENT_NO: `(?:номер|код)${W}(?:клиента|абонента|покупателя)|клиент${A}|абонент${A}|(?:client|customer|account)${W}(?:id|no\\.?|number|#)`,
   IP_REG: `патент${A}(?:${W}на${W}(?:изобретение|полезную${W}модель|промышленный${W}образец))?|товарн${A}${W}знак${A}|знак${A}${W}обслуживания|программ${A}${W}для${W}эвм|баз${A}${W}данных|trademark|patent`,
-  HEALTH: `(?:основн${A}${W}|сопутствующ${A}${W}|клиническ${A}${W}|заключительн${A}${W})?диагноз${A}|(?:код${W})?мкб(?:-?10)?|сведения${W}о${W}здоровье|состояни${A}${W}здоровья|группа${W}инвалидности|инвалидност${A}|diagnosis|icd(?:-?10)?(?:${W}code)?|medical${W}condition`,
+  HEALTH: `(?:основн${A}${W}|сопутствующ${A}${W}|клиническ${A}${W}|заключительн${A}${W})?диагноз${A}(?:${W}(?:основн|сопутствующ|клиническ|заключительн|окончательн|направительн)${A})?|(?:основн|сопутствующ)${A}(?=${S}:)|(?:код${W})?мкб(?:-?10)?|анамнез${A}|аллерги${A}|сведения${W}о${W}здоровье|состояни${A}${W}здоровья|группа${W}инвалидности|инвалидност${A}|diagnosis|icd(?:-?10)?(?:${W}code)?|medical${W}condition`,
   SPECIAL: `вероисповедани${A}|религи${A}|религиозн${A}${W}(?:убеждени${A}|взгляд${A})|национальност${A}|этническ${A}${W}(?:принадлежност${A}|происхождени${A})|политическ${A}${W}(?:взгляд${A}|убеждени${A})|партийност${A}|судимост${A}|сведения${W}о${W}судимости|religion|ethnicity|ethnic${W}origin|political${W}(?:views|opinions)|criminal${W}record|convictions`,
 };
 
@@ -203,8 +203,7 @@ export function labelWindows(text, start, ctx, size = LABEL_WINDOW) {
   const nl = raw.lastIndexOf('\n');
   const w = nl >= 0 ? raw.slice(nl + 1) : raw;
   const windows = [w];
-  // строка заголовка таблицы («Ф.И.О. | Диагноз | Госномер») — не «метка | значение» (0.5, `headerRow` из detect/tables.js)
-  if ((nl >= 0 || from === 0) && /^[\s:—–-]*$/u.test(w) && !ctx?.stream?.headerRow) {
+  if ((nl >= 0 || from === 0) && /^[\s:—–-]*$/u.test(w)) {
     const row = ctx?.stream?.rowHeader;
     const col = ctx?.stream?.columnHeader;
     if (row) windows.push(`${String(row).trim().slice(-size)} ${w}`);
