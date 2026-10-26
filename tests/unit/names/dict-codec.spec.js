@@ -2,8 +2,12 @@
 import { describe, it, expect } from 'vitest';
 import { encodeList, decodeList } from '../../../src/core/detect/names/dict/codec.js';
 import { getDicts, surnameLemmas, surnameSuffixInfo, bigFirstNameInfo } from '../../../src/core/detect/names/dict/index.js';
-import RU_SURNAMES from '../../../src/core/detect/names/dict/ru-surnames.js';
+import { readFileSync } from 'node:fs';
+import { parseDictFile } from '../../../src/core/detect/names/dict/load.js';
 import { isStopWord, COMMON_NOUNS } from '../../../src/core/detect/names/lexicon.js';
+
+// с 0.5 (WP12-A) упакованный список — секция файла пакета vendor/dict/ru-surnames.txt, а не модуль
+const RU_SURNAMES = parseDictFile(readFileSync('vendor/dict/ru-surnames.txt', 'utf8')).get('SURNAMES');
 
 describe('кодек front-coding', () => {
   it('round-trip: кириллица (с дефисом) и латиница, порядок — сортировка', () => {

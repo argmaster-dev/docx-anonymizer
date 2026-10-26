@@ -6,6 +6,9 @@
 import { CoreError } from '../errors.js';
 import { buildLayout, isUpright, mulTransform, orientPage, MONO_FONT_RE } from './layout.js';
 
+// сигнатура — в sniff.js (хост распознаёт PDF, не загружая этот модуль; WP12-A)
+export { isPdf } from './sniff.js';
+
 /** Меньше стольких букв на странице — страница «без текста» (скан, картинка). */
 export const MIN_LETTERS = 20;
 /** Лимит страниц по умолчанию (TOO_LARGE с details.pages). */
@@ -28,19 +31,6 @@ export const BASE_DOC_OPTIONS = Object.freeze({
 });
 
 const BOLD_FONT_RE = /bold|black|heavy|semibold|demi|[-,]bd\b|w[6-9]00/i;
-
-/**
- * Сигнатура PDF: «%PDF-» в первых 1024 байтах (так проверяют и читатели PDF — перед заголовком бывает мусор).
- * @param {Uint8Array} bytes
- */
-export function isPdf(bytes) {
-  if (!bytes || bytes.length < 5) return false;
-  const n = Math.min(bytes.length - 4, 1024);
-  for (let i = 0; i < n; i++) {
-    if (bytes[i] === 0x25 && bytes[i + 1] === 0x50 && bytes[i + 2] === 0x44 && bytes[i + 3] === 0x46 && bytes[i + 4] === 0x2d) return true;
-  }
-  return false;
-}
 
 /**
  * Число букв (\p{L}) в текстовых элементах страницы.

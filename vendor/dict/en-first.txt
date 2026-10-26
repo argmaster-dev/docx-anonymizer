@@ -1,8 +1,6 @@
-// СГЕНЕРИРОВАНО scripts/make-dicts.mjs — не редактировать вручную (npm run dicts). WP7, FR-23.
-// Английские имена (ранг ≤ 5000, муж. и жен.): 4860 записей. Формат — front-coding (codec.js).
-// Источник: US Census 1990, https://www2.census.gov/topics/genealogy/1990surnames/ (dist.male.first, dist.female.first), public domain
-// Дата выгрузки: 2026-10-15. Лицензии и атрибуция — NOTICE.md.
-export default `L0aaron
+# make-dicts.mjs (npm run dicts), 2026-10-15: English first names (US Census 1990, rank <= 5000), 4860. Sources and licenses: NOTICE.md
+#=FIRST
+L0aaron
 1bbie
 3y
 2dul
@@ -4861,4 +4859,4 @@ export default `L0aaron
 4ida
 1ula
 3ema
-3ma`;
+3ma

@@ -4,7 +4,8 @@
 // один на жизнь offscreen-документа; документ закрывается (loadingTask.destroy) после каждого файла.
 // CMaps и стандартные шрифты pdf.js читает сам через fetch по chrome-extension:// (useWorkerFetch) — CSP connect-src 'self',
 // ни одного http(s)-запроса (NFR-01). Пути строятся от import.meta.url: chrome.runtime.getURL в воркере нет.
-import { extractPdf } from '../core/pdf/extract.js';
+// С 0.5 (WP12-A, К14) и разбор PDF ядра (core/pdf/extract.js + layout.js) не входит в worker.js: esbuild выносит его
+// в отдельный модуль offscreen/chunks/*.js (динамический import ниже), воркер грузит его из своего пакета при первом PDF.
 
 /**
  * @param {{vendorBase?: string, maxPages?: number}} [o] vendorBase — URL каталога vendor/pdfjs/ (со слешем в конце)
@@ -37,7 +38,7 @@ export function createPdfExtractor(o = {}) {
   }
 
   return async (bytes, opts = {}) => {
-    const pdfjs = await load();
+    const [pdfjs, { extractPdf }] = await Promise.all([load(), import('../core/pdf/extract.js')]);
     return extractPdf(pdfjs, bytes, {
       ...opts,
       maxPages: o.maxPages,

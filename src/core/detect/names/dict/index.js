@@ -1,14 +1,42 @@
 // Словари ФИО для словарного детектора (WP7, FR-23, ступень 1 NER): ленивое декодирование и морфологические запросы.
-// Модули словарей генерирует scripts/make-dicts.mjs; источники и лицензии — NOTICE.md.
-// Словари попадают только в бандл offscreen/worker.js (content script модули names не импортирует, К15).
+// С 0.5 (WP12-A) словари — не код, а файлы пакета vendor/dict/*.txt (генерирует scripts/make-dicts.mjs; источники и лицензии —
+// vendor/dict/NOTICE.md): их один раз на жизнь воркера читает и передаёт сюда names/dict/load.js (`loadDicts`). Запросы
+// остаются синхронными; до загрузки getDicts() бросает ошибку. Сбой загрузки — пустые списки (остаются курируемые имена
+// lexicon.js), анализ идёт без словарного детектора, хост выдаёт предупреждение DICT_FAILED (docs/contracts.md §2).
+// Списки ставятся один раз до первого анализа: кэши разборов слов в детекторах (person-dict.js) не сбрасываются.
 
-import RU_SURNAMES from './ru-surnames.js';
-import { MALE, FEMALE, UNISEX, AMBIGUOUS } from './ru-first.js';
-import EN_FIRST from './en-first.js';
-import EN_SURNAMES from './en-surnames.js';
 import { decodeList } from './codec.js';
 import { declineFirstName, declineSurname, lemmaCandidates } from '../morph.js';
 import { lowerE, MALE_NAMES_RU, FEMALE_NAMES_RU, AMBIGUOUS_NAMES_RU, COMMON_NOUNS } from '../lexicon.js';
+
+/**
+ * Упакованные списки (строки codec.js) — содержимое секций файлов vendor/dict/*.txt.
+ * @typedef {object} DictSources
+ * @property {string} ruSurnames  ru-surnames.txt #=SURNAMES
+ * @property {string} male        ru-first.txt #=MALE
+ * @property {string} female      ru-first.txt #=FEMALE
+ * @property {string} unisex      ru-first.txt #=UNISEX
+ * @property {string} ambiguous   ru-first.txt #=AMBIGUOUS
+ * @property {string} enFirst     en-first.txt #=FIRST
+ * @property {string} enSurnames  en-surnames.txt #=SURNAMES
+ */
+
+/** Пустые списки: словари не загрузились — остаются только курируемые имена lexicon.js. */
+export const EMPTY_DICT_SOURCES = Object.freeze({ ruSurnames: 'R', male: 'R', female: 'R', unisex: 'R', ambiguous: 'R', enFirst: 'L', enSurnames: 'L' });
+
+/** @type {DictSources | null} */
+let SRC = null;
+
+/**
+ * Устанавливает упакованные списки (load.js; тесты). Кэш декодирования и разборов сбрасывается.
+ * @param {DictSources | null} src  null — снова «не загружены»
+ */
+export function setDictSources(src) {
+  SRC = src;
+  D = null;
+  surnameMemo.clear();
+  suffixMemo.clear();
+}
 
 /** @typedef {'m'|'f'} Gender */
 /** @typedef {{lemma: string, gender: Gender, cases: number[]}} FormInfo */
@@ -30,13 +58,14 @@ let D = null;
 /** @returns {Dicts} */
 export function getDicts() {
   if (D) return D;
+  if (!SRC) throw new Error('Словари ФИО не загружены: до анализа вызовите loadDicts() (names/dict/load.js)');
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   /** @type {Map<string, 'm'|'f'|'u'>} */
   const ruFirst = new Map();
   for (const [list, g] of /** @type {[string, 'm'|'f'|'u'][]} */ ([
-    [MALE, 'm'],
-    [FEMALE, 'f'],
-    [UNISEX, 'u'],
+    [SRC.male, 'm'],
+    [SRC.female, 'f'],
+    [SRC.unisex, 'u'],
   ])) {
     for (const w of decodeList(list)) ruFirst.set(w, g);
   }
@@ -67,16 +96,16 @@ export function getDicts() {
       }
     }
   }
-  const ruAmbiguous = new Set(decodeList(AMBIGUOUS));
+  const ruAmbiguous = new Set(decodeList(SRC.ambiguous));
   for (const w of AMBIGUOUS_NAMES_RU) ruAmbiguous.add(w);
 
   D = {
-    ruSurnames: new Set(decodeList(RU_SURNAMES)),
+    ruSurnames: new Set(decodeList(SRC.ruSurnames)),
     ruFirst,
     ruFirstForms,
     ruAmbiguous,
-    enFirst: new Set(decodeList(EN_FIRST)),
-    enSurnames: new Set(decodeList(EN_SURNAMES)),
+    enFirst: new Set(decodeList(SRC.enFirst)),
+    enSurnames: new Set(decodeList(SRC.enSurnames)),
     decodeMs: 0,
   };
   D.decodeMs = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;

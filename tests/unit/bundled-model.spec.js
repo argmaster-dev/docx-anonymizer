@@ -135,6 +135,53 @@ describe('readPackageFile: только собственный пакет рас
     expect(err.message).toBe('Файл пакета расширения не найден');
   });
 
+  it('словари ФИО (WP12-A): /vendor/dict/<имя>.txt своего пакета → байты', async () => {
+    own();
+    const fetch = vi.fn(async (url) =>
+      url === 'chrome-extension://abcdefgh/vendor/dict/ru-first.txt' ? { ok: true, arrayBuffer: async () => new Uint8Array([35, 61]).buffer } : { ok: false },
+    );
+    vi.stubGlobal('fetch', fetch);
+    expect([...(await readPackageFile('chrome-extension://abcdefgh/vendor/dict/ru-first.txt'))]).toEqual([35, 61]);
+    const err = await readPackageFile('chrome-extension://abcdefgh/vendor/dict/none.txt').catch((e) => e);
+    expect(err.code).toBe('IO');
+    expect(err.message).toBe('Файл пакета расширения не найден');
+  });
+
+  it('словари ФИО: обход пути, другой каталог vendor/, не .txt, вложенный путь, чужой origin, http(s) → IO до вызова fetch', async () => {
+    own();
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    for (const url of [
+      'chrome-extension://abcdefgh/vendor/dict/../../manifest.json',
+      'chrome-extension://abcdefgh/vendor/dict/../pdfjs/pdf.mjs',
+      'chrome-extension://abcdefgh/vendor/dict/%2e%2e/x.txt',
+      'chrome-extension://abcdefgh/vendor/dict%2fru-first.txt',
+      'chrome-extension://abcdefgh/vendor/dict\\ru-first.txt',
+      'chrome-extension://abcdefgh/vendor/dict/ru-first.js',
+      'chrome-extension://abcdefgh/vendor/dict/NOTICE.md',
+      'chrome-extension://abcdefgh/vendor/dict/sub/ru-first.txt',
+      'chrome-extension://abcdefgh/vendor/dict/.txt',
+      'chrome-extension://abcdefgh/vendor/ru-first.txt',
+      'chrome-extension://abcdefgh/vendor/pdfjs/x.txt',
+      'chrome-extension://abcdefgh/models/ru-first.txt',
+      'chrome-extension://abcdefgh/vendor/dict/ru-first.zip',
+      'chrome-extension://abcdefgh/vendor/dict/ru-first.txt?x=1',
+      'chrome-extension://abcdefgh/vendor/dict/ru-first.txt#x',
+      'chrome-extension://abcdefgh:8080/vendor/dict/ru-first.txt',
+      'chrome-extension://user@abcdefgh/vendor/dict/ru-first.txt',
+      'chrome-extension://other/vendor/dict/ru-first.txt',
+      'https://example.invalid/vendor/dict/ru-first.txt',
+      'http://127.0.0.1/vendor/dict/ru-first.txt',
+      'data:text/plain,%23=A',
+      'blob:chrome-extension://abcdefgh/vendor/dict/ru-first.txt',
+    ]) {
+      const err = await readPackageFile(url).catch((e) => e);
+      expect(err, url).toBeInstanceOf(ModelStoreError);
+      expect(err.code, url).toBe('IO');
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('вне контекста расширения (нет self.location) → IO', async () => {
     vi.stubGlobal('self', undefined);
     const err = await readPackageFile('chrome-extension://abcdefgh/models/ok.zip').catch((e) => e);

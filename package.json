@@ -26,6 +26,7 @@
     "gen-genre-fixtures": "node scripts/gen-genre-fixtures.mjs",
     "gen-heldout-fixtures": "node scripts/gen-heldout-fixtures.mjs",
     "eval-genres": "node scripts/eval-genres.mjs",
+    "bench": "node scripts/bench.mjs",
     "bench-ner": "node scripts/bench-ner.mjs",
     "dicts": "node scripts/make-dicts.mjs",
     "icons": "node scripts/make-icons.mjs"

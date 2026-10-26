@@ -8,6 +8,9 @@
 #   (гейт — dist-e2e/models/index.json) — только локально. PDF-фикстуры закоммичены: их извлечение сверяется со снимками
 #   всегда, а регенерация в pdf-fixtures.spec.js нужна Chromium Playwright — в задании test его нет, она пропускается (локально тоже
 #   можно выключить SKIP_PDF_REGEN=1); LibreOffice-варианты фикстур пересобираются только локально (npm run gen-pdf-fixtures).
+# Версия 0.5 (WP12-A): actions — мажорные версии на рантайме Node 24 (checkout v7, setup-node v7, upload-artifact v7; сверено
+#   по релизам 26.10.2026), Node для сборки и тестов — LTS 24 (26 становится LTS 28.10.2026), раннер закреплён: ubuntu-24.04
+#   вместо ubuntu-latest (образ не сменится сам при переводе ubuntu-latest на новую версию Ubuntu).
 name: CI
 
 on:
@@ -28,13 +31,13 @@ permissions:
 jobs:
   test:
     name: lint, test, build, pack
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       # xmllint — проверка XML результата в tests/integration/{sample,fixtures-docs}.spec.js (без него эти проверки пропускаются)
       - name: Install xmllint
@@ -49,7 +52,7 @@ jobs:
           CI: '1'
       - run: npm run build
       - run: npm run pack
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: extension-zip
           path: release/*.zip
@@ -58,13 +61,13 @@ jobs:
   e2e:
     name: e2e (Chromium, headless)
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - name: Install Playwright Chromium
@@ -76,7 +79,7 @@ jobs:
         env:
           SKIP_LIBREOFFICE: '1'
           CI: '1'
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: e2e-test-output

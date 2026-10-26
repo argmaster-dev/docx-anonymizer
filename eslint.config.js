@@ -2,7 +2,8 @@ import js from '@eslint/js';
 import globals from 'globals';
 
 export default [
-  { ignores: ['dist/**', 'dist-e2e/**', '**/.venv/**', 'node_modules/**', 'test-output/**'] },
+  // .claude/** — рабочие копии (git worktree) агентов внутри каталога репозитория: в git их нет, линтуются в своих ветках (WP12-A)
+  { ignores: ['dist/**', 'dist-e2e/**', '**/.venv/**', 'node_modules/**', 'test-output/**', '.claude/**'] },
   js.configs.recommended,
   {
     languageOptions: {

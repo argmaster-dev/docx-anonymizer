@@ -1,14 +1,15 @@
 # Словари ФИО: источники и лицензии
 
-Модули `ru-surnames.js`, `ru-first.js`, `en-first.js`, `en-surnames.js` сгенерированы `scripts/make-dicts.mjs`
+Файлы `ru-surnames.txt`, `ru-first.txt`, `en-first.txt`, `en-surnames.txt` сгенерированы `scripts/make-dicts.mjs`
 (`npm run dicts`, выгрузка 2026-10-15) из перечисленных ниже наборов данных. Данные отфильтрованы
-(нижний регистр, «ё» → «е», без стоп-слов и нарицательных), фамилии приведены к мужской лемме и упакованы front-coding (`codec.js`).
+(нижний регистр, «ё» → «е», без стоп-слов и нарицательных), фамилии приведены к мужской лемме и упакованы front-coding
+(`src/core/detect/names/dict/codec.js`). Расширение читает их из своего пакета (`vendor/dict/`) при старте воркера.
 
 ## datacoon/russiannames
 
 - Репозиторий: https://github.com/datacoon/russiannames, коммит `ac26a24a9bf0ac05e3330668c5103400a1cbf4ea`
 - Файлы: `russiannames/data/surnames.parquet`, `russiannames/data/names.parquet`
-- Используется в: `ru-surnames.js`, `ru-first.js`
+- Используется в: `ru-surnames.txt`, `ru-first.txt`
 - Лицензия: BSD-3-Clause
 
 ```
@@ -47,7 +48,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 - Репозиторий: https://github.com/natasha/natasha, коммит `08ae8452db9391f7c19730e61201cd442014a242`
 - Файл: `natasha/data/dict/maybe_first.txt` (имена-омонимы нарицательных); `last.txt` — только для метрики генератора, в расширение не входит
-- Используется в: `ru-first.js` (`AMBIGUOUS`)
+- Используется в: `ru-first.txt` (`AMBIGUOUS`)
 - Лицензия: MIT (Natasha project)
 
 ```
@@ -76,6 +77,6 @@ SOFTWARE.
 
 ## U.S. Census Bureau
 
-- 1990 Census, Frequently Occurring Names: https://www2.census.gov/topics/genealogy/1990surnames/ (`dist.male.first`, `dist.female.first`) → `en-first.js`
-- 2010 Census, Frequently Occurring Surnames: https://www2.census.gov/topics/genealogy/2010surnames/ (`names.zip`) → `en-surnames.js`
+- 1990 Census, Frequently Occurring Names: https://www2.census.gov/topics/genealogy/1990surnames/ (`dist.male.first`, `dist.female.first`) → `en-first.txt`
+- 2010 Census, Frequently Occurring Surnames: https://www2.census.gov/topics/genealogy/2010surnames/ (`names.zip`) → `en-surnames.txt`
 - Лицензия: public domain — работы федерального правительства США не охраняются авторским правом (17 U.S.C. § 105).

@@ -2,7 +2,7 @@
 import { build } from 'esbuild';
 import { unzipSync } from 'fflate';
 import { createHash } from 'node:crypto';
-import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parsePackManifest } from '../src/core/ner/pack.js';
@@ -79,21 +79,38 @@ await build({
 
 // Worker ядра — ES-модуль (WP8): onnxruntime-web (ESM-сборка) находит свой wasm через import.meta.url,
 // которого нет в IIFE. offscreen.js создаёт его как new Worker('worker.js', {type: 'module'}).
+// С 0.5 (WP12-A, К14) — с разделением кода: динамический import() становится отдельным модулем offscreen/chunks/*.js,
+// который воркер загружает из своего пакета по требованию (разбор PDF — offscreen/pdf-loader.js); в worker.js — только то,
+// что нужно для DOCX. Словари ФИО — не код: vendor/dict/*.txt (ниже).
 const workerBuild = await build({
   ...common,
   entryPoints: { 'offscreen/worker': join(root, 'src/offscreen/worker.js') },
   outdir: dist,
   format: 'esm',
   platform: 'browser',
+  splitting: true,
+  chunkNames: 'offscreen/chunks/[name]-[hash]',
   metafile: true,
 });
 {
   // Какой вариант ORT попал в бандл: ожидается ort.wasm.bundle.min.mjs (glue встроен, внешний только .wasm из vendor/)
   const ortInputs = Object.keys(workerBuild.metafile.inputs).filter((f) => f.includes('onnxruntime-web'));
-  const out = Object.values(workerBuild.metafile.outputs)[0];
+  const outputs = Object.entries(workerBuild.metafile.outputs);
+  const [, out] = /** @type {[string, any]} */ (outputs.find(([f]) => f.endsWith('offscreen/worker.js')));
   const ortBytes = ortInputs.reduce((n, f) => n + (out.inputs[f]?.bytesInOutput || 0), 0);
   if (!ortInputs.length) throw new Error('onnxruntime-web не попал в worker.js');
-  console.log(`worker.js: ${out.bytes} байт, из них ORT ${ortBytes} (${ortInputs.map((f) => f.split('/').pop()).join(', ')})`);
+  if (Object.keys(out.inputs).some((f) => /names\/dict\/(ru|en)-/.test(f))) throw new Error('словари ФИО попали в worker.js (должны быть в vendor/dict/)');
+  // общий код esbuild (chunk-*.js) worker.js импортирует статически — он входит в код воркера; динамические — модули по требованию
+  const staticBytes = out.imports
+    .filter((i) => i.kind === 'import-statement' && !i.external)
+    .reduce((n, i) => n + (outputs.find(([f]) => f.endsWith(i.path.replace(/^.*?offscreen\//, 'offscreen/')))?.[1].bytes || 0), 0);
+  console.log(
+    `worker.js: ${out.bytes} байт (+ общий модуль ${staticBytes}), из них ORT ${ortBytes} (${ortInputs.map((f) => f.split('/').pop()).join(', ')}), код без ORT ${out.bytes + staticBytes - ortBytes}`,
+  );
+  for (const i of out.imports.filter((x) => x.kind === 'dynamic-import' && !x.external)) {
+    const o = outputs.find(([f]) => f.endsWith(i.path.replace(/^.*?offscreen\//, 'offscreen/')));
+    if (o) console.log(`  модуль по требованию ${o[0].slice(o[0].indexOf('offscreen/'))}: ${o[1].bytes} байт`);
+  }
 }
 
 // Статика: HTML, CSS, локали
@@ -118,8 +135,19 @@ const statics = [
   ['node_modules/pdfjs-dist/cmaps', 'vendor/pdfjs/cmaps'],
   ['node_modules/pdfjs-dist/standard_fonts', 'vendor/pdfjs/standard_fonts'],
   ['node_modules/pdfjs-dist/LICENSE', 'vendor/pdfjs/LICENSE'],
+  // словари ФИО (версия 0.5, WP12-A, К14): не в коде worker.js, а файлами пакета — воркер читает их один раз при старте
+  // (src/core/detect/names/dict/load.js через offscreen/package-fetch.js); NOTICE.md — лицензии источников (BSD-3-Clause, MIT)
+  ['vendor/dict', 'vendor/dict'],
 ];
 for (const [from, to] of statics) await cp(join(root, from), join(dist, to), { recursive: true });
+{
+  const dictDir = join(dist, 'vendor/dict');
+  const files = (await readdir(dictDir)).filter((f) => f.endsWith('.txt'));
+  let bytes = 0;
+  for (const f of files) bytes += (await stat(join(dictDir, f))).size;
+  if (files.length !== 4) throw new Error(`vendor/dict: ожидалось 4 словаря, найдено ${files.length} (npm run dicts)`);
+  console.log(`vendor/dict: ${files.length} словаря, ${bytes} байт`);
+}
 // Встроенная модель NER (WP10-C): zip пакета байт в байт + models/index.json (массив из одного описания)
 if (bundled) {
   await mkdir(join(dist, 'models'), { recursive: true });

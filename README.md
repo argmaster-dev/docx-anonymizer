@@ -187,7 +187,7 @@
 | Имена-омонимы нарицательных («Вера», «Роза») | [natasha/natasha](https://github.com/natasha/natasha), `maybe_first.txt` | MIT |
 | Английские имена (≈ 4 900) и фамилии (10 000) | U.S. Census Bureau: 1990 Census names, 2010 Census surnames | public domain |
 
-Полные тексты лицензий и версии источников — [`src/core/detect/names/dict/NOTICE.md`](src/core/detect/names/dict/NOTICE.md).
+Полные тексты лицензий и версии источников — [`vendor/dict/NOTICE.md`](vendor/dict/NOTICE.md).
 
 ## PDF
 
@@ -316,7 +316,7 @@ CI (`.github/workflows/ci.yml`) запускается при push и pull reque
 
 MIT — см. [`LICENSE`](LICENSE). Сторонние компоненты — на условиях своих лицензий:
 
-- словари ФИО — BSD-3-Clause (datacoon/russiannames), MIT (natasha), public domain (US Census); тексты — [`NOTICE.md`](src/core/detect/names/dict/NOTICE.md);
+- словари ФИО — BSD-3-Clause (datacoon/russiannames), MIT (natasha), public domain (US Census); тексты — [`NOTICE.md`](vendor/dict/NOTICE.md);
 - ONNX Runtime Web (`vendor/` в сборке) — MIT, текст — [`assets/licenses/onnxruntime-web.LICENSE`](assets/licenses/onnxruntime-web.LICENSE);
 - pdf.js (`pdfjs-dist`, в сборке — `vendor/pdfjs/` вместе с CMaps и стандартными шрифтами) — Apache-2.0, текст — `vendor/pdfjs/LICENSE` в сборке (копируется из `node_modules/pdfjs-dist/LICENSE`);
 - пакет модели NER — MIT (веса дообученной модели и базовая `cointegrated/rubert-tiny2`), файлы `LICENSE` и `NOTICE` внутри пакета; данные обучения (WikiANN, factRuEval-2016, синтетика) в пакет не входят.

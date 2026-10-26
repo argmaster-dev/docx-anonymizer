@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 // Генератор словарей ФИО для словарного детектора (WP7, FR-23, ступень 1 NER).
-// Источники (лицензии совместимы с MIT, тексты — в src/core/detect/names/dict/NOTICE.md):
+// Источники (лицензии совместимы с MIT, тексты — в vendor/dict/NOTICE.md):
 //   datacoon/russiannames — BSD-3-Clause, © 2018 Ivan Begtin: русские фамилии и имена с частотами и родом;
 //   natasha/natasha — MIT: список имён-омонимов (maybe_first.txt) и фамилии (last.txt, только для метрики);
 //   US Census 1990 (имена) и 2010 (фамилии) — public domain.
 // Версии зафиксированы: SHA коммитов GitHub и sha256 каждого скачанного файла (SOURCES).
 //
 // Использование:
-//   npm run dicts                         — скачать (в кэш) и перегенерировать src/core/detect/names/dict/*.js
-//   npm run dicts -- --check              — сравнить регенерацию с закоммиченными модулями (код выхода 1 при расхождении)
+//   npm run dicts                         — скачать (в кэш) и перегенерировать vendor/dict/*.txt и NOTICE.md
+//   npm run dicts -- --check              — сравнить регенерацию с закоммиченными файлами (код выхода 1 при расхождении)
 //   npm run dicts -- --cache=<каталог>    — каталог кэша загрузок
 // Сеть используется только здесь (src/** сетевых API не содержит, NFR-01).
 import { createHash } from 'node:crypto';
@@ -24,7 +24,8 @@ import { lowerE, isStopWord, COMMON_NOUNS, STOP_EXACT, AMBIGUOUS_NAMES_RU, MALE_
 import { patronymicInfo } from '../src/core/detect/names/morph.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const OUT = join(root, 'src/core/detect/names/dict');
+// с 0.5 (WP12-A) словари — файлы пакета vendor/dict/, загружаются воркером отдельно от кода (names/dict/load.js)
+const OUT = join(root, 'vendor/dict');
 
 const DATACOON_SHA = 'ac26a24a9bf0ac05e3330668c5103400a1cbf4ea';
 const NATASHA_SHA = '08ae8452db9391f7c19730e61201cd442014a242';
@@ -306,60 +307,44 @@ function buildEnSurnames(csv) {
     .map(([w]) => w);
 }
 
-/* ---------- модули ---------- */
+/* ---------- файлы словарей (vendor/dict/*.txt, версия 0.5, WP12-A) ---------- */
 
-const header = (what, src, n) =>
-  `// СГЕНЕРИРОВАНО scripts/make-dicts.mjs — не редактировать вручную (npm run dicts). WP7, FR-23.\n` +
-  `// ${what}: ${n} записей. Формат — front-coding (codec.js).\n` +
-  `// Источник: ${src}\n` +
-  `// Дата выгрузки: ${SOURCES.retrieved}. Лицензии и атрибуция — NOTICE.md.\n`;
+// Формат файла (docs/contracts.md §2, «Словари в vendor/dict»): строки «# …» — комментарии; «#=<ИМЯ>» начинает секцию;
+// строки секции до следующей «#=» — строка front-coding (codec.js), склеенная через \n. Строка кодека начинается с символа
+// '0'…'X' (или 'R'/'L' — первая), поэтому с «#» не путается.
+// Заголовок — одна строка (файлы лежат в пакете расширения, каждый байт — в архиве); источники, коммиты и лицензии — NOTICE.md.
+const header = (what, n) => `# make-dicts.mjs (npm run dicts), ${SOURCES.retrieved}: ${what}, ${n}. Sources and licenses: NOTICE.md\n`;
 
-const lit = (s) => '`' + s + '`';
+const section = (name, words) => `#=${name}\n${encodeList(words)}\n`;
 
-function modules({ ruSurnames, ruFirst, ambiguous, enFirst, enSurnames }) {
-  const dc = `${SOURCES.datacoon.repo} @ ${SOURCES.datacoon.sha} (${SOURCES.datacoon.license})`;
+function dictFiles({ ruSurnames, ruFirst, ambiguous, enFirst, enSurnames }) {
   const byG = (g) => [...ruFirst].filter(([, x]) => x === g).map(([w]) => w);
   return {
-    'ru-surnames.js':
-      header(
-        'Русские фамилии (мужские леммы, женские формы приведены к мужским, top по частоте)',
-        dc + ', russiannames/data/surnames.parquet',
-        ruSurnames.length,
-      ) + `export default ${lit(encodeList(ruSurnames))};\n`,
-    'ru-first.js':
-      header(
-        'Русские имена (леммы) по роду; AMBIGUOUS — омонимы нарицательных',
-        `${dc}, russiannames/data/names.parquet; омонимы — ${SOURCES.natasha.repo} @ ${SOURCES.natasha.sha} (${SOURCES.natasha.license}), natasha/data/dict/maybe_first.txt`,
-        ruFirst.size,
-      ) +
-      `export const MALE = ${lit(encodeList(byG('m')))};\n` +
-      `export const FEMALE = ${lit(encodeList(byG('f')))};\n` +
-      `export const UNISEX = ${lit(encodeList(byG('u')))};\n` +
-      `export const AMBIGUOUS = ${lit(encodeList(ambiguous))};\n`,
-    'en-first.js':
-      header(
-        'Английские имена (ранг ≤ 5000, муж. и жен.)',
-        `US Census 1990, ${SOURCES.census1990.url} (dist.male.first, dist.female.first), public domain`,
-        enFirst.length,
-      ) + `export default ${lit(encodeList(enFirst))};\n`,
-    'en-surnames.js':
-      header('Английские фамилии (top 10 000)', `US Census 2010, ${SOURCES.census2010.url} (names.zip), public domain`, enSurnames.length) +
-      `export default ${lit(encodeList(enSurnames))};\n`,
+    'ru-surnames.txt': header('Russian surnames (masculine lemmas, top by frequency)', ruSurnames.length) + section('SURNAMES', ruSurnames),
+    'ru-first.txt':
+      header('Russian first names by gender; AMBIGUOUS - homonyms of common nouns', ruFirst.size) +
+      section('MALE', byG('m')) +
+      section('FEMALE', byG('f')) +
+      section('UNISEX', byG('u')) +
+      section('AMBIGUOUS', ambiguous),
+    'en-first.txt': header('English first names (US Census 1990, rank <= 5000)', enFirst.length) + section('FIRST', enFirst),
+    'en-surnames.txt': header('English surnames (US Census 2010, top 10000)', enSurnames.length) + section('SURNAMES', enSurnames),
   };
 }
 
 function notice(bsd, mit) {
   return `# Словари ФИО: источники и лицензии
 
-Модули \`ru-surnames.js\`, \`ru-first.js\`, \`en-first.js\`, \`en-surnames.js\` сгенерированы \`scripts/make-dicts.mjs\`
+Файлы \`ru-surnames.txt\`, \`ru-first.txt\`, \`en-first.txt\`, \`en-surnames.txt\` сгенерированы \`scripts/make-dicts.mjs\`
 (\`npm run dicts\`, выгрузка ${SOURCES.retrieved}) из перечисленных ниже наборов данных. Данные отфильтрованы
-(нижний регистр, «ё» → «е», без стоп-слов и нарицательных), фамилии приведены к мужской лемме и упакованы front-coding (\`codec.js\`).
+(нижний регистр, «ё» → «е», без стоп-слов и нарицательных), фамилии приведены к мужской лемме и упакованы front-coding
+(\`src/core/detect/names/dict/codec.js\`). Расширение читает их из своего пакета (\`vendor/dict/\`) при старте воркера.
 
 ## datacoon/russiannames
 
 - Репозиторий: ${SOURCES.datacoon.repo}, коммит \`${SOURCES.datacoon.sha}\`
 - Файлы: \`russiannames/data/surnames.parquet\`, \`russiannames/data/names.parquet\`
-- Используется в: \`ru-surnames.js\`, \`ru-first.js\`
+- Используется в: \`ru-surnames.txt\`, \`ru-first.txt\`
 - Лицензия: BSD-3-Clause
 
 \`\`\`
@@ -370,7 +355,7 @@ ${bsd.trim()}
 
 - Репозиторий: ${SOURCES.natasha.repo}, коммит \`${SOURCES.natasha.sha}\`
 - Файл: \`natasha/data/dict/maybe_first.txt\` (имена-омонимы нарицательных); \`last.txt\` — только для метрики генератора, в расширение не входит
-- Используется в: \`ru-first.js\` (\`AMBIGUOUS\`)
+- Используется в: \`ru-first.txt\` (\`AMBIGUOUS\`)
 - Лицензия: MIT (Natasha project)
 
 \`\`\`
@@ -379,8 +364,8 @@ ${mit.trim()}
 
 ## U.S. Census Bureau
 
-- 1990 Census, Frequently Occurring Names: ${SOURCES.census1990.url} (\`dist.male.first\`, \`dist.female.first\`) → \`en-first.js\`
-- 2010 Census, Frequently Occurring Surnames: ${SOURCES.census2010.url} (\`names.zip\`) → \`en-surnames.js\`
+- 1990 Census, Frequently Occurring Names: ${SOURCES.census1990.url} (\`dist.male.first\`, \`dist.female.first\`) → \`en-first.txt\`
+- 2010 Census, Frequently Occurring Surnames: ${SOURCES.census2010.url} (\`names.zip\`) → \`en-surnames.txt\`
 - Лицензия: public domain — работы федерального правительства США не охраняются авторским правом (17 U.S.C. § 105).
 `;
 }
@@ -417,7 +402,7 @@ async function main() {
   const enFirst = buildEnFirst((await get('dist.male.first')).toString('latin1'), (await get('dist.female.first')).toString('latin1'));
   const enSurnames = buildEnSurnames(census2010);
 
-  const files = modules({ ruSurnames, ruFirst, ambiguous, enFirst, enSurnames });
+  const files = dictFiles({ ruSurnames, ruFirst, ambiguous, enFirst, enSurnames });
   files['NOTICE.md'] = notice((await get('datacoon-LICENSE')).toString('utf8'), (await get('natasha-LICENSE')).toString('utf8'));
 
   const g = (x) => [...ruFirst.values()].filter((v) => v === x).length;

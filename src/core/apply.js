@@ -1,6 +1,8 @@
 // applyDecisions: группы с решениями → байты результата + маппинг (FR-25–FR-28).
-// DOCX → .docx (serializeDocx); текстовая модель PDF (версия 0.3, doc.kind === 'text') → Markdown/текст (serializeText).
-import { serializeDocx } from './docx/replace.js';
+// Сериализатор — адаптера формата по doc.kind (DocumentAdapter, ТЗ §5.3, с 0.5 — WP12-A, src/core/adapters.js): DOCX → .docx
+// (serializeDocx); текстовая модель PDF (версия 0.3, doc.kind === 'text') → Markdown/текст (serializeText).
+import { adapterForKind } from './adapters.js';
+import { CoreError } from './errors.js';
 import { serializeText, TEXT_MIME } from './text/serialize.js';
 import { replacementFor } from './placeholders.js';
 import { buildMapping } from './mapping.js';
@@ -18,19 +20,19 @@ import { buildMapping } from './mapping.js';
  * @property {'md'|'txt'} [textFormat='md']           формат результата текстовой модели (PDF, версия 0.3)
  */
 
-export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+export { DOCX_MIME } from './docx/adapter.js';
 
 /**
  * Правки по решениям (FR-26, FR-13) и сводка применённого для маппинга — общая часть DOCX и текста.
  * @param {{streamById: Map<string, any>}} doc
  * @param {import('./contracts/entity.js').EntityGroup[]} groups
  * @param {{mode?: string, placeholderLanguage?: string}} [opts]
- * @returns {{edits: import('./docx/replace.js').TextEdit[], applied: Map<string, {token: string, occurrences: number, parts: Set<string>, firstForm?: string}>}}
+ * @returns {{edits: import('./ooxml/serialize.js').TextEdit[], applied: Map<string, {token: string, occurrences: number, parts: Set<string>, firstForm?: string}>}}
  */
 export function planEdits(doc, groups, opts = {}) {
   const mode = opts.mode || 'placeholder';
   const lang = opts.placeholderLanguage || 'ru';
-  /** @type {import('./docx/replace.js').TextEdit[]} */
+  /** @type {import('./ooxml/serialize.js').TextEdit[]} */
   const edits = [];
   /** @type {Map<string, {token: string, occurrences: number, parts: Set<string>, firstForm?: string}>} */
   const applied = new Map();
@@ -78,8 +80,10 @@ export function applyDecisions(doc, groups, options = {}) {
     out = serializeText(/** @type {any} */ (doc), edits, { format });
     mime = TEXT_MIME[format];
   } else {
-    out = serializeDocx(doc, edits, { keepMetadata: options.keepMetadata, stripEmbedded: options.stripEmbedded });
-    mime = DOCX_MIME;
+    const adapter = adapterForKind(/** @type {any} */ (doc).kind);
+    if (!adapter) throw new CoreError('INTERNAL', 'Нет адаптера для вида документа');
+    out = adapter.serialize(doc, edits, { keepMetadata: options.keepMetadata, stripEmbedded: options.stripEmbedded });
+    mime = adapter.mime;
   }
   const { bytes, changedParts, removedParts } = out;
 

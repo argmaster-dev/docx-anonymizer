@@ -1,7 +1,14 @@
 // Публичный API ядра. Ядро чистое: никаких chrome.*, DOM, сети — тестируется в Node.
 export { parseDocx, detectLanguage, partRank } from './docx/model.js';
 export { serializeDocx } from './docx/replace.js';
-export { readZip, writeZip, inflateEntry, crc32 } from './docx/zip.js';
+export { readZip, writeZip, inflateEntry, crc32 } from './ooxml/zip.js';
+// общий слой OOXML и адаптеры форматов (версия 0.5, WP12-A, docs/contracts.md §9)
+export { parsePackage } from './ooxml/model.js';
+export { parseFlowPart, planRunEdits, buildCharMap } from './ooxml/flow.js';
+export { serializePackage } from './ooxml/serialize.js';
+export { isZip, zipHasEntry, hasExtension } from './ooxml/adapter.js';
+export { DOCX_ADAPTER } from './docx/adapter.js';
+export { DOCUMENT_ADAPTERS, adapterForKind, detectAdapter } from './adapters.js';
 export { analyze, groupEntities } from './detect/runner.js';
 export { resolveOverlaps, compareStrength } from './detect/overlap.js';
 export { registerBuiltinDetectors } from './detect/index.js';

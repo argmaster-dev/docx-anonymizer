@@ -62,3 +62,44 @@ test('PDF: перехват и конвейер без единого http(s)-з
   // запросы pdf.js — только к собственным файлам пакета (CMaps/шрифты, если понадобились, — оттуда же)
   for (const u of urls.filter((x) => x.includes('pdfjs'))) expect(u).toMatch(/^chrome-extension:\/\/[^/]+\/vendor\/pdfjs\//);
 });
+
+// К13, К14 (версия 0.5, WP12-A): словари ФИО — файлы vendor/dict/*.txt пакета, воркер читает их сам (chrome-extension://);
+// разбор PDF ядра — модуль offscreen/chunks/ по требованию. Ни одного http(s)-запроса; словарное лицо находится в браузере.
+// Запись сети — с самого старта (earlyCapture): в полной сборке offscreen и воркер поднимаются сразу (автоустановка модели) и
+// читают словари раньше, чем тест успел бы подключить запись.
+test.describe('словари ФИО из пакета (WP12-A)', () => {
+  test.use({ earlyCapture: true });
+  test('словари ФИО и модуль разбора PDF — из пакета расширения, без http(s); словарное лицо находится (WP12-A)', async ({ context, extensionId }) => {
+    const net = await captureAllRequests(context);
+    const ext = await context.newPage();
+    await ext.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+    await installClient(ext);
+    // вымышленные данные: «Зульфия Хасанова» находит только словарный детектор (фикстура PERSON-dict.json, dictOnly)
+    const { makeDocx, para, run } = await import('../helpers/docx.js');
+    const docx = await runPipeline(ext, { name: 'dict.docx', bytes: makeDocx(para(run('Отчёт подготовила Зульфия Хасанова.'))) });
+    expect(docx.ent.warnings.map((w) => w.code)).not.toContain('DICT_FAILED');
+    expect(docx.ent.entities.filter((e) => e.category === 'PERSON').map((e) => e.value)).toContain('Зульфия Хасанова');
+    const pdf = await runPipeline(ext, { name: 'dict.pdf', bytes: readFileSync(resolve('tests/fixtures/pdf/sample-contract.pdf')) });
+    expect(pdf.resultName).toBe('dict.anon.md');
+
+    const urls = await net.stop();
+    expect(externalRequests(urls), 'http(s)').toEqual([]);
+    expect(
+      urls.filter((u) => !/^(chrome-extension|chrome|data|about):/.test(u)),
+      'прочие схемы',
+    ).toEqual([]);
+    const own = offscreenRequests(urls);
+    for (const name of ['ru-surnames', 'ru-first', 'en-first', 'en-surnames']) {
+      expect(
+        own.filter((u) => u.endsWith(`/vendor/dict/${name}.txt`)),
+        name,
+      ).toHaveLength(1); // один раз на жизнь воркера
+    }
+    expect(
+      own.some((u) => /\/offscreen\/chunks\/extract-[^/]+\.js$/.test(u)),
+      'модуль разбора PDF',
+    ).toBe(true);
+    for (const u of urls.filter((x) => x.includes('/vendor/dict/') || x.includes('/offscreen/chunks/')))
+      expect(u).toMatch(new RegExp(`^chrome-extension://${extensionId}/`));
+  });
+});

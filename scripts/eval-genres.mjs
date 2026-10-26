@@ -34,6 +34,10 @@ import { findLeaks } from '../tests/integration/support/pipeline.js';
 import { unzipText } from '../tests/helpers/docx.js';
 import { unescapeXml } from '../src/core/docx/xml.js';
 import { lowerE } from '../src/core/detect/names/lexicon.js';
+import { loadDictsFromDisk } from './dicts-node.mjs';
+
+// словари ФИО — файлы vendor/dict/*.txt (версия 0.5, WP12-A): до первого анализа
+await loadDictsFromDisk();
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const GENRES_DIR = join(root, 'tests/fixtures/genres');

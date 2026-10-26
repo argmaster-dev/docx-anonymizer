@@ -2,40 +2,50 @@
 // Без chrome.* — тестируется в Node (tests/integration/host.spec.js).
 // Настройки приходят ВНУТРИ сообщения (поле `settings`, его добавляет background):
 // offscreen-документ не имеет доступа к chrome.storage.
-import {
-  parseDocx,
-  fromText,
-  isPdf,
-  analyze,
-  applyDecisions,
-  mergeDecisions,
-  deanonymize,
-  findOccurrences,
-  getParagraphs,
-  occurrenceContext,
-  migrateSettings,
-  PlaceholderAllocator,
-  resolvePlaceholderLanguage,
-  registerBuiltinDetectors,
-  CoreError,
-  summarizeSession,
-} from '../core/index.js';
+// Импорты — из модулей ядра, а не из core/index.js: так в worker.js не попадает разбор PDF (core/pdf/extract.js, layout.js),
+// который воркер грузит отдельным модулем при первом PDF (offscreen/pdf-loader.js; бюджет worker.js, К14, WP12-A).
+import { fromText } from '../core/text/model.js';
+import { isPdf } from '../core/pdf/sniff.js';
+import { analyze } from '../core/detect/runner.js';
+import { applyDecisions } from '../core/apply.js';
+import { adapterForKind, detectAdapter } from '../core/adapters.js';
+import { mergeDecisions } from '../core/contracts/entity.js';
+import { summarizeSession } from '../core/contracts/session.js';
+import { deanonymize } from '../core/deanon.js';
+import { findOccurrences } from '../core/search.js';
+import { getParagraphs, occurrenceContext } from '../core/text-view.js';
+import { migrateSettings } from '../core/settings.js';
+import { PlaceholderAllocator, resolvePlaceholderLanguage } from '../core/placeholders.js';
+import { registerBuiltinDetectors } from '../core/detect/index.js';
+import { CoreError } from '../core/errors.js';
 import { MSG, ChunkAssembler, postChunked, errorMessage, sha256Hex } from '../shared/protocol.js';
 import { ModelStoreError } from '../shared/model-store.js';
+import { loadDicts } from '../core/detect/names/dict/load.js';
 
 /**
  * @param {{post: (clientId: string, msg: object) => void, nerProvider?: any, toolVersion?: string,
  *   createNerProvider?: (settings: import('../core/settings.js').Settings) => import('../core/contracts/ner.js').NerProvider,
  *   extractPdf?: (bytes: Uint8Array, opts: {onProgress?: (percent: number) => void}) => Promise<import('../core/pdf/layout.js').Layout>,
  *   readPackageFile?: (url: string) => Promise<Uint8Array>,
+ *   readDictFile?: (name: string) => Promise<Uint8Array | string>,
  *   modelStore?: {listInstalled: () => Promise<any[]>, inspectPack: (bytes: Uint8Array, opts?: object) => Promise<any>, install: (bytes: Uint8Array, opts?: object) => Promise<any>}}} env
  *   nerProvider — готовый провайдер (тесты; имеет приоритет), createNerProvider — синхронная фабрика по settings.nerModel (worker.js),
  *   extractPdf — извлечение текста PDF (версия 0.3; worker.js — pdf-loader.js, тесты — pdf.js в Node),
  *   readPackageFile и modelStore — установка встроенной модели NER из архива расширения (WP10-C, MODEL_INSTALL; worker.js —
- *   offscreen/package-fetch.js и shared/model-store.js, тесты — фейки)
+ *   offscreen/package-fetch.js и shared/model-store.js, тесты — фейки),
+ *   readDictFile — чтение словаря ФИО vendor/dict/<name>.txt (0.5, WP12-A; worker.js — readPackageFile, Node — диск); без него
+ *   анализ идёт на словарях, загруженных раньше (тесты), а если их нет — без словарей с предупреждением DICT_FAILED
  */
 export function createHost(env) {
   registerBuiltinDetectors();
+  // Словари ФИО (WP12-A, К14): загрузка начинается сразу при создании хоста — пока клиент шлёт файл чанками, воркер читает
+  // и декодирует словари; анализ её дожидается (ensureDicts). Сбой — анализ без словарей и DICT_FAILED (NFR-13).
+  const readDict =
+    env.readDictFile ||
+    (async () => {
+      throw new Error('нет env.readDictFile');
+    });
+  loadDicts(readDict);
   /** Кэш провайдера NER (WP8): один на модель, сбрасывается MODEL_CHANGED и сменой nerModel. */
   /** @type {{modelId: string, provider: any} | null} */
   let ner = null;
@@ -162,17 +172,21 @@ export function createHost(env) {
         return;
       }
     }
-    // Точка ветвления (версия 0.3): PDF — по сигнатуре %PDF- или по имени .pdf, иначе DOCX
-    const kind = isPdf(bytes) || /\.pdf$/i.test(u.begin.name || '') ? 'pdf' : 'docx';
+    // Точка ветвления (версия 0.3): PDF — по сигнатуре %PDF- или по имени .pdf; иначе — адаптер формата по сигнатуре и имени
+    // (DocumentAdapter, WP12-A); не распознан — Word, его разбор ответит NOT_DOCX
+    const adapter = isPdf(bytes) || /\.pdf$/i.test(u.begin.name || '') ? null : detectAdapter(bytes, u.begin.name) || adapterForKind('docx');
+    const kind = adapter ? adapter.kind : 'pdf';
     let doc;
-    if (kind === 'pdf') doc = await parsePdf(bytes, u.begin.name, progress);
+    if (!adapter) doc = await parsePdf(bytes, u.begin.name, progress);
     else {
       progress('unzip', 0);
-      doc = parseDocx(bytes);
+      doc = adapter.parse(bytes);
       progress('parse', 100);
     }
     const allocator = msg.batchId ? batches.get(msg.batchId) : undefined;
+    const dictWarnings = await ensureDicts();
     const analysis = await analyze(doc, settings, { nerProvider: providerFor(settings), allocator, onProgress: progress });
+    analysis.warnings.push(...dictWarnings);
     const docId = `d${++docSeq}`;
     const session = {
       docId,
@@ -204,12 +218,14 @@ export function createHost(env) {
     // Переанализ с сохранением решений по ключу (категория + нормализованное значение)
     const prev = new Map(s.groups.map((g) => [`${g.category}\u0000${g.normalized}`, g]));
     const allocator = s.batchId ? batches.get(s.batchId) : undefined;
+    const dictWarnings = await ensureDicts();
     const analysis = await analyze(s.doc, s.settings, {
       nerProvider: providerFor(s.settings),
       allocator,
       userEntities: s.userEntities,
       onProgress: progress,
     });
+    analysis.warnings.push(...dictWarnings);
     s.analysis = analysis;
     s.groups = analysis.groups.map((g) => {
       const p = prev.get(`${g.category}\u0000${g.normalized}`);
@@ -257,6 +273,17 @@ export function createHost(env) {
     doc.warnings.push(...(layout.warnings || []));
     progress('parse', 100);
     return doc;
+  }
+
+  /**
+   * Словари ФИО загружены (или загружаются) — дождаться. Не загрузились (нет файла, битый формат) — анализ идёт без словарного
+   * детектора (списки пустые, курируемые имена lexicon.js на месте) и каждый анализ получает предупреждение DICT_FAILED
+   * {details: {reason}} (сбой окончательный на жизнь воркера, names/dict/load.js). Значений из словарей и документа в нём нет (NFR-14).
+   * @returns {Promise<{code: string, details: {reason: string}}[]>}
+   */
+  async function ensureDicts() {
+    const r = await loadDicts(readDict);
+    return r.ok ? [] : [{ code: 'DICT_FAILED', details: { reason: r.reason } }];
   }
 
   /**

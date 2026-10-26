@@ -1,8 +1,6 @@
-// СГЕНЕРИРОВАНО scripts/make-dicts.mjs — не редактировать вручную (npm run dicts). WP7, FR-23.
-// Русские фамилии (мужские леммы, женские формы приведены к мужским, top по частоте): 50000 записей. Формат — front-coding (codec.js).
-// Источник: https://github.com/datacoon/russiannames @ ac26a24a9bf0ac05e3330668c5103400a1cbf4ea (BSD-3-Clause, Copyright (c) 2018, Ivan Begtin), russiannames/data/surnames.parquet
-// Дата выгрузки: 2026-10-15. Лицензии и атрибуция — NOTICE.md.
-export default `R0ababkoc
+# make-dicts.mjs (npm run dicts), 2026-10-15: Russian surnames (masculine lemmas, top by frequency), 50000. Sources and licenses: NOTICE.md
+#=SURNAMES
+R0ababkoc
 4tqko
 3eocrkij
 3fc
@@ -50001,4 +49999,4 @@ export default `R0ababkoc
 6c
 4F
 2ikocrkij
-2tk`;
+2tk

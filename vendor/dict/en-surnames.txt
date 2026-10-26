@@ -1,8 +1,6 @@
-// СГЕНЕРИРОВАНО scripts/make-dicts.mjs — не редактировать вручную (npm run dicts). WP7, FR-23.
-// Английские фамилии (top 10 000): 10000 записей. Формат — front-coding (codec.js).
-// Источник: US Census 2010, https://www2.census.gov/topics/genealogy/2010surnames/ (names.zip), public domain
-// Дата выгрузки: 2026-10-15. Лицензии и атрибуция — NOTICE.md.
-export default `L0aaron
+# make-dicts.mjs (npm run dicts), 2026-10-15: English surnames (US Census 2010, top 10000), 10000. Sources and licenses: NOTICE.md
+#=SURNAMES
+L0aaron
 1bad
 3rca
 3te
@@ -10001,4 +9999,4 @@ export default `L0aaron
 2cker
 6man
 2niga
-2rita`;
+2rita

@@ -1,0 +1,254 @@
+{
+  "tests/fixtures/docs/english-contract.docx": {
+    "normal": "b695e79d6b7179e82a8957025360bbd9a4947a3f30acec6d9af502aa410f780a",
+    "commercial": "d886da7124f5e5d1b23e1a01ac80f6c9a7a525c984ef1d41f701657f47386ba5",
+    "strip": "247c17a2799c2944fac57625d14243a47bc816784071fb52389a238ce8ecb5aa",
+    "restore": "ea514e4094c14c7dff39149df01fc04db13de78eb8bf3834d0b6d114eef87079"
+  },
+  "tests/fixtures/docs/ip-contract.docx": {
+    "normal": "b5771563702500f7827c0c48655e840b18bcd88eead5e02ce59bac7f81896942",
+    "commercial": "c2c6c29da7d3cddb97d56ddb11e63be688c34ab5e2033548d4adada368c2caf0",
+    "strip": "f9874567af62084078826b1b4e24d7406ba57b9af2fb5c7e21c14d3ffb2b2060",
+    "restore": "632e7686ac5ba49cdd1424f3a7bc11c3ba3528c2c5f7706887af2fb1ff0c86a4"
+  },
+  "tests/fixtures/docs/structures.docx": {
+    "normal": "f31f94087852b0353552e5934d7481572c7c040c8d5e0c298969bb125747415f",
+    "commercial": "b8a4eb7429c46a4d0a45bc2c413f7b8934a27fcf3b274f51adf993f2ad0d631c",
+    "strip": "712648c94d8600cf0716de9bc92d930fcb4ec001ad089ea49a32f1593c19ebaf",
+    "restore": "ef4328e4fabe3b9fd1cdc44246c73a9d948deb7d79fb0195ec08fc7db26b4389"
+  },
+  "tests/fixtures/docs/third-persons.docx": {
+    "normal": "dd9ffe45cce5ae83fbe03a6a510881e78c8175a248f8e9c4b9b86f9a6c83819c",
+    "commercial": "6d9a88f1b3f8e0e57fca3aaf9b620eb6f636e288def2cdf32380f0c9784d7b90",
+    "strip": "551d7c2e3589b4df3d67bf28e2e372144738bd8a4c0b34a0d3066dc83ae82b49",
+    "restore": "ee0888e4e237127b1a7607f80d9058fc09a480b2f43d6ac34412055d457398e2"
+  },
+  "tests/fixtures/docs/two-companies.docx": {
+    "normal": "d5f7bc1cba0ddf1dda20b0302d6c455945fbfd08e5ef2d2106d8da320e9048c3",
+    "commercial": "b60cb1c65594cfa15597de000e00fc813a6a12559273161bc427f32445323342",
+    "strip": "318489e2577a658946e07a7f1a78c70a599fedb31138f67193041193caffada6",
+    "restore": "c29b4bf57cd191966ad59532448b58fd18dfa64fb618c968b5cfe597d1bcefbb"
+  },
+  "tests/fixtures/genres/chat/chat-sales.docx": {
+    "normal": "b073dad71c94da6801d6556eb908e9f73dac80aeaf5d349caf40feab61660e3d",
+    "commercial": "3d686e3d80125fe87899cd88ca72826370f48804703b828745cc24185ab0105e",
+    "strip": "352133835994a54bb46fe476141bcecaad9fc86794576acd597f996816adc9c3",
+    "restore": "8e1b91113f4addd195998956b46f20c58b7b6267419f64fbc5731bbb7e77c8c7"
+  },
+  "tests/fixtures/genres/chat/chat-support.docx": {
+    "normal": "6d439c548d298b449db1988d8ca9367698d444288f97c58bf6d6ef038a832374",
+    "commercial": "f6bd6ec7a9ba90d13b0e2629b91c996b8392dda32a913fb9b58458252befea14",
+    "strip": "7a276d0643f442fd284a3b23c820835701f496379279dba1ce965c76370b9d55",
+    "restore": "f66cb63f4ddbf355930cc2e78a29c4aac7d46f7fee73a81cd45957232dc70871"
+  },
+  "tests/fixtures/genres/chat/chat-team.docx": {
+    "normal": "559846c658bc12d2cc09eefdcb339e4bcb0fbbb951e2604077c10bf0bc6f35a5",
+    "commercial": "c891ad98c2d951b0d0267052376bef64a4c5b885bf7891c9b7554cfa3224e916",
+    "strip": "aa5b6c5982a9ac9f1230e104a66a47c67d579ac47e83132f8ad7731c93f0ce5b",
+    "restore": "6cce4881849ccbf5e6b6ab789e19d2f2451f7049ebab03cd319bfff9e9330d23"
+  },
+  "tests/fixtures/genres/invoice/invoice-licenses.docx": {
+    "normal": "86e6119aa3088db2079106548091bc0bb984d752761bf0756b00f7af871332be",
+    "commercial": "1519e98cc830b8bce4ae1305e62a42ae8636e20ab93fcae5133eb94d2259bf76",
+    "strip": "7e1e1ddbaa370aff1a2aff1a5c15d4ee665ac6b78f1e74529ce107a9dbca5842",
+    "restore": "48e831f3c0f46384c4c62e180d0920c0bec49f0dc9816e92c538de8638e2f60f"
+  },
+  "tests/fixtures/genres/invoice/invoice-services.docx": {
+    "normal": "5c666cead265a959a5dc8bdea541b6c1bde2008f402b289daf5ebeccddcd4177",
+    "commercial": "cde75c9a8db91e4bb37a2dc2a678bb911cb5395150d189c49b334299e73e2508",
+    "strip": "a9354bb696970327513c5db6eea39bf33545a2fc5c25d5adc6ff353159c381d5",
+    "restore": "b7976ba1eca5241b4f32d74b16e276a46dcb92fcf7ade72bde882589fca3d177"
+  },
+  "tests/fixtures/genres/invoice/upd-ip.docx": {
+    "normal": "c631a757589ecaf8c199df2fce2a82fe2b5d80d8c6ca453faa7311aec7eaf3bb",
+    "commercial": "f138930bad71a22afe0304acfd7e15cde95280138b5fe6c9870a7a064422af7b",
+    "strip": "ec8088c8e88cbfd757c267721182423f1873fecce6096e92831ad482bbe1f5d6",
+    "restore": "e9a2c27f2bef7f1ef1b31462ba7e92cf1c76a441a1c63d0a0fe9b9bf737d9fca"
+  },
+  "tests/fixtures/genres/letter/letter-en.docx": {
+    "normal": "4a37d3d2e4266c9fe501ef274978647045b1fdd5fd70f5a452f2f2a5c1e633d8",
+    "commercial": "1a83b7d7763ae5e6fbac9d1ce527cbf1f6964a70184071a3093d69b087e1929e",
+    "strip": "11d0d8e2ce9c639d7000db62f3b91180f7c877d25952d06c0f6e830bf0253806",
+    "restore": "87312adc878bb7a08bd7a9097cc8ceee1f7b6db68f96a26ca352a36595324dca"
+  },
+  "tests/fixtures/genres/letter/letter-guarantee.docx": {
+    "normal": "fa3540945c62f09bc25adfe7720fc455d56fc39c07191fca88cc55279732483b",
+    "commercial": "a301c678621c0d6627ded0adcd19df14699495841c0e94ca1c354ce30323dae5",
+    "strip": "637002233846e7bdca60f2545c8ab56f38700b9ff5937da689272294a3a26e3a",
+    "restore": "c5a83f730880a8bd8d262ec87cbb08ae2c7390cb539a50d32e33f3c498f02c91"
+  },
+  "tests/fixtures/genres/letter/letter-reply.docx": {
+    "normal": "4f3c1f475b29609474c4a509747d5d5b86a43f435a13899e6b5a8be256050282",
+    "commercial": "80658cf78b6be3836584479f1197fbf5d43d0dbfb3b5946066f2aa8a9de7f18e",
+    "strip": "7c21498e2e3160370e0d0f8a0a6b17cc909f115242359f5c8c0201e1a138e3ab",
+    "restore": "c95d56516059e4266beb5a70ef8a109a3be57688a4b2c691c809d0fdfa8d1e9d"
+  },
+  "tests/fixtures/genres/letter/letter-schedule.docx": {
+    "normal": "d30be719052be84aa5e362b1dd27643afe4c97fad8c39ccce8b62b83876e03c1",
+    "commercial": "1e826d338ed675924939367d7d379e2d1e8e1968f953d6bfce221d66e7d7ca9d",
+    "strip": "93db630082354f04d4bd191961d6b8183bfb7ccc38c1bbb7afa69f18b6625077",
+    "restore": "355f578724672872257e05dedfbb425c6e3b5d9ae9739fea82af8a1b4a6f2cca"
+  },
+  "tests/fixtures/genres/manual/instruction-crm.docx": {
+    "normal": "8ed267b3dd310a9dd01921cf7461808c81ed684d846755ccfea929d6abb86f21",
+    "commercial": "eaa1c09490d7e8514897106abb2197ae622e612dd2542912c0349e0b2b141e46",
+    "strip": "9ac7a5a952136e121219aa81084c969cb650fec384e5ab4c3f94d4cbc6f0e117",
+    "restore": "41fa8d68ffd3c25b06110794c929c1532ef60df40a269f7b034c1c74d2615b43"
+  },
+  "tests/fixtures/genres/manual/policy-pd.docx": {
+    "normal": "e1f88135831d6f332168cbd43bbacaa1f421f046689ad04b35c2cb7a50bae4e9",
+    "commercial": "ab6db97a9ebacf72699e09d093d54ec47c6b4629332670b63bb259412f46daa8",
+    "strip": "aa6536fbb994111f280c3f4192ea5c1898590050137fa22ddf69aa5703038000",
+    "restore": "36fb92b1eca8aa0719c0f175be5f120e48d2f3859d56b90094b8d44487a7b708"
+  },
+  "tests/fixtures/genres/manual/reglament-edo.docx": {
+    "normal": "447b23bf192fe7a7dabda6ab932df3dc9baf9a302d1bdb4765f9898225cf659c",
+    "commercial": "3dfd2d59aae9fc393fd9599b60f24aae7e8cee8307d768c50536201d461eb91e",
+    "strip": "1bb152eec305f8dd0f0da134a7ce516c2873d6a1101f5c9b08eed77a2aeae6ac",
+    "restore": "cfb885653bbdf7cbc9f13bb7fa70699f76f915246862ca08124764c4859c4829"
+  },
+  "tests/fixtures/genres/proposal/kp-lunopark.docx": {
+    "normal": "b52693dac85d5b6e2bbf39c600b22831f37279525c283d6bf6f1d1c3df0d93f2",
+    "commercial": "906ea38086773ab00f28e01177768018c7d99ff54f8cd92d8da23248aaf7193c",
+    "strip": "3077ab1692ed2aa2a1c0ee644ee1e2710f0b06748b57b2e085e488b45ac31285",
+    "restore": "f03ec14f03146ed2ca36beae0462a37e9c8328dfe4a53180eea88465333e6e66"
+  },
+  "tests/fixtures/genres/proposal/kp-polden.docx": {
+    "normal": "3054e241d1d1d79b49190f4725c5eefeb9d1d130c0dc1b922a1e2a349321743c",
+    "commercial": "30c73d0f67894d92a3db0f94844f07eea4d4107a435f16f28dff8260e4cea6a5",
+    "strip": "8476f8fac92a80c5c15cc5e765fa5915e8d9fc55915e00d11ac16abfd8241c00",
+    "restore": "ac99844216d9b5da1b93f49b8406242268bd76d9e70ac41953b8aac45b63d621"
+  },
+  "tests/fixtures/genres/proposal/kp-svetlyachok.docx": {
+    "normal": "28568349e708620913e4d08a913ba4dec4a0387c8941db6d23a8b3272681ecdd",
+    "commercial": "271c21a884a3492ca793d6cca5e8529438a634d478de43a594dbc81fa9c862fd",
+    "strip": "aff4dbee71e39330dcaa7ec0bb7377ba6e3b6ed4c260e5b05f40ef6a672291df",
+    "restore": "b57b33fcee2eb7d2656567f0a3c4c5656ae52e87b54ed95b89e36eed7a0672f0"
+  },
+  "tests/fixtures/genres/reconciliation/reconciliation-ao.docx": {
+    "normal": "8d4cf02d77cdc8600cc272def39836a3ef4d919c1ec0baf57f580c354fac766e",
+    "commercial": "f0e9d2e9142b9563a27067063697ca6acd7b3b4f6348bb2911da40521edbc62c",
+    "strip": "5000f0bbbefb403cbe7cc228dc96353aa9fa67d3e73e0e302f0ab563bbe55a6d",
+    "restore": "9f11c6a4c1fab4b9d5b8721b3556e128746fab675a0252e83e84c38224cf4ab1"
+  },
+  "tests/fixtures/genres/reconciliation/reconciliation-ip.docx": {
+    "normal": "13d5ef27b03e10393063b09f24bbd61c0f9cc9dc9c529fca3e2386f375f1a6cc",
+    "commercial": "b300616b44b94536e2c3854e43fdecaa1b5218fecb512da72fa979bd2f23f233",
+    "strip": "eb6ffabae6c78315d7cac7db3d7d69abd3204c69df1e14e60b1d6634a3283772",
+    "restore": "3e2a90bd3f2130d950d6912d182364f73d2f71daea994dec0859552dc1356334"
+  },
+  "tests/fixtures/genres/reconciliation/reconciliation-ooo.docx": {
+    "normal": "faaf4679a6a38392156bc43b3bba381e687d1282cb1dd054c50ba92131bfe019",
+    "commercial": "83e667cf05a4c153ea83e83b4893f67bdc69488ae867afa9df8a2fdea313d5e7",
+    "strip": "3ced9b74365b97baac9c31d65a47de2f034b6c0232074aac714b4ac51284d0ce",
+    "restore": "5b2e0665a0fcec1404a8b5205d3920368414ff3dc1992b194d0bc3e09622bba5"
+  },
+  "tests/fixtures/genres/resume/resume-accountant.docx": {
+    "normal": "aebc75b467f6006ce24411c3e355f9a5e8f7c08d816d3418bab6cd87e78d8281",
+    "commercial": "4897af44c68514aee06bf9d0e18299db3ad8d3de16a9736c60f1a3dac0509ca7",
+    "strip": "63f7ffa0483366a0a1b4e64000d82064abba0cc8d097af733bc1ee93bc5f00e8",
+    "restore": "e5781f39798397bef2d943b32f359778aeaa337976cd786713c51a743cd3c034"
+  },
+  "tests/fixtures/genres/resume/resume-dev.docx": {
+    "normal": "9360e56c4175b69a92f411e05ea73160dfd06c0c6fae2bc2c6b30222b9bc701c",
+    "commercial": "568a599b64efd5d5e80b679a6efaca0e50f43a6a1d6a05ae876d3b6b0698d2a6",
+    "strip": "e2321f4940b7412b6886af38a6db354839449a41dc82672f8761ba8376afa7b3",
+    "restore": "bbaa0a699d6d9c8b254989681c26ebe9c3eca74485b888b7110ba73e365e7108"
+  },
+  "tests/fixtures/genres/resume/resume-en.docx": {
+    "normal": "9f2225f2cb506e24af70720e309aed182f4176fc05337f4858f79053c6191c83",
+    "commercial": "19c0a0b256d2d6422829cecca168379b23811bd0a67fa2fd043c185dbcecb359",
+    "strip": "91e1b962b7726f129df617e0e8ae8a4f2548fb9448a5d9341d5df23b18227759",
+    "restore": "3941683669923a3611f4a9ef95e23de2f82dda9e5973a98d934656e05222648d"
+  },
+  "tests/fixtures/genres/resume/resume-pm.docx": {
+    "normal": "c20ede4d2ef479c54cc633007196c9e21934734dd5496e74ab2a6f778cf9e1d3",
+    "commercial": "5278459f44d9eb28bdfa9bbdb20cc8913e8b09d5dbb2fc32b33eccfe0d451011",
+    "strip": "fc1e4a3a3b7ade4e4a78658ad6f4fee3224039a4957fd8caabc16724be6432c5",
+    "restore": "85e5cbb8a82088cf0d8c5623f3b37ea99f517d8bfebdf50726a08769e6313b35"
+  },
+  "tests/fixtures/heldout/chat/08-chat.docx": {
+    "normal": "73f645889b1c129e9d2ce3a8bc85f05131b47105748b50b6f1d36b14dd9f917d",
+    "commercial": "73f645889b1c129e9d2ce3a8bc85f05131b47105748b50b6f1d36b14dd9f917d",
+    "strip": "42c590426596bf53afbf15639b79f2ae0c9101dbfc09e35fb129eb15d69734b0",
+    "restore": "4b500b05e2df4f54c8ad361a3ea3b51a2dd556ca9e23007d61a459c7943b3c59"
+  },
+  "tests/fixtures/heldout/claim/02-pretenziya.docx": {
+    "normal": "8443c1b34b8d52a73b740cd05cf6de33ae4888a55aad95164bca9e6e7d5649f4",
+    "commercial": "863681c87c2287933bf6f537eeb0a27499b61575b26a956101ada7f8cb5f0914",
+    "strip": "d0bca9def9a9674f965f5b772ee91030dd8341314ecc6eace0ddad8bd0c1d4d2",
+    "restore": "d28321b8272eef40be134158e3e277d6fe50ea8ead4f19ab5d07f1ac5f3aa2b9"
+  },
+  "tests/fixtures/heldout/contract/01-dogovor-uslug.docx": {
+    "normal": "3024270c570614ce3553d5801f8ca19763037523501f136519d73f73548312f5",
+    "commercial": "3024270c570614ce3553d5801f8ca19763037523501f136519d73f73548312f5",
+    "strip": "6aaed61931fa888ff01a13189090c903a824a5bf9504b1d6a567bf5670a3e472",
+    "restore": "a8e037deb87574393fd0a95236b830c175ce9d0be878d7ad4f3ba5e0b45aa7be"
+  },
+  "tests/fixtures/heldout/contract/03-doverennost.docx": {
+    "normal": "bc1313e01de167db113942f5588af8f7c7937bd004bd4a2157a85782d1275d1f",
+    "commercial": "bc1313e01de167db113942f5588af8f7c7937bd004bd4a2157a85782d1275d1f",
+    "strip": "8e7dff99a9e906cc42f3a2e85c16fbef4ae723f53aa4918e469d00af7e2b03c0",
+    "restore": "40d0fb2260e567a955da2945928cb5978d9aa1c1d4c0621ddb836a8893115488"
+  },
+  "tests/fixtures/heldout/invoice/09-schet-oferta.docx": {
+    "normal": "eb58e6c06b4b3410c2ad4208301fec8832363d87738c75ddf5d6b2e6ed5e50a2",
+    "commercial": "eb58e6c06b4b3410c2ad4208301fec8832363d87738c75ddf5d6b2e6ed5e50a2",
+    "strip": "386b153419de559aa25df77cfe440e92c56be32279eca105245ae7fa0104ebc7",
+    "restore": "95ef22dbd2caa7aeed09f1c9ace47a260830ce12f4f23822f7fd081c95ac8a32"
+  },
+  "tests/fixtures/heldout/invoice/12-inn-goods.docx": {
+    "normal": "64e781289094166b55ff1b3ffe10163d900afbbf0aa9b78767538a293920b07f",
+    "commercial": "f6f25c26f4fe6807a305810cbd27fa8c22fa9e5f2dd925f6b62c1644904b180e",
+    "strip": "3566ca9256597ab5bff7b7fe3a66d071163c05142bdd35819bed3bf51dc4fdc3",
+    "restore": "a527c9df1ef16390499b43fc9c9c6a64c3f2c23d1475c3d614b9f20c54091d56"
+  },
+  "tests/fixtures/heldout/letter/06-letter-en.docx": {
+    "normal": "7940a427e5dd70c33875070efec03d5a67363a4848a4193a3c231facb312ab73",
+    "commercial": "7940a427e5dd70c33875070efec03d5a67363a4848a4193a3c231facb312ab73",
+    "strip": "fd432a2eb66f9222a9b06b6ed5d28e8f37920994a1e59f57e5beb49dc95795ab",
+    "restore": "611cf2f2a27a2a1cd7d6092c14cfd3d34e77d071c610c2f5480899bd99911f35"
+  },
+  "tests/fixtures/heldout/manual/10-instrukciya.docx": {
+    "normal": "11e82227e90ce4837c223825cb4815c002d824ce497415c805afba74ab733f7a",
+    "commercial": "11e82227e90ce4837c223825cb4815c002d824ce497415c805afba74ab733f7a",
+    "strip": "35e21288ad5d09ff4393964bdd3c546f2ea2e5b7168cbf3115c71779497e5fcd",
+    "restore": "3181f2b867c4ca859ccffb0cec47b2425e15f4e789cc5e97586820090fbc0b6f"
+  },
+  "tests/fixtures/heldout/memo/04-sluzhebnaya.docx": {
+    "normal": "78da7ad1dfbe0b16e7a5d2b7a2784f536fcbbd7f890763f0d8d21cafc5b4a228",
+    "commercial": "78da7ad1dfbe0b16e7a5d2b7a2784f536fcbbd7f890763f0d8d21cafc5b4a228",
+    "strip": "78c5acef228f4cf9b601ff0af1b4ff5976514740b1c704071797c025b8e12fd9",
+    "restore": "ac4a21c6ece32a28e1c5689b013784d359fd51d4aa23d9c57cfd03836e747c9c"
+  },
+  "tests/fixtures/heldout/protocol/05-protokol.docx": {
+    "normal": "d2bf769fa9ece0eb4eec926bc8e07136382c453959cdbfb6322771630f6d9612",
+    "commercial": "d2bf769fa9ece0eb4eec926bc8e07136382c453959cdbfb6322771630f6d9612",
+    "strip": "96b74ddd9783ade9e816730f98a382b5f7407123bce836c02462bec40d91215a",
+    "restore": "1413b0397cc9dda4c9f88bbdf13d17591aafc20e34e9d48fee308e4e524391d9"
+  },
+  "tests/fixtures/heldout/resume/07-cv-en.docx": {
+    "normal": "fa5fc7b2c96c82023267d06401aaa223852445a91a483287db0500647e0e3f14",
+    "commercial": "fa5fc7b2c96c82023267d06401aaa223852445a91a483287db0500647e0e3f14",
+    "strip": "51e92b902267845772118d03dae0d6bc14b2789f97f70d8f32fab8304adfe3bf",
+    "restore": "57e5510d8a35673d271c67f46ece081de771c39c3a86376671c55a2aa86aea92"
+  },
+  "tests/fixtures/heldout/text/11-omonimy.docx": {
+    "normal": "85fe58785916c561b7547fd1bf77542daf02fc5fd6d84aad7353d6e9c2183dbe",
+    "commercial": "85fe58785916c561b7547fd1bf77542daf02fc5fd6d84aad7353d6e9c2183dbe",
+    "strip": "614606b5631e8bad4285aec2c2f69bed312abf459a44440fdf146bd319797061",
+    "restore": "b7c52881ad93fa44e302c668c3def1cdb1192f060fb204d3121969782651328d"
+  },
+  "tests/fixtures/sample-contract.docx": {
+    "normal": "dcc488935d69e564cbabd8eaa38bc64c467f61d3ca246f7db57079b454b41441",
+    "commercial": "a9531a32b0325877dc7f3c043e77392e00850bca896724ac900e8a35c7af7809",
+    "strip": "a7b04e0c972e24aa699133a61676960f08c034feaa04190eb2fb0127dbc6c7e5",
+    "restore": "4794589979e5c74151aa6a5a1b43a10ecb6d9326a0c37c531b667972e38e6be9"
+  },
+  "scripts/make-sample.mjs#buildSampleDocx": {
+    "normal": "dcc488935d69e564cbabd8eaa38bc64c467f61d3ca246f7db57079b454b41441",
+    "commercial": "a9531a32b0325877dc7f3c043e77392e00850bca896724ac900e8a35c7af7809",
+    "strip": "a7b04e0c972e24aa699133a61676960f08c034feaa04190eb2fb0127dbc6c7e5",
+    "restore": "4794589979e5c74151aa6a5a1b43a10ecb6d9326a0c37c531b667972e38e6be9"
+  }
+}

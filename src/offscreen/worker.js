@@ -23,6 +23,8 @@ const host = createHost({
   extractPdf: createPdfExtractor(),
   // Встроенная модель NER (WP10-C): zip из собственного пакета расширения (chrome-extension://, не сеть) → OPFS этого же origin
   readPackageFile,
+  // Словари ФИО (0.5, WP12-A): файлы vendor/dict/<имя>.txt своего пакета, один раз на жизнь воркера — не часть кода worker.js (К14)
+  readDictFile: (name) => readPackageFile(new URL(`../vendor/dict/${name}.txt`, import.meta.url).href),
   modelStore: { listInstalled, inspectPack, install },
 });
 

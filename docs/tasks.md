@@ -881,12 +881,51 @@ e2e и сборка — под `flock /home/alexf14/.local/tmp/claude-1000/docx-
 | время до/после (`npm run bench`) — в «Статус» | запуск |
 | `npm run lint`, `npm test`, `npm run e2e`, `npm run pack` зелёные | запуск |
 
+**Статус:** выполнено 26.10.2026 (коммит — в истории ветки `v0.5` следом за `dd891e4`).
+
+- **Словари:** `vendor/dict/{ru-surnames,ru-first,en-first,en-surnames}.txt` (секции `#=ИМЯ` со строками `codec.js`, 359 538 байт) + `NOTICE.md`; генерирует
+  `npm run dicts` (`--check` совпадает), модули `src/core/detect/names/dict/{ru,en}-*.js` удалены. `names/dict/load.js`: `loadDicts(read)` — один раз на жизнь
+  воркера, сбой окончательный (пустые списки + `DICT_FAILED {reason: READ_FAILED|BAD_FORMAT}` к каждому анализу; повтор после сбоя оставил бы устаревший
+  `SIG_MEMO` в `person-dict.js`). Хост начинает загрузку при создании, `ANALYZE`/`ADD_ENTITY` её ждут; в Node — `scripts/dicts-node.mjs` и `setupFiles` vitest.
+  `readPackageFile` — второй путь `/vendor/dict/<имя>.txt`. Сжатый размер словарей в архиве: 142 179 байт против ≈ 142 553 доли словарей в сжатом `worker.js` 0.4.
+- **Бюджет (К14):** вынос словарей освободил 359 234 байт, но код 0.4 без ORT и словарей был 431 580 байт (секции `names/dict/index.js` и `codec.js` 0.4 считались
+  словарями) — до 400 КиБ не хватало ≈ 22 КБ. Поэтому разбор PDF ядра (`core/pdf/extract.js` + `layout.js`, 38 399 байт) вынесен в модуль по требованию
+  `offscreen/chunks/extract-*.js` (esbuild `splitting`, динамический импорт в `offscreen/pdf-loader.js`; `isPdf` — в новом `core/pdf/sniff.js`; хост
+  импортирует ядро из модулей, а не из `core/index.js`). Итог (`npm run pack`): `worker.js` 502 401 байт + общий модуль 1 768, ORT 102 856, **код без ORT
+  401 313 байт = 391,9 КиБ ≤ 400 КиБ (запас 8 287 байт)**, словарей в бандлах нет; лёгкий архив 6 486 404 байт (≤ 12 МБ; 0.4.1 — 6 479 326), полный 36 029 405.
+- **Общий слой OOXML** `src/core/ooxml/{zip,xml,model,flow,opc,serialize,adapter}.js`, реестр `src/core/adapters.js`, Word — `docx/{model,replace,adapter}.js`
+  (`WORDML`, `DOCX_ADAPTER`); `applyDecisions` выбирает сериализатор по `doc.kind`; описание — `docs/contracts.md` §9 (с предложениями для WP12-B, §9.7).
+  `docx/{zip,xml}.js` оставлены реэкспортом — импорты тестов и скриптов не менялись.
+- **Регрессия:** снимок sha256 снят до переноса (код `fc9a46b`): 42 DOCX (41 фикстура `tests/fixtures/**` + образец) × `normal`/`commercial`/`strip`/`restore`,
+  `tests/fixtures/docx-regression.json`; после переноса совпадают все 168.
+- **CI:** `actions/checkout@v7`, `actions/setup-node@v7`, `actions/upload-artifact@v7` (последние мажорные, `runs.using: node24` — сверено `gh api` 26.10.2026),
+  `node-version: 24` (LTS; 26 становится LTS 28.10.2026), `runs-on: ubuntu-24.04`. CI не запускался; локально Node 24 не проверялся (установлен 22.22).
+- **Бенчмарк** (`npm run bench`, новый `scripts/bench.mjs`; до — та же программа на дереве `fc9a46b`, прогоны чередовались, медианы; машина делилась с другим агентом):
+
+  | Замер | 0.4 (`fc9a46b`) | WP12-A |
+  |---|---|---|
+  | Chromium, первый анализ свежего профиля (offscreen + воркер + словари), образец, 3 × 7 | 174,7–176,7 мс | 171,2–172,7 мс |
+  | Chromium, ANALYZE 20 страниц (9 016 слов, 286 абзацев), 3 × 7 | 277,5–285,5 мс | 284,5–287,8 мс (+1,5 %) |
+  | Node 22, холодный старт: импорт + словари + первый анализ образца, 3 × 11 | 330,8–334,9 мс | 345,8–346,5 мс (+4 %: декодирование 52 мс до анализа) |
+  | Node 22, parse + analyze 20 страниц, 3 × 11 | 221,9–228,3 мс | 225,5–229,7 мс |
+  | Chromium с моделью 1.1.0 (e2e `ner.spec.js`), 20 страниц | ≈ 2,4 с (README 0.4) | 2 359 мс |
+
+  Холодный старт в браузере не медленнее (на 2 % быстрее), 20 страниц — в пределах 10 % (К14).
+- **Тесты:** новые `tests/unit/dict-load.spec.js` (9), `tests/unit/ooxml/{flow,package,adapter}.spec.js` (21), `tests/integration/docx-regression.spec.js` (2),
+  `host.spec.js` +3 (`DICT_FAILED`, последним блоком), `bundled-model.spec.js` +2 (пути словарей), e2e `nfr.spec.js` +1 (словари и модуль PDF из пакета, запись
+  сети с самого старта). **Изменённые ожидания:** `pack.spec.js` — лимит кода 416 → 400 КиБ, код считается вместе со статическим общим модулем, словарей в бандлах
+  0 байт (было: словари только в `worker.js`, ≤ 400 КБ), добавлена проверка модуля PDF по требованию — по ТЗ; `names/dict-codec.spec.js` — упакованный список
+  берётся из `vendor/dict/ru-surnames.txt`, а не из удалённого модуля (ожидание прежнее).
+- **Вне зоны (минимально):** `src/core/pdf/{sniff,extract}.js` (сигнатура отдельно, реэкспорт), `vitest.config.js` (`setupFiles`), `package.json` (`bench`),
+  `scripts/{eval-genres,gen-ner-eval}.mjs` (загрузка словарей), `.prettierignore`, `README.md`, `docs/spec-full.md` (ссылка на `vendor/dict/NOTICE.md`),
+  `eslint.config.js` (игнор `.claude/**` — рабочие копии агентов внутри репозитория).
+
 ## Бэклог после 0.4
 
 Версия 0.4.0: политика маскирования, список компаний, корпус жанров, модель 1.1.0 (WP11-A…D). Отложено:
 
-- **Словари ФИО и списки слов — в `vendor/dict/*.txt`** с ленивой загрузкой через `offscreen/package-fetch.js`. Код `worker.js` — 424 820 байт при лимите
-  416 КиБ (поднят с 400 в WP11-E), запас ≈ 1,2 КБ.
+- ~~**Словари ФИО и списки слов — в `vendor/dict/*.txt`** с ленивой загрузкой через `offscreen/package-fetch.js`. Код `worker.js` — 424 820 байт при лимите
+  416 КиБ (поднят с 400 в WP11-E), запас ≈ 1,2 КБ.~~ — словари ФИО вынесены в 0.5 (WP12-A, лимит снова 400 КиБ); курируемые списки `lexicon.js` остались в коде.
 - **Склейка ячеек широкой PDF-таблицы** (8+ колонок, ячейки с переносами, заголовок вне таблицы): «НовосибирскПетрушин», «2224061538998 999» — часть значения
   остаётся открытой (heldout4, `crm/crm-export.pdf`); строка в ограничениях README.
 - **Финальная проверка (heldout3), не сделано в WP11-E:** имя без контекста («ключи оставил Мирон») — не находит ни модель, ни правила; одиночная

@@ -1,5 +1,5 @@
 // Хост ядра (то, что крутится в Web Worker offscreen) — полный протокол без браузера.
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { zipSync, strToU8 } from 'fflate';
 import { createHost, makeResultName } from '../../src/offscreen/host.js';
@@ -10,6 +10,8 @@ import { buildFixtures } from '../../scripts/gen-fixtures.mjs';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { extractPdfNode } from './support/pdf.js';
+import { readDictFromDisk } from '../../scripts/dicts-node.mjs';
+import { makeDocx, para, run } from '../helpers/docx.js';
 
 function setup() {
   const out = [];
@@ -625,5 +627,73 @@ describe('host: MODEL_INSTALL поверх установленной прежн
     expect(out.find((m) => m.requestId === 'up2').status).toBe('present');
     expect(read).toHaveLength(1);
     expect(slots()).toEqual(['upd-pack.1']);
+  });
+});
+
+// WP12-A (К14): словари ФИО — файлы vendor/dict/*.txt, хост грузит их через env.readDictFile один раз при создании.
+// Свежий граф модулей (vi.resetModules) — как новый воркер: своё состояние словарей и кэши детекторов. Блок — ПОСЛЕДНИМ
+// в файле: после resetModules динамические импорты дают новые экземпляры модулей (другие классы ошибок), а тестам выше
+// нужны прежние.
+describe('host: словари ФИО из пакета (WP12-A)', () => {
+  // вымышленные данные: имя «Мирон» без контекста размечает только стаб модели (правила его не находят)
+  const TEXT = 'Ключи от склада оставил Мирон, ИНН поставщика 7707083893, почта sklad@example.invalid.';
+  const NER_START = TEXT.indexOf('Мирон');
+  const nerStub = {
+    name: 'stub',
+    init: async () => {},
+    detect: async (text) => (text === TEXT ? [{ start: NER_START, end: NER_START + 'Мирон'.length, label: 'PER', score: 0.99 }] : []),
+  };
+
+  async function freshHost(readDictFile) {
+    vi.resetModules();
+    const { createHost: create } = await import('../../src/offscreen/host.js');
+    const { MSG: M, postChunked: chunk } = await import('../../src/shared/protocol.js');
+    const out = [];
+    const host = create({ post: (_c, m) => out.push(m), nerProvider: nerStub, readDictFile });
+    const settings = { ...defaultSettings(), nerEnabled: true };
+    async function upload(requestId, bytes, name = 'склад.docx') {
+      const msgs = [];
+      chunk((m) => msgs.push(m), { requestId, kind: 'FILE', bytes, meta: { name } });
+      for (const m of msgs) await host.handle('c1', { settings, ...m });
+      await host.handle('c1', { settings, type: M.ANALYZE, requestId });
+      return out.filter((m) => m.requestId === requestId);
+    }
+    return { host, out, upload, M, settings };
+  }
+  afterAll(() => vi.resetModules());
+
+  it('словари читаются через env.readDictFile один раз (4 файла vendor/dict), DICT_FAILED нет', async () => {
+    const calls = [];
+    const { upload, M } = await freshHost(async (n) => (calls.push(n), readDictFromDisk(n)));
+    const a = (await upload('r1', makeDocx(para(run(TEXT))))).find((m) => m.type === M.ENTITIES);
+    const b = (await upload('r2', buildSampleDocx().bytes)).find((m) => m.type === M.ENTITIES);
+    expect(calls.sort()).toEqual(['en-first', 'en-surnames', 'ru-first', 'ru-surnames']);
+    for (const e of [a, b]) expect(e.warnings.map((w) => w.code)).not.toContain('DICT_FAILED');
+  });
+
+  it('сбой чтения словарей → предупреждение DICT_FAILED {reason}, не ERROR; сущности правил и модели на месте; ADD_ENTITY — тоже с предупреждением', async () => {
+    const { upload, out, host, M, settings } = await freshHost(async () => {
+      throw new Error('Файл пакета расширения не найден');
+    });
+    const r = await upload('r1', makeDocx(para(run(TEXT))));
+    expect(r.some((m) => m.type === M.ERROR)).toBe(false);
+    const ent = r.find((m) => m.type === M.ENTITIES);
+    expect(ent.warnings).toContainEqual({ code: 'DICT_FAILED', details: { reason: 'READ_FAILED' } });
+    const by = (cat) => ent.entities.filter((e) => e.category === cat);
+    expect(by('INN').map((e) => e.value)).toEqual(['7707083893']);
+    expect(by('EMAIL').map((e) => e.value)).toEqual(['sklad@example.invalid']);
+    expect(by('PERSON').find((e) => e.value === 'Мирон')?.source).toBe('ner');
+    // в предупреждении нет текста документа и словарей (NFR-14)
+    expect(JSON.stringify(ent.warnings)).not.toMatch(/Мирон|7707083893|sklad/);
+    await host.handle('c1', { settings, type: M.ADD_ENTITY, requestId: 'r2', docId: ent.docId, category: 'COMPANY', text: 'склада', replaceAll: true });
+    const upd = out.find((m) => m.requestId === 'r2' && m.type === M.ENTITIES);
+    expect(upd.warnings).toContainEqual({ code: 'DICT_FAILED', details: { reason: 'READ_FAILED' } });
+  });
+
+  it('битый словарь → DICT_FAILED с причиной BAD_FORMAT', async () => {
+    const { upload, M } = await freshHost(async (n) => (n === 'ru-first' ? new TextEncoder().encode('не словарь') : readDictFromDisk(n)));
+    const ent = (await upload('r1', buildSampleDocx().bytes)).find((m) => m.type === M.ENTITIES);
+    expect(ent.warnings).toContainEqual({ code: 'DICT_FAILED', details: { reason: 'BAD_FORMAT' } });
+    expect(ent.entities.filter((e) => e.category === 'EMAIL').length).toBeGreaterThanOrEqual(4);
   });
 });

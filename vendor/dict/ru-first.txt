@@ -1,8 +1,6 @@
-// СГЕНЕРИРОВАНО scripts/make-dicts.mjs — не редактировать вручную (npm run dicts). WP7, FR-23.
-// Русские имена (леммы) по роду; AMBIGUOUS — омонимы нарицательных: 6783 записей. Формат — front-coding (codec.js).
-// Источник: https://github.com/datacoon/russiannames @ ac26a24a9bf0ac05e3330668c5103400a1cbf4ea (BSD-3-Clause, Copyright (c) 2018, Ivan Begtin), russiannames/data/names.parquet; омонимы — https://github.com/natasha/natasha @ 08ae8452db9391f7c19730e61201cd442014a242 (MIT, Copyright (c) 2016 Natasha project), natasha/data/dict/maybe_first.txt
-// Дата выгрузки: 2026-10-15. Лицензии и атрибуция — NOTICE.md.
-export const MALE = `R0aansolij
+# make-dicts.mjs (npm run dicts), 2026-10-15: Russian first names by gender; AMBIGUOUS - homonyms of common nouns, 6783. Sources and licenses: NOTICE.md
+#=MALE
+R0aansolij
 1ba
 3j
 3kaq
@@ -4601,8 +4599,9 @@ export const MALE = `R0aansolij
 2AF
 2CF
 1ya
-3q`;
-export const FEMALE = `R0aca
+3q
+#=FEMALE
+R0aca
 2dtrsina
 2qoqa
 1dapiF
@@ -6692,8 +6691,9 @@ export const FEMALE = `R0aca
 2F
 1qina
 2orlaca
-7na`;
-export const UNISEX = `R0abeallav
+7na
+#=UNISEX
+R0abeallav
 3o
 2onfns
 1hihada
@@ -6784,8 +6784,9 @@ export const UNISEX = `R0abeallav
 0EliFna
 1nC
 1rrfu
-0Frfq`;
-export const AMBIGUOUS = `R0abonfns
+0Frfq
+#=AMBIGUOUS
+R0abonfns
 1candaqe
 2qoqa
 1dasa
@@ -6941,4 +6942,4 @@ export const AMBIGUOUS = `R0abonfns
 2isa
 2Cbqtr
 1qa
-0Ena`;
+0Ena

@@ -19,6 +19,10 @@ import { fileURLToPath } from 'node:url';
 import { getDicts } from '../src/core/detect/names/dict/index.js';
 import { declineSurname, declineFirstName, declinePatronymic } from '../src/core/detect/names/morph.js';
 import { MALE_NAMES_RU, FEMALE_NAMES_RU, AMBIGUOUS_NAMES_RU, FIRST_NAMES_EN, lowerE } from '../src/core/detect/names/lexicon.js';
+import { loadDictsFromDisk } from './dicts-node.mjs';
+
+// словари ФИО — файлы vendor/dict/*.txt (версия 0.5, WP12-A): до первого анализа
+await loadDictsFromDisk();
 
 export const SEED = 20261015;
 const N_RU = 240;

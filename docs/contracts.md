@@ -1,6 +1,6 @@
 # Контракты модулей
 
-Документ описывает, **что есть** в коде и **как к этому подключаться** (версия 0.3.0: MVP WP1–WP5, пакеты 0.2 WP6–WP9 и 0.3 WP10-A…D — PDF §7, восстановление файла §1.6, встроенная модель §6.8).
+Документ описывает, **что есть** в коде и **как к этому подключаться** (версия 0.3.0: MVP WP1–WP5, пакеты 0.2 WP6–WP9 и 0.3 WP10-A…D — PDF §7, восстановление файла §1.6, встроенная модель §6.8; 0.4 — §8; 0.5 WP12-A — словари в `vendor/dict` §2, общий слой OOXML и `DocumentAdapter` §9).
 Источник истины — код с JSDoc; здесь — смысл и правила. Рамки MVP — `docs/mvp-scope.md`, цели 0.2 и 0.3 — `docs/concept-0.2.md`, `docs/concept-0.3.md`,
 ТЗ — `docs/spec-full.md`, рабочие пакеты — `docs/tasks.md`.
 
@@ -18,10 +18,13 @@ popup / content / options / restore ──port "docx"──► background (route
 
 | Путь | Что | Пакет |
 |---|---|---|
-| `src/core/docx/zip.js` | свой ZIP: чтение, детерминированная запись, байт-копия нетронутых записей | фундамент |
-| `src/core/docx/xml.js` | линейный токенизатор XML, (un)escape, `applyRangeEdits` | фундамент |
-| `src/core/docx/model.js` | `parseDocx` → `DocModel` (части, параграфы, потоки, virtualText, charMap) | фундамент |
-| `src/core/docx/replace.js` | `serializeDocx(doc, edits, opts)` — замена через раны, метаданные, rels, ZIP | фундамент |
+| `src/core/ooxml/zip.js` | свой ZIP: чтение, детерминированная запись, байт-копия нетронутых записей (до 0.5 — `core/docx/zip.js`, там остался реэкспорт) | фундамент; WP12-A |
+| `src/core/ooxml/xml.js` | линейный токенизатор XML, (un)escape, `applyRangeEdits` (до 0.5 — `core/docx/xml.js`, реэкспорт) | фундамент; WP12-A |
+| `src/core/ooxml/model.js`, `flow.js`, `opc.js`, `serialize.js`, `adapter.js` | общий слой OOXML (§9): каркас пакета `parsePackage`, потоки/charMap/замена через раны по описанию разметки `FlowMarkup`, rels/docProps/чистка ссылок, сборка `serializePackage`, интерфейс `DocumentAdapter` | WP12-A |
+| `src/core/adapters.js` | реестр адаптеров форматов: `DOCUMENT_ADAPTERS`, `adapterForKind`, `detectAdapter` (§9) | WP12-A |
+| `src/core/docx/model.js` | адаптер Word поверх ooxml/: `WORDML`, части и порядок FR-25 (`docxParts`, `partRank`), авторы/alt/поля/вид абзаца; `parseDocx` → `DocModel` (`kind: 'docx'`) | фундамент; WP12-A |
+| `src/core/docx/replace.js`, `adapter.js` | `serializeDocx(doc, edits, opts)` = `serializePackage` с записями встроенных объектов Word; `DOCX_ADAPTER`, `DOCX_MIME` | фундамент; WP12-A |
+| `src/core/pdf/sniff.js` | `isPdf` — сигнатура PDF без загрузки разбора (хост; `extract.js` реэкспортирует) | WP12-A |
 | `src/core/pdf/layout.js` | разметка текста PDF: `buildLayout(pages)` и шаги `orientPage`, `normalizeItems`, `groupLines`, `findGutters`, `monoCharWidth`, `joinWords`, `stripRepeating`, `detectColumns`, `detectTables`, `linePitch`, `mergeParagraphs`, `dehyphenate`, `classifyHeading`, `detectList`; помощники `orientationOf`, `isUpright`, `mulTransform`; пороги `LINE_TOL`, `SPACE_GAP`, `SEGMENT_GAP`, `GUTTER_GAP`, `PARA_PITCH`, `INDENT`, `BAND`, `HEADER_GAP`, `MONO_FONT_RE` (§7) | WP10-A |
 | `src/core/pdf/extract.js` | `extractPdf(pdfjs, bytes, opts) → Layout` (pdf.js передаётся снаружи), `isPdf`, `lettersOnPage`, `mapPdfError`, `pageSpace`, `BASE_DOC_OPTIONS`, `MIN_LETTERS` (20), `MAX_PAGES` (1000) (§7) | WP10-A |
 | `src/core/text/model.js`, `serialize.js` | текстовая модель `fromText(blocks, meta)` → `DocModel` с `kind: 'text'`; `serializeText(doc, edits, {format: 'md'\|'txt'})` (§7) | WP10-A |
@@ -41,7 +44,8 @@ popup / content / options / restore ──port "docx"──► background (route
 | `src/core/validators.js`, `detect/identifiers/` | валидаторы и детекторы 18 категорий идентификаторов | WP1 |
 | `src/core/detect/names/` | PERSON/COMPANY/ADDRESS, база знаний сторон (`kb.js`), морфология, транслитерация | WP2 |
 | `src/core/detect/names/person-dict.js` | словарный детектор ФИО третьих лиц `findPersonsByDict` (§2) | WP7 |
-| `src/core/detect/names/dict/` | `index.js` (ленивое декодирование, поиск), `codec.js` (front-coding), генерируемые `ru-surnames.js`, `ru-first.js`, `en-first.js`, `en-surnames.js`, `NOTICE.md` | WP7 |
+| `src/core/detect/names/dict/` | `index.js` (ленивое декодирование, поиск), `codec.js` (front-coding), `load.js` (`loadDicts`, `parseDictFile`, `dictState`, §2) | WP7; WP12-A |
+| `vendor/dict/` | словари ФИО — файлы пакета `ru-surnames.txt`, `ru-first.txt`, `en-first.txt`, `en-surnames.txt` и `NOTICE.md` (генерирует `npm run dicts`), §2 | WP12-A |
 | `src/core/detect/custom/` | документный детектор пользовательских категорий | WP4 |
 | `src/core/ner/pack.js`, `known-packs.js` | формат пакета модели: `parsePackManifest`, `verifyPackFiles`, `packZipName`; список проверенных пакетов (§6.1) | WP8; sha256 — WP9 |
 | `src/core/ner/pending-provider.js` | заглушка провайдера WP8 (только для `tests/unit/ner/pack.spec.js`) | WP8 |
@@ -52,7 +56,7 @@ popup / content / options / restore ──port "docx"──► background (route
 | `src/shared/model-store.js` | хранилище пакетов модели в OPFS: проверка, установка в слоты, чтение из воркера, удаление (§6.2) | WP8 |
 | `src/shared/bundled-model.js` | встроенная модель: `planBootstrap`, `settingsPatchFor`, `BOOTSTRAP_CLIENT` (чистые функции, §6.8) | WP10-C |
 | `src/background/bundled-model.js` | автоустановка встроенной модели: `initBundledModel` (onInstalled + миграция настроек, onStartup, ответ хоста), `bootstrapBundledModel` (§6.8) | WP10-C |
-| `src/offscreen/package-fetch.js` | `readPackageFile(url)` — zip из собственного пакета расширения (`chrome-extension://` того же origin); единственный `fetch` в `src/` (§6.8) | WP10-C |
+| `src/offscreen/package-fetch.js` | `readPackageFile(url)` — файл из собственного пакета расширения (`chrome-extension://` того же origin): `models/*.zip` (§6.8) и с 0.5 `vendor/dict/*.txt` (§2); единственный `fetch` в `src/` | WP10-C; WP12-A |
 | `src/background/index.js`, `router.js`, `offscreen-manager.js` | роутер портов (с 0.3 — `MODEL_BOOTSTRAP`, отказ на клиентские `MODEL_INSTALL`/`MODEL_INSTALLED`), жизненный цикл offscreen; миграция настроек с 0.3 — в `background/bundled-model.js` (`onInstalled`) | фундамент; WP10-C |
 | `src/background/site-access.js` | динамическая регистрация content script по выданным origin (§4а) | WP6 |
 | `src/background/badge.js` | бейдж `ON` (FR-43) | WP3 |
@@ -68,7 +72,9 @@ popup / content / options / restore ──port "docx"──► background (route
 | `src/ui/components/dom.js` | `h`, `clear` — построение DOM без `innerHTML` | 0.1 |
 | `schemas/` | `mapping`, `protocol`, `model-pack` (JSON Schema draft 2020-12) | WP5; WP8 |
 | `scripts/build.mjs`, `pack.mjs` | сборка `dist/` (`--e2e` → `dist-e2e/`, `--with-model=<zip>` — полная), архивы релиза: лёгкий и `-full` (§6.8) | фундамент; WP6, WP8, WP10-C |
-| `scripts/make-dicts.mjs` | генератор словарей ФИО из закреплённых коммитов (`npm run dicts`, `--check`) | WP7 |
+| `scripts/make-dicts.mjs` | генератор словарей ФИО из закреплённых коммитов (`npm run dicts`, `--check`) → `vendor/dict/` | WP7; WP12-A |
+| `scripts/dicts-node.mjs` | словари в Node: `readDictFromDisk`, `loadDictsFromDisk` (тесты — `tests/setup/dicts.js`, скрипты) | WP12-A |
+| `scripts/bench.mjs` | бенчмарк конвейера без модели (`npm run bench`, `-- --browser`): холодный старт и 20-страничный договор | WP12-A |
 | `scripts/pack-model.mjs` | детерминированный zip пакета модели (`npm run pack:model -- --id=<id>`) | WP8 |
 | `scripts/bench-ner.mjs` | бенчмарк и span-F1 провайдера в Node (`npm run bench-ner`), помощники для тестов | WP9 |
 | `scripts/gen-ner-eval.mjs` | корпус оценки NER `tests/fixtures/ner/eval-{ru,en}.json` (`npm run gen-ner-eval`) | WP9 |
@@ -97,6 +103,7 @@ popup / content / options / restore ──port "docx"──► background (route
   `w:noBreakHyphen` → `U+2011`; `w:softHyphen` — **0 символов** (удаляется, если попал внутрь заменяемого диапазона).
 - Вложенные `w:p` (текстовые поля, ячейки, `sdtContent`) — отдельные параграфы со своими потоками; `paragraph.depth` — вложенность.
 - `doc.language` — авто-язык FR-19 (`ru|en|both`), `doc.warnings` — например `EMBEDDED_NOT_PROCESSED` (FR-15).
+- `doc.kind` (0.5, WP12-A) — вид документа, он же `DocumentAdapter.kind`: `'docx'` у Word, `'text'` у текстовой модели; по нему `applyDecisions` выбирает сериализатор (§9).
 - **Текстовая модель** (0.3, PDF): `fromText(blocks, {name, size, format})` (`core/text/model.js`) строит `DocModel` с `kind: 'text'` — без ZIP и XML
   (`entries: []`, `parts: new Map()`), один `live`-поток `p<N>:live` на блок (кроме `hr`), без `segments`; ячейки таблиц — отдельные абзацы (`depth: 1`),
   `doc.tables = [{index, cols, pids}]`, колонтитулы — потоки в `word/header1.xml` / `word/footer1.xml`, `doc.blocks` — блоки с `pid` для сериализации.
@@ -221,7 +228,28 @@ registerDocumentDetector('kb', (doc, entities, ctx) => [{ streamId, category: 'P
 - Названия фирм (ревью WP-N1): латинская пара не берётся перед хвостом названия (`ORG_TAIL_WORDS_EN` в `lexicon.js`: `International`, `LLP`, `Inc.`, `Bank`, `Partners`…, а также `&` и `and <хвост>`), после `<Слово> of` («Bank of America Merrill Lynch») и если сама «фамилия» — хвост («Morris International»); устойчивые названия из двух «имён» («Clifford Chance», «Майкл Корс») — в `NON_PERSON_PAIRS`. Это же действует для латинских пар правил, найденных только по курируемому имени (`span.nameOnly`, без лейбла и обращения). В `kb.js` словарная пара (или `nameOnly`), совпадающая с названием компании документа без ОПФ или с его началом из ≥ 2 слов, выдаётся как `COMPANY` (`confidence: 'kb'`, canonical этой компании), а не `PERSON`.
 - Пара правил «Имя Отчество» («Ольгой Петровной»: второе слово — отчество, согласованное с именем по роду и падежу) в `kb.js` разбирается как `fm`, поэтому падежные формы попадают в одну запись.
 - Измерения: фикстура `PERSON-dict.json` — 47 позитивов (39 `dictOnly`), 68 негативов; К4 (2 400 абзацев) — отношение времени со словарём к времени без него 1.07–1.17.
-- Словари (`names/dict/index.js`, ленивое декодирование при первом вызове): `getDicts()`, `bigFirstNameInfo(word)`, `surnameLemmas(word)`, `surnameSuffixInfo(word)`, `isEnFirst`, `isEnSurname`. Модули словарей — генерируемые (`npm run dicts`), вручную не правятся; попадают только в `offscreen/worker.js` (К15).
+- Словари (`names/dict/index.js`): `getDicts()`, `bigFirstNameInfo(word)`, `surnameLemmas(word)`, `surnameSuffixInfo(word)`, `isEnFirst`, `isEnSurname` — синхронные. Файлы словарей генерируются (`npm run dicts`), вручную не правятся.
+
+**Словари в `vendor/dict` (версия 0.5, WP12-A, К14).** Словари — не код `worker.js`, а файлы пакета `vendor/dict/{ru-surnames,ru-first,en-first,en-surnames}.txt`
+(359 538 байт) и `vendor/dict/NOTICE.md` (лицензии источников; сборка копирует каталог в `dist/vendor/dict/` и печатает размер).
+- **Формат файла:** UTF-8; строки `# …` — комментарии (первая — заголовок с источником); `#=<ИМЯ>` (`[A-Z][A-Z0-9_]*`) начинает секцию; строки до следующей
+  строки на `#` — тело секции: строка `codec.js` (front-coding, ASCII, первая буква `R`/`L`). Строка кодека начинается с `'0'…'X'`, поэтому с `#` не путается.
+  Секции: `ru-surnames` — `SURNAMES`; `ru-first` — `MALE`, `FEMALE`, `UNISEX`, `AMBIGUOUS`; `en-first` — `FIRST`; `en-surnames` — `SURNAMES`. CRLF допустим.
+  Размер в архиве не хуже 0.4: 142 179 байт сжатых против ≈ 142 553 байт доли словарей в сжатом `worker.js` 0.4.
+- **Загрузка** (`names/dict/load.js`): `loadDicts(read) → Promise<{ok: true, ms} | {ok: false, reason: 'READ_FAILED'|'BAD_FORMAT', ms}>`, `read(name)` — имя без
+  `.txt` → `Uint8Array | string`. Один раз на жизнь модуля (воркера): параллельные вызовы ждут одну загрузку, последующие получают её итог без чтения; не бросает.
+  Успех — списки ставятся (`setDictSources`) и сразу декодируются (`getDicts()`, ≈ 55–70 мс в Node), так формат проверен до первого анализа. Сбой —
+  пустые списки (`EMPTY_DICT_SOURCES`: остаются курируемые имена `lexicon.js`), `dictState() === 'failed'` **окончательно**: подмена словарей после первого анализа
+  оставила бы устаревшие разборы слов в кэше `person-dict.js` (`SIG_MEMO`). `READ_FAILED` — файл не получен, не байты/строка или не UTF-8; `BAD_FORMAT` — нет секции,
+  данные вне секции, не строка кодека. `parseDictFile(text) → Map<секция, строка кодека>`, `DICT_FILES`, `resetDictsForTests()` (только тесты).
+- **`getDicts()` до загрузки** бросает `Error('Словари ФИО не загружены: до анализа вызовите loadDicts() …')`; вызывающие (`person-dict`, `vocative`, `kb`,
+  `ner/filters-pl`) не менялись.
+- **Браузер:** `worker.js` передаёт хосту `readDictFile: (name) => readPackageFile(new URL('../vendor/dict/<name>.txt', import.meta.url).href)`; хост
+  (`createHost`) запускает `loadDicts` сразу при создании (пока клиент шлёт файл чанками), `ANALYZE` и `ADD_ENTITY` её дожидаются. Сбой — анализ идёт без
+  словарного детектора, к каждому анализу — предупреждение `DICT_FAILED {details: {reason}}` (по образцу `NER_FAILED`; панель показывает `warnGeneric`), правила,
+  база знаний и модель работают. Без `env.readDictFile` хост работает на словарях, загруженных раньше (тесты), а если их нет — `DICT_FAILED {reason: 'READ_FAILED'}`.
+- **Node:** `scripts/dicts-node.mjs` (`loadDictsFromDisk()` — сбой бросает); vitest грузит словари до каждого файла теста (`setupFiles: tests/setup/dicts.js`),
+  `scripts/eval-genres.mjs` и `gen-ner-eval.mjs` — на верхнем уровне.
 
 ---
 
@@ -359,10 +387,18 @@ UI: popup — `siteState(settings, url, {granted})` даёт `needsAccess` (на
     регенерация PDF-фикстур в `pdf-fixtures.spec.js` (Chromium Playwright в задании `test` не установлен; `SKIP_PDF_REGEN=1`); сверка с `pdftotext` в
     `pdf-pipeline.spec.js` (нет утилиты); LibreOffice (`SKIP_LIBREOFFICE=1`). Только по запросу: `E2E_SHOTS`, `E2E_HEADED`, `E2E_WP3_DETACHED`, `FULL_DETECTORS`.
     Главный сценарий `tests/e2e/chat.spec.js`: 13 тестов, 12 идут всегда, detached input — только с `E2E_WP3_DETACHED=1`; флаг `E2E_WP3` времён WP3/WP5 снят.
-15. С 0.3 `fetch` в `src/` есть ровно в одном файле — `src/offscreen/package-fetch.js` (чтение zip встроенной модели из своего пакета, override ESLint, сторож —
-    `tests/unit/bundled-model.spec.js`); новый `fetch` в другом файле — ошибка lint и теста. pdf.js не бандлится: он лежит в `vendor/pdfjs/` и грузится лениво (§7.1);
+15. С 0.3 `fetch` в `src/` есть ровно в одном файле — `src/offscreen/package-fetch.js` (чтение из своего пакета: zip встроенной модели, с 0.5 — словари
+    `vendor/dict/*.txt`; override ESLint, сторож — `tests/unit/bundled-model.spec.js`); новый `fetch` в другом файле — ошибка lint и теста. pdf.js не бандлится: он лежит в `vendor/pdfjs/` и грузится лениво (§7.1);
     импорт `pdfjs-dist` в код расширения раздует `worker.js` сверх бюджета (§6.5). Текстовая модель (`kind: 'text'`) имеет пустые `doc.parts` и `doc.entries` — код вне `core/docx/`,
     которому нужны части DOCX, должен проверять `doc.kind` (§1.1).
+16. С 0.5 (WP12-A) словари ФИО грузятся отдельно от кода (§2): в Node до первого `analyze`/`getDicts` нужен `await loadDictsFromDisk()` (`scripts/dicts-node.mjs`);
+    vitest делает это сам (`tests/setup/dicts.js`). Тест, которому нужно «словари не загружены» или «сбой загрузки» вместе с анализом, берёт свежий граф модулей
+    (`vi.resetModules()` + динамический импорт) и стоит последним в файле: кэши детекторов (`SIG_MEMO`) живут в экземпляре модуля, а после `resetModules`
+    динамические импорты дают новые классы (`ModelStoreError` и т.п.) — тестам ниже нужны прежние.
+17. С 0.5 `worker.js` собирается с разделением кода (`splitting`, `chunkNames: 'offscreen/chunks/[name]-[hash]'`): динамический `import()` в коде воркера — отдельный
+    модуль, который воркер грузит из пакета по требованию (разбор PDF — `offscreen/pdf-loader.js`). Общий для них код esbuild кладёт в `offscreen/chunks/chunk-*.js`,
+    его `worker.js` импортирует статически — он входит в бюджет кода. `offscreen/host.js` импортирует ядро из модулей, а не из `core/index.js`: реэкспорт
+    `core/pdf/extract.js` в баррель затянул бы разбор PDF в `worker.js`. Код, нужный только одному формату, — кандидат в такой модуль (§9, WP12-B).
 
 ---
 
@@ -485,7 +521,12 @@ OPFS (`navigator.storage.getDirectory()`), работает в окне и в de
   **код без ORT и словарей ≤ 400 КБ, словари ≤ 400 КБ**: общий запас «без ORT ≤ 700 КБ» был исчерпан (на 19.10.2026 — 531 байт), а растёт код.
   Состояние 19.10.2026 (`node scripts/build.mjs`, с PDF и доработкой WP10-A по ревью): `worker.js` 819 125 байт = ORT 102 856 + словари 365 494 + код 350 775
   (запас кода 58 825 байт ≈ 57,4 КиБ, словарей 44 106 байт ≈ 43,1 КиБ; «КБ» в бюджетах = 1024 байт). Бэклог — словари в `vendor/dict/*.txt` с ленивой загрузкой через `package-fetch.js` (`docs/tasks.md`).
-- Что проверяет `tests/integration/pack.spec.js` в лёгком архиве: код `worker.js` без ORT и словарей ≤ 400 КБ, словари ≤ 400 КБ (и > 100 КБ), ORT встроен (> 50 КБ),
+- **С 0.5 (WP12-A, К14):** словари — файлы `vendor/dict/*.txt` (§2), в `worker.js` их нет (0 байт); разбор PDF ядра (`core/pdf/extract.js` + `layout.js`) —
+  модуль по требованию `offscreen/chunks/extract-*.js` (38 399 байт). Бюджет — **код `worker.js` без ORT ≤ 400 КиБ** (409 600 байт), считая статически
+  импортируемый общий модуль `offscreen/chunks/chunk-*.js`; лимит 416 КиБ WP11-E снят. Состояние 26.10.2026 (`npm run pack`): `worker.js` 502 401 байт + общий модуль
+  1 768 байт, из них ORT 102 856, **код без ORT 401 313 байт (391,9 КиБ, запас 8 287 байт ≈ 8,1 КиБ)**; `vendor/dict` — 359 538 байт; лёгкий архив 6 486 404 байт
+  (та же сборка кода 0.4.1 — 6 479 326: + `vendor/dict/NOTICE.md`, модуль PDF и код слоя OOXML), полный — 36 029 405 байт. Сборка печатает размеры `worker.js`, модулей по требованию и `vendor/dict`.
+- Что проверяет `tests/integration/pack.spec.js` в лёгком архиве (до 0.5; с 0.5 — абзац выше и `pack.spec.js`): код `worker.js` без ORT и словарей ≤ 400 КБ, словари ≤ 400 КБ (и > 100 КБ), ORT встроен (> 50 КБ),
   нет внешних `ort-wasm*.mjs`; `content.js` < 150 КБ и без словарей; `vendor/pdfjs/` ≤ 6 МБ, ≥ 150 `.bcmap`, ≥ 10 шрифтов, `LICENSE` (Apache); pdf.js не бандлится в
   `worker.js`; архив ≤ 12 МБ (К8). Полный архив — при наличии zip пакета (§6.8).
 - Архив релиза (`npm run pack`, 0.2.0): 4 244 595 байт (4,0 МБ), 27 файлов; wasm 14 239 897 байт (13,6 МБ) сжимается в архиве до 3 824 625 байт. Модели в архиве нет.
@@ -991,3 +1032,112 @@ content (files.js: fileKind/isSupported по pdfMode) ──► host.onAnalyze: 
 - **Подписи и обращения:** подпись Telegram «Имя, [дата время]» / «Имя Ф., [дата время]» — PERSON; имя из подписи или обращения ищется и в косвенных падежах
   («через Арсения»), только не омонимы.
 - **Не делается:** склейка ячеек широкой PDF-таблицы (8+ колонок, переносы, заголовок вне таблицы) — ограничение README, бэклог.
+
+---
+
+## 9. Общий слой OOXML и адаптеры форматов (версия 0.5, WP12-A, `docs/concept-0.5.md` п. 1)
+
+```
+bytes, name ──► host: isPdf / .pdf ? ──да──► env.extractPdf → fromText (kind 'text', §7)
+                         └─нет──► detectAdapter(bytes, name) ?? Word ──► adapter.parse(bytes) ──► DocModel {kind, entries, parts, streams, …}
+DocModel ──► analyze() ──► planEdits() ──► adapterForKind(doc.kind).serialize(doc, edits, {keepMetadata, stripEmbedded}) ──► bytes того же формата
+```
+
+Ядро (детекторы, `analyze`, `planEdits`, маппинг) формата не знает: оно работает с потоками `DocModel` (§1.1). Формат знает адаптер. Word — первый адаптер
+поверх общего слоя `src/core/ooxml/`; Excel и PowerPoint (WP12-B) подключаются своим описанием частей и разметки, без копирования ZIP, токенизатора, charMap и
+замены через раны. Поведение DOCX не изменилось: `tests/integration/docx-regression.spec.js` сверяет sha256 результата со снимком, снятым до переноса (§9.6).
+
+### 9.1. `DocumentAdapter` (`ooxml/adapter.js`, реестр — `core/adapters.js`)
+
+| Поле | Что | Word (`docx/adapter.js`) |
+|---|---|---|
+| `kind` | вид документа = `doc.kind` = поле `kind` сессии и `ENTITIES` | `'docx'` |
+| `extensions` | расширения имени в нижнем регистре | `['.docx', '.docm']` |
+| `mime` | MIME результата (`applyDecisions` → `mime`) | `DOCX_MIME` |
+| `detect(bytes, name?) → boolean` | сигнатура и содержимое (ZIP с главной частью) или имя | `zipHasEntry(bytes, 'word/document.xml') \|\| hasExtension(name, …)` |
+| `parse(bytes) → DocModel` | модель; ошибки — `CoreError` | `parseDocx` (`NOT_DOCX`/`ENCRYPTED`/`PARSE_FAILED`) |
+| `serialize(doc, edits, opts?) → {bytes, changedParts, removedParts}` | результат того же формата; правки — `TextEdit[]` из `planEdits` (решения пользователя уже учтены); модель не мутируется | `serializeDocx` |
+| `parts(names) → string[]` | части пакета с текстом в порядке обхода FR-25 | `docxParts` (`partRank` + естественный порядок) |
+
+Реестр: `DOCUMENT_ADAPTERS` (порядок = приоритет распознавания), `adapterForKind(kind)` (модель без `kind` — Word; неизвестный — `null`, `applyDecisions` → `INTERNAL`),
+`detectAdapter(bytes, name)` — первый адаптер, чей `detect` истинен, иначе `null`. Хост (`onAnalyze`): PDF — как в 0.3; иначе `detectAdapter(...) || Word`
+(нераспознанный файл получает прежнюю ошибку Word `NOT_DOCX`). Помощники: `isZip(bytes)`, `zipHasEntry(bytes, name)` (только центральный каталог; не ZIP,
+битый, зашифрованный — `false`), `hasExtension(name, exts)`. PDF — не адаптер: извлечение асинхронное и требует pdf.js из окружения (§7).
+
+### 9.2. Каркас пакета (`ooxml/model.js`)
+
+`parsePackage(bytes, desc) → DocModel`: `readZip` → нет `desc.mainPart` → `CoreError(desc.notFound.code, desc.notFound.message)` → для каждой части из
+`desc.parts(names)` (в этом порядке) `desc.parsePart(name, readXmlEntry(entry), ctx)` → потоки каждой части по позиции → общий порядок `order` (FR-25) →
+`warnings: desc.warnings?.(entries) ?? []` → `language: detectLanguage(streams, desc.languageStream ?? live-потоки главной части)`. `ctx = {pidCounter, attrCounter,
+paragraphs}` — сквозные счётчики `p<N>`/`a<N>` на весь документ. Типы `Segment`, `Stream`, `Paragraph`, `Part` (+ `markup` у текстовой части), `DocModel` (+ `kind`) —
+здесь; `docx/model.js` реэкспортирует их как прежде. Ещё: `readXmlEntry(entry)` (UTF-8, BOM снимается, сбой — `PARSE_FAILED`), `sortParts(names, rank)`,
+`addAttrStream(part, ctx, {raw, valueStart, valueEnd}, attrKind, xpath, type = 'attr')`, `detectLanguage(streams, pick?)`.
+
+`PackageDescription = {kind, mainPart, notFound: {code, message}, parts(names), parsePart(name, xml, ctx), warnings?(entries), languageStream?(stream)}`.
+
+### 9.3. Потоки по описанию разметки (`ooxml/flow.js`)
+
+`parseFlowPart(name, xml, ctx, markup, hooks?) → Part` — параграфы (с вложенностью `depth`), потоки `live`/`deleted`/`field` с сегментами и charMap
+(`buildCharMap(segments, length)`), раны со встроенными объектами (`embeddedRuns`). `hooks.onElement(token, parent, para, part)` вызывается для каждого
+открывающего и самозакрывающегося тега до разметки потоков — так адаптер добавляет атрибутные потоки (авторы, alt) и вид абзаца. `planRunEdits(xml, stream, edits,
+markup, push)` — замена через раны (§6.3 п.2–4): новый текст — в первый затронутый элемент текста, остальной затронутый текст удаляется, спецэлементы в диапазоне
+удаляются, контейнер — `INTERNAL`, диапазон из одних спецэлементов → `markup.specialReplacement(escaped)`. `planValueEdits(stream, edits, push)` — значение атрибута
+или метаданных целиком. `OBJ` = U+FFFC.
+
+`FlowMarkup` — описание разметки (значения Word — `WORDML` в `docx/model.js`; SpreadsheetML и DrawingML — образцы в `tests/unit/ooxml/markups.js`):
+
+| Поле | Word | SpreadsheetML (образец) | DrawingML (образец) |
+|---|---|---|---|
+| `paragraph` / `paragraphs` | `w:p` / {`w:p`} | `si` / {`si`, `is`} | `a:p` / {`a:p`} |
+| `run` | `w:r` | `r` | `a:r` |
+| `text` (элемент → тип потока) | `w:t` live, `w:delText` deleted, `w:instrText`/`w:delInstrText` field | `t` live | `a:t` live |
+| `textParents` | {`w:r`} | {`r`, `si`, `is`} (не `rPh` — фонетика) | {`a:r`, `a:fld`} |
+| `specials` / `openSpecials` | `w:tab`, `w:ptab` → `\t`; `w:br`, `w:cr` → `\n`; `w:sym`, ссылки на сноски/комментарии → U+FFFC; `w:noBreakHyphen` → U+2011 / нет | — | `a:br` → `\n`, `a:tab` → `\t` / **да** (`<a:br><a:rPr/></a:br>`) |
+| `soft` | {`w:softHyphen`} (0 символов) | — | — |
+| `containers` | {`w:drawing`, `w:pict`, `w:object`, `mc:AlternateContent`} | — | по формату |
+| `specialParents` | {`w:r`} | {`r`} | {`a:p`, `a:r`} (`a:br` — между ранами) |
+| `deleted` | {`w:del`, `w:moveFrom`} | — | — |
+| `embeddedOpen` / `embeddedSelf` | {`w:object`, `c:chart`} / {`c:chart`} | — | по формату |
+| `preserveSpace` | да | да | **нет** (у `a:t` нет `xml:space`) |
+| `specialReplacement` | `<w:t xml:space="preserve">…</w:t>` | `<t xml:space="preserve">…</t>` | `<a:r><a:t>…</a:t></a:r>` |
+
+### 9.4. Пакет OPC и сборка (`ooxml/opc.js`, `ooxml/serialize.js`)
+
+`opc.js`: `parseRelsPart` (внешние ссылки `TargetMode="External"` → `attr`/`rel-target`, FR-13), `parseMetaPart` (docProps core/app → `meta`, FR-12),
+`META_PART_RE`, `META_REMOVED_RE` (`docProps/custom.xml`, `docProps/thumbnail.*`), `cleanupReferences(doc, removed, newXml)` (Override в `[Content_Types].xml`, связи
+во всех `*.rels`), `relsBaseDir`, `resolveTarget`, `removeElements`. `serialize.js`: `serializePackage(doc, edits, {keepMetadata, stripEmbedded}, {embeddedParts})`
+— правки по потокам (проверки `INTERNAL`: неизвестный поток, диапазон, пересечения), через раны по `part.markup` или значением, очистка метаданных, удаление
+частей `embeddedParts` и ранов `embeddedRuns`, ZIP в исходном порядке с байт-копией нетронутых записей (FR-40). `TextEdit`, `SerializeOptions` — здесь.
+
+### 9.5. Word (`src/core/docx/`)
+
+Остались только знания о Word: `WORDML`; `TEXT_PART_RE`, `PEOPLE_PART_RE`, `RELS_PART_RE` (только `word/_rels`), `EMBEDDED_PART_RE` (`word/embeddings|charts`);
+`partRank`, `docxParts`; хук текстовой части — авторы/инициалы (`w:author`, `w:initials`, связь по элементу), alt-тексты (`wp:docPr`, `pic:cNvPr`, `v:shape`),
+`w:fldSimple/@w:instr`, вид абзаца по `w:pPr` (К10 0.4); `people.xml` (FR-11); предупреждение `EMBEDDED_NOT_PROCESSED`. `docx/zip.js`, `docx/xml.js` — реэкспорт
+`ooxml/` для прежних импортов (тесты, скрипты); `docx/replace.js` реэкспортирует `relsBaseDir`, `resolveTarget`.
+
+### 9.6. Регрессия и тесты
+
+- `tests/integration/docx-regression.spec.js` + снимок `tests/fixtures/docx-regression.json` (снят на коммите fc9a46b до переноса): все `tests/fixtures/**/*.docx` (41)
+  и образец `make-sample.mjs` — sha256 результата `normal` (настройки по умолчанию, метки), `commercial`, `strip` (маска, `keepMetadata: false`, `stripEmbedded: true`)
+  и `restore` (`restoreDocx` результата `commercial`). Переснять — только при намеренном изменении DOCX: `UPDATE_DOCX_REGRESSION=1 npx vitest run tests/integration/docx-regression.spec.js`.
+- `tests/unit/ooxml/flow.spec.js` — токенизатор и потоки на SpreadsheetML/DrawingML/выдуманной разметке, charMap, замена через раны; `package.spec.js` — каркас и сборка
+  выдуманного формата «demo»; `adapter.spec.js` — интерфейс Word, реестр, `applyDecisions` по `doc.kind`.
+
+### 9.7. Что нужно WP12-B (предложения по итогам WP12-A)
+
+- **Бюджет.** Запас кода `worker.js` ≈ 8,1 КиБ — адаптеры Excel и PowerPoint в него не поместятся. Предложение: адаптер формата — модуль по требованию, как разбор PDF
+  (§5 п. 17): в реестре лёгкая запись `{kind, extensions, mime, detect, load: () => import('./xlsx/adapter.js')}`; хост после распознавания делает
+  `await load()` (он и так асинхронный), а синхронный `applyDecisions` берёт уже загруженный адаптер (реестр запоминает результат `load`). Тогда `worker.js`
+  растёт только на `detect` и запись реестра, а код формата живёт в `offscreen/chunks/` со своим бюджетом. В Node-тестах `load` — тот же динамический импорт. Запасной вариант — `minifyWhitespace` для `worker.js` (замер на коде 0.4: код без ORT 431 580 → 335 754 байт), но тогда
+  `pack.spec.js` должен считать ORT по metafile, а не по комментариям секций.
+- **Распознавание:** Excel — ZIP с `xl/workbook.xml`, `.xlsx`/`.xlsm`; PowerPoint — `ppt/presentation.xml`, `.pptx`/`.pptm`. `readZip` отвечает `NOT_DOCX` на не-ZIP —
+  адаптеру нужен свой код ошибки (протокол §5.4, тексты панели) или общий `NOT_SUPPORTED`.
+- **Excel:** `sharedStrings.xml` — `parseFlowPart` с разметкой `si`/`r`/`t` (`textParents` без `rPh`); inline-строки `<c t="inlineStr"><is>` — те же правила в частях
+  листов; числа `<v>` (ИНН, счёт числом) и имена листов (`<sheet name>`), колонтитулы `<oddHeader>` (текст с кодами `&P`) — не раны: свои потоки через `addAttrStream`
+  или новый тип; замена числа строкой меняет ячейку (`t="s"`/`inlineStr`) — правка вне `planRunEdits`, своя функция сериализации части. Порядок частей — `parts(names)`.
+- **PowerPoint:** `slides/slideN.xml`, `notesSlides/`, комментарии; разметка DrawingML — образец `DML` (`openSpecials: true`, `specialParents: {a:p, a:r}`,
+  `preserveSpace: false`, `specialReplacement` с раном). Таблицы и группы — тот же `a:p` внутри `a:tc`/`p:grpSp`, отдельной логики не нужно.
+- **Вне ядра, но затронуто:** `content/files.js` (`fileKind`, `isSupported`, `makeResultName`, `resultType`), `host.makeResultName`, `restore-doc.js` (восстановление
+  файла через адаптер: `parse` + `serialize` вместо `parseDocx`/`serializeDocx`), `ENTITIES.kind` и схема протокола (`docx|pdf` → + `xlsx|pptx`).
+- **Скрытые данные (WP12-D):** счётчики комментариев, правок, скрытого текста — хуками `onElement` при разборе (`ooxml/hidden.js`), без второго прохода.

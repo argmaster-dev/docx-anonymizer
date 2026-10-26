@@ -9,7 +9,10 @@ import { join } from 'node:path';
 import { packRelease, FIXED_TIME, findModelZip, latestKnownPack, latestModelZipPath } from '../../scripts/pack.mjs';
 import { KNOWN_PACKS, findKnownPack } from '../../src/core/ner/known-packs.js';
 import { compareVersions } from '../../src/core/ner/pack.js';
-import RU_SURNAMES from '../../src/core/detect/names/dict/ru-surnames.js';
+import { parseDictFile, DICT_FILES } from '../../src/core/detect/names/dict/load.js';
+
+// словари ФИО с 0.5 (WP12-A) — файлы пакета vendor/dict/*.txt; маркер — начало упакованного списка фамилий
+const RU_SURNAMES = parseDictFile(readFileSync('vendor/dict/ru-surnames.txt', 'utf8')).get('SURNAMES');
 
 const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 let out;
@@ -61,7 +64,7 @@ describe('архив релиза', () => {
     expect(m.permissions).toEqual(expect.arrayContaining(['scripting', 'activeTab']));
   });
 
-  it('модель NER (WP8): unlimitedStorage, wasm ORT в vendor/, worker — ES-модуль; worker.js: код ≤ 416 КиБ, словари ≤ 400 КБ (К15)', () => {
+  it('модель NER (WP8): unlimitedStorage, wasm ORT в vendor/, worker — ES-модуль; worker.js без ORT ≤ 400 КиБ, словарей в нём нет (К14 0.5)', () => {
     const m = JSON.parse(strFromU8(zip['manifest.json']));
     expect(m.permissions).toContain('unlimitedStorage');
     const wasm = zip['vendor/ort-wasm-simd-threaded.wasm'];
@@ -72,33 +75,54 @@ describe('архив релиза', () => {
     const worker = strFromU8(zip['offscreen/worker.js']);
     expect(worker).toMatch(/^export\s|\nexport\s|import\.meta\.url/); // ESM-сборка: import.meta доступен
     expect(worker).not.toMatch(/^(?:(?:var|const|let)\s+\S+\s*=\s*)?require\(/m); // нет top-level require
-    // Размеры: секции бандла esbuild помечены комментариями «// <путь модуля>». ORT и словари ФИО (генерируемые
-    // данные WP7) считаются отдельно от кода: прежний общий бюджет «без ORT ≤ 700 КБ» исчерпан (запас был < 1 КБ),
-    // а растёт в основном код. Бэклог: словари — в vendor/dict/*.txt с ленивой загрузкой (docs/tasks.md).
-    const sections = worker.split(/\n(?=\/\/ (?:node_modules|src)\/)/);
-    const bytesOf = (prefix) => sections.filter((s) => s.startsWith(prefix)).reduce((n, s) => n + Buffer.byteLength(s), 0);
-    const ortBytes = bytesOf('// node_modules/onnxruntime-web/');
-    const dictBytes = bytesOf('// src/core/detect/names/dict/');
-    const total = zip['offscreen/worker.js'].length;
-    console.log(`worker.js ${total} байт: ORT ${ortBytes}, словари ${dictBytes}, код ${total - ortBytes - dictBytes}`);
+    // Размеры: секции бандла esbuild помечены комментариями «// <путь модуля>». С 0.5 (WP12-A) словари ФИО — не код, а файлы
+    // vendor/dict/*.txt (их секций в бандле нет), разбор PDF — модуль по требованию offscreen/chunks/ (грузится при первом PDF).
+    // Код воркера = worker.js + модули, которые он импортирует статически (общий кусок esbuild), без ORT; лимит снова 400 КиБ.
+    const staticChunks = [...worker.matchAll(/^import\s*\{[^}]*\}\s*from\s*"\.\/(chunks\/[^"]+)";/gm)].map((x) => `offscreen/${x[1]}`);
+    for (const f of staticChunks) expect(zip[f], f).toBeDefined();
+    const code = [worker, ...staticChunks.map((f) => strFromU8(zip[f]))].join('\n');
+    const sections = code.split(/\n(?=\/\/ (?:node_modules|src)\/)/);
+    const bytesOf = (re) => sections.filter((x) => re.test(x)).reduce((n, x) => n + Buffer.byteLength(x), 0);
+    const ortBytes = bytesOf(/^\/\/ node_modules\/onnxruntime-web\//);
+    const dictData = bytesOf(/^\/\/ src\/core\/detect\/names\/dict\/(?:ru|en)-/);
+    const total = Buffer.byteLength(code);
+    console.log(
+      `worker.js ${zip['offscreen/worker.js'].length} байт + статические модули ${staticChunks.length} (${total - zip['offscreen/worker.js'].length} байт): ORT ${ortBytes}, код без ORT ${total - ortBytes}, словари 0`,
+    );
     expect(ortBytes, 'ORT встроен в worker.js (bundle-вариант, glue без внешнего .mjs)').toBeGreaterThan(50 * 1024);
-    expect(dictBytes, 'словари ФИО в worker.js').toBeGreaterThan(100 * 1024);
-    // 0.4, WP11-E: правила по финальной проверке — лимит кода 400 → 416 КиБ (решение координатора)
-    expect(total - ortBytes - dictBytes, 'код worker.js без ORT и словарей').toBeLessThanOrEqual(416 * 1024);
-    expect(dictBytes, 'словари ФИО').toBeLessThanOrEqual(400 * 1024);
+    expect(dictData, 'словари ФИО в коде воркера').toBe(0);
+    expect(total - ortBytes, 'код worker.js без ORT').toBeLessThanOrEqual(400 * 1024);
     expect(Object.keys(zip).filter((n) => /ort-wasm.*\.mjs$/.test(n))).toEqual([]);
   });
 
-  it('словари ФИО (WP7) только в offscreen/worker.js; content.js < 150 КБ и без словарей (К15)', () => {
+  it('словари ФИО — файлы vendor/dict/*.txt с NOTICE.md, ни в одном бандле; content.js < 150 КБ (К14 0.5, К15 0.2)', () => {
+    for (const n of DICT_FILES) {
+      const f = `vendor/dict/${n}.txt`;
+      expect(zip[f], f).toBeDefined();
+      expect(Buffer.from(zip[f]).equals(readFileSync(f)), `${f} — байт в байт как в репозитории`).toBe(true);
+    }
+    expect(strFromU8(zip['vendor/dict/NOTICE.md'])).toMatch(/BSD-3-Clause[\s\S]*MIT/);
+    const dictBytes = DICT_FILES.reduce((n, d) => n + zip[`vendor/dict/${d}.txt`].length, 0);
+    console.log(`vendor/dict: ${DICT_FILES.length} словаря, ${dictBytes} байт`);
+    expect(dictBytes).toBeGreaterThan(100 * 1024);
+    expect(dictBytes).toBeLessThanOrEqual(400 * 1024);
     // маркер — первые 24 символа упакованной строки фамилий (в бандле перевод строки может стать escape-последовательностью)
     const marker = RU_SURNAMES.slice(0, 24);
     const has = (code) => code.includes(marker) || code.includes(marker.replace(/\n/g, '\\n'));
-    const content = strFromU8(zip['content.js']);
     expect(zip['content.js'].length).toBeLessThan(150 * 1024);
-    expect(has(content)).toBe(false);
-    expect(has(strFromU8(zip['offscreen/worker.js']))).toBe(true);
-    for (const f of ['background.js', 'popup/popup.js', 'options/options.js', 'restore/restore.js', 'help/help.js'])
-      expect(has(strFromU8(zip[f])), f).toBe(false);
+    const bundles = Object.keys(zip).filter((n) => n.endsWith('.js'));
+    expect(bundles).toContain('offscreen/worker.js');
+    for (const f of bundles) expect(has(strFromU8(zip[f])), f).toBe(false);
+  });
+
+  it('разбор PDF ядра — модуль по требованию offscreen/chunks/, не в worker.js (WP12-A)', () => {
+    const worker = strFromU8(zip['offscreen/worker.js']);
+    expect(worker).not.toMatch(/\n\/\/ src\/core\/pdf\/(?:layout|extract)\.js\n/);
+    const lazy = [...worker.matchAll(/import\("\.\/(chunks\/[^"]+)"\)/g)].map((x) => `offscreen/${x[1]}`);
+    expect(lazy.length).toBeGreaterThanOrEqual(1);
+    const pdf = lazy.map((f) => strFromU8(zip[f] || new Uint8Array())).find((c) => c.includes('// src/core/pdf/layout.js'));
+    expect(pdf, 'модуль с core/pdf/layout.js').toBeDefined();
+    console.log(`модули по требованию: ${lazy.map((f) => `${f} ${zip[f].length} байт`).join(', ')}`);
   });
 
   it('pdf.js (версия 0.3, К8): vendor/pdfjs/ с CMaps и шрифтами ≤ 6 МБ, не в worker.js; архив ≤ 12 МБ', () => {
