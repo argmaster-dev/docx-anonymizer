@@ -11,7 +11,6 @@ import { createPreview } from '../preview/preview.js';
 import { PANEL_CSS } from './styles.js';
 import { formatSize } from '../../content/files.js';
 import { shouldShowMappingHint } from './done-hint.js';
-import { encryptMapping, MIN_PASSWORD_LENGTH } from '../../core/key-crypto.js';
 
 export const PANEL_TAG = 'docx-anonymizer-root';
 
@@ -91,6 +90,7 @@ function logo() {
  * @property {() => void} [onOrgPolicyHintShown]  подсказка о политике 0.4 («организации — по желанию») показана: снять orgPolicyHintPending
  * @property {(section: 'categories'|'companies'|'ner') => void} [onOpenOptions]  открыть страницу настроек на разделе (0.4, MSG.OPEN_OPTIONS)
  * @property {(flag: string, value: boolean) => void} [onHiddenPref]  переключатель скрытых данных изменён (0.5, WP12-D): запомнить в настройках
+ * @property {(done: any) => void} [onSaveKeyProtected]  «Сохранить с паролем…» (0.5, WP12-D): открыть страницу расширения, где вводится пароль
  */
 
 export class Panel {
@@ -340,6 +340,8 @@ export class Panel {
       h('div', { class: 'hid-sum', text: t('hiddenSummary', { list: items.join(', ') }), 'data-testid': 'hidden-summary' }),
       h('div', { class: 'hid-opts' }, ...opts),
       h('div', { class: 'hid-hint', text: t('hiddenHint') }),
+      // Excel: формулы на удаляемое меняются (#REF!, пересчёт итогов) — сказать заранее (ревью WP12-D)
+      c.hiddenSheets || c.hiddenRows || c.hiddenCols ? h('div', { class: 'hid-hint', text: t('hiddenHintSheets'), 'data-testid': 'hidden-hint-sheets' }) : null,
     );
   }
 
@@ -665,8 +667,8 @@ export class Panel {
   }
 
   /**
-   * @param {{replacements: number, names: string[], resultFiles: File[], mappingText: string|null, mappingName: string, hintMappingShown?: boolean}} d
-   *   hintMappingShown — подсказка о ключе восстановления уже показывалась (WP10-D)
+   * @param {{replacements: number, names: string[], resultFiles: File[], mappingText: string|null, mappingName: string, hintMappingShown?: boolean, docIds?: string[]}} d
+   *   hintMappingShown — подсказка о ключе восстановления уже показывалась (WP10-D); docIds — сессии отправки (ключ с паролем, WP12-D)
    */
   showDone(d) {
     const t = this.t;
@@ -708,16 +710,32 @@ export class Panel {
       this.menu = h(
         'div',
         { class: 'menu', role: 'menu', hidden: true, 'data-testid': 'more-menu' },
-        // 0.5 (WP12-D): «Защитить паролем» и поля пароля — над кнопкой сохранения
-        ...this.keyProtectForm(),
         h('button', {
           class: 'menu-item',
           type: 'button',
           role: 'menuitem',
           text: t('btnDownloadMapping'),
           'data-testid': 'btn-download-mapping',
-          onClick: () => this.onSaveMappingClick(),
+          onClick: () => {
+            this.saveMapping();
+            this.closeMenu();
+          },
         }),
+        // 0.5 (WP12-D, К8): пароль вводится только на странице расширения — на сайте его видели бы слушатели клавиатуры страницы
+        this.o.handlers.onSaveKeyProtected
+          ? h('button', {
+              class: 'menu-item',
+              type: 'button',
+              role: 'menuitem',
+              text: t('btnSaveKeyProtected'),
+              'data-testid': 'btn-save-key-password',
+              onClick: () => {
+                this.mappingSaved = true;
+                this.closeMenu();
+                this.o.handlers.onSaveKeyProtected?.(d);
+              },
+            })
+          : null,
       );
     }
     this.footer.append(
@@ -745,88 +763,6 @@ export class Panel {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
-  }
-
-  /**
-   * «Защитить паролем» в меню «Ещё» (0.5, WP12-D, Ц5, К8): флажок, пароль и повтор, индикатор длины, предупреждение
-   * «забытый пароль = потерянный ключ». Пароль живёт только в поле ввода до сохранения и нигде не запоминается.
-   * @returns {HTMLElement[]}
-   */
-  keyProtectForm() {
-    const t = this.t;
-    const k = {};
-    const meter = () => {
-      const n = k.pw1.value.length;
-      const grade = n < MIN_PASSWORD_LENGTH ? 'short' : n < 12 ? 'fair' : 'good';
-      k.meter.dataset.grade = grade;
-      k.meter.textContent = n ? t('keyPwMeter', { n, grade: t(`keyPw_${grade}`, { min: MIN_PASSWORD_LENGTH }) }) : '';
-      k.err.textContent = '';
-    };
-    const field = (testid, label) =>
-      h('input', {
-        class: 'pw',
-        type: 'password',
-        autocomplete: 'new-password',
-        placeholder: label,
-        'aria-label': label,
-        'data-testid': testid,
-        onInput: meter,
-        onKeydown: (e) => {
-          if (e.key === 'Enter') this.onSaveMappingClick();
-        },
-      });
-    k.pw1 = field('mapping-password', t('keyPassword'));
-    k.pw2 = field('mapping-password2', t('keyPassword2'));
-    k.meter = h('div', { class: 'pw-meter', 'data-testid': 'mapping-pw-meter', 'aria-live': 'polite' });
-    k.err = h('div', { class: 'pw-err', role: 'alert', 'data-testid': 'mapping-pw-error' });
-    k.form = h('div', { class: 'pw-form', hidden: true }, k.pw1, k.pw2, k.meter, h('div', { class: 'pw-warn', text: t('keyPwWarn') }), k.err);
-    k.protect = h('input', {
-      type: 'checkbox',
-      'data-testid': 'mapping-protect',
-      onChange: () => {
-        k.form.hidden = !k.protect.checked;
-        k.err.textContent = '';
-        if (k.protect.checked) k.pw1.focus();
-      },
-    });
-    this.keyForm = k;
-    return [h('label', { class: 'menu-check' }, k.protect, h('span', { text: t('keyProtect') })), k.form];
-  }
-
-  /** «Сохранить ключ восстановления»: без пароля — как раньше; с паролем — зашифрованный файл (core/key-crypto.js). */
-  async onSaveMappingClick() {
-    const k = this.keyForm;
-    if (!k?.protect.checked) {
-      this.saveMapping();
-      this.closeMenu();
-      return;
-    }
-    const d = this.done;
-    if (!d || d.mappingText == null || this.encrypting) return;
-    const t = this.t;
-    const pw = k.pw1.value;
-    if (pw.length < MIN_PASSWORD_LENGTH) return void (k.err.textContent = t('keyPwTooShort', { min: MIN_PASSWORD_LENGTH }));
-    if (pw !== k.pw2.value) return void (k.err.textContent = t('keyPwMismatch'));
-    const btn = /** @type {HTMLButtonElement} */ (this.menu?.querySelector('[data-testid="btn-download-mapping"]'));
-    this.encrypting = true;
-    btn.disabled = true;
-    btn.textContent = t('keyEncrypting');
-    try {
-      const enc = await encryptMapping(d.mappingText, pw);
-      this.download(d.mappingName, new Blob([JSON.stringify(enc, null, 2)], { type: 'application/json' }));
-      this.mappingSaved = true;
-      k.pw1.value = '';
-      k.pw2.value = '';
-      k.meter.textContent = '';
-      this.closeMenu();
-    } catch {
-      // без подробностей: в сообщении не должно быть ни пароля, ни данных
-      k.err.textContent = t('keyEncryptFailed');
-    } finally {
-      this.encrypting = false;
-      btn.disabled = false;
-      btn.textContent = t('btnDownloadMapping');
-    }
   }
 
   /** Ключ восстановления (карта замен) → файл .mapping.json (FR-28). */

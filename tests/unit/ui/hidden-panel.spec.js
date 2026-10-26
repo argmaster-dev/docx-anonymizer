@@ -46,8 +46,12 @@ describe('строка «В документе: …»', () => {
 
   it('ключи ru/en панели, страницы восстановления и справки совпадают; предупреждение о забытом пароле есть', () => {
     for (const d of [panel, RESTORE_DICT, HELP_DICT]) expect(Object.keys(d.en).sort()).toEqual(Object.keys(d.ru).sort());
-    expect(panel.ru.keyPwWarn).toMatch(/Забытый пароль = потерянный ключ/);
-    expect(panel.en.keyPwWarn).toMatch(/forgotten password/);
+    // пароль вводится только на странице расширения (ревью WP12-D): в панели — кнопка, полей и их текстов нет
+    expect(panel.ru.btnSaveKeyProtected).toBe('Сохранить с паролем…');
+    expect(Object.keys(panel.ru).filter((k) => /^keyPw|^keyPassword/.test(k))).toEqual([]);
+    expect(RESTORE_DICT.ru.save_warn).toMatch(/Забытый пароль = потерянный ключ/);
+    expect(RESTORE_DICT.en.save_warn).toMatch(/forgotten password/);
+    expect(panel.ru.hiddenHintSheets).toMatch(/#REF!/);
     expect(RESTORE_DICT.ru.key_password_bad).toMatch(/Неверный пароль/);
     expect(HELP_DICT.ru.hidden_3).toMatch(/600 000/);
   });
@@ -70,5 +74,30 @@ describe('настройки выбора скрытых данных', () => {
     expect(settings.acceptRevisions).toBe(false);
     const kept = migrateSettings({ ...defaultSettings(), removeComments: true, removeHiddenSlides: true }).settings;
     expect(hiddenFlagsFrom(kept)).toMatchObject({ comments: true, hiddenSlides: true, revisions: false });
+  });
+});
+
+describe('«Сохранить с паролем…»: страница расширения (OPEN_KEY_SAVE, ревью WP12-D)', () => {
+  it('ссылка — только id сессий и имя файла ключа без путей; схема протокола', async () => {
+    const { keySavePath, MSG } = await import('../../../src/shared/protocol.js');
+    const { readFileSync } = await import('node:fs');
+    const { createValidator } = await import('../../helpers/jsonschema.js');
+    expect(keySavePath({ docIds: ['d1', 'd12'], name: '[ФИО_1].mapping.json' })).toBe(
+      'restore/restore.html?save=1&docId=d1&docId=d12&name=%5B%D0%A4%D0%98%D0%9E_1%5D.mapping.json',
+    );
+    for (const bad of [
+      { docIds: [], name: 'a.mapping.json' },
+      { docIds: ['x1'], name: 'a.mapping.json' },
+      { docIds: ['d1'], name: '../a.mapping.json' },
+      { docIds: ['d1'], name: 'a.json' },
+      { docIds: ['d1'], name: 'a\nb.mapping.json' },
+      { docIds: 'd1', name: 'a.mapping.json' },
+    ])
+      expect(keySavePath(bad), JSON.stringify(bad)).toBeNull();
+    const schema = JSON.parse(readFileSync('schemas/protocol.schema.json', 'utf8'));
+    const { validate } = createValidator({ 'protocol.schema.json': schema });
+    const msg = { type: MSG.OPEN_KEY_SAVE, requestId: 'k1', docIds: ['d3'], name: 'договор.mapping.json' };
+    expect(validate(schema, msg)).toEqual([]);
+    expect(validate(schema, { ...msg, docIds: ['../x'] })).not.toEqual([]);
   });
 });

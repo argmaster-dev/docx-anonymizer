@@ -1,7 +1,7 @@
 // Шифрование ключа восстановления паролем (версия 0.5, WP12-D, Ц5, К8; docs/concept-0.5.md п. 7, docs/contracts.md §9.9).
 // Ключ восстановления — карта «метка → настоящее значение» (FR-27, FR-28): в открытом виде это все найденные данные документа.
 // По желанию пользователя файл .mapping.json сохраняется зашифрованным: WebCrypto, PBKDF2-SHA-256 (600 000 итераций, соль 16
-// байт) → ключ AES-GCM-256, IV 12 байт; шифруется JSON карты целиком. В файле — только параметры и шифротекст (base64): ни
+// байт) → ключ AES-GCM-256, IV 12 байт; шифруется JSON карты целиком, заголовок (версия, алгоритм, параметры KDF) — AAD. В файле — только параметры и шифротекст (base64): ни
 // значений, ни имён документов, ни меток. Неверный пароль и повреждённый файл неразличимы (тег GCM не сходится) — код
 // KEY_PASSWORD, без частичного вывода. Пароль никуда не пишется и не логируется; расшифрованная карта живёт только в памяти
 // страницы. Забытый пароль = потерянный ключ: восстановить его нельзя (риск концепции, сказано в интерфейсе).
@@ -15,10 +15,15 @@ export const KEY_ENC = 'AES-GCM-256';
 export const KDF_ITERATIONS = 600000;
 /** Пределы итераций при чтении: не ниже требования К8 и не настолько много, чтобы файл подвесил страницу. */
 export const KDF_MIN_ITERATIONS = 600000;
-export const KDF_MAX_ITERATIONS = 10000000;
+export const KDF_MAX_ITERATIONS = 2000000;
 /** Минимальная длина пароля в интерфейсе (символов). */
 export const MIN_PASSWORD_LENGTH = 8;
 const SALT_BYTES = 16;
+/**
+ * Заголовок ключа как дополнительные аутентифицированные данные AES-GCM (AAD): канонический JSON версии, алгоритма и параметров KDF
+ * (порядок полей фиксирован) — подмена любого поля заголовка ломает тег, даже если ключ вывелся бы тот же.
+ */
+const aad = (h) => new TextEncoder().encode(JSON.stringify([h.encVersion, h.enc, h.kdf.name, h.kdf.hash, h.kdf.iterations, h.kdf.salt]));
 const IV_BYTES = 12;
 
 /** Ошибка ключа: `KEY_PASSWORD` — неверный пароль или повреждённый шифротекст; `KEY_INVALID` — не зашифрованный ключ этого формата. */
@@ -95,14 +100,9 @@ export async function encryptMapping(mapping, password, opts = {}) {
   const iv = c.getRandomValues(new Uint8Array(IV_BYTES));
   const key = await deriveKey(s, password, salt, iterations, 'encrypt');
   const plain = new TextEncoder().encode(typeof mapping === 'string' ? mapping : JSON.stringify(mapping));
-  const ct = new Uint8Array(await s.encrypt({ name: 'AES-GCM', iv }, key, plain));
-  return {
-    encVersion: KEY_ENC_VERSION,
-    enc: KEY_ENC,
-    kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations, salt: toBase64(salt) },
-    iv: toBase64(iv),
-    ct: toBase64(ct),
-  };
+  const head = { encVersion: KEY_ENC_VERSION, enc: KEY_ENC, kdf: { name: 'PBKDF2', hash: 'SHA-256', iterations, salt: toBase64(salt) } };
+  const ct = new Uint8Array(await s.encrypt({ name: 'AES-GCM', iv, additionalData: aad(head) }, key, plain));
+  return { ...head, iv: toBase64(iv), ct: toBase64(ct) };
 }
 
 /**
@@ -130,7 +130,7 @@ export async function decryptMapping(obj, password, opts = {}) {
   let plain;
   try {
     const key = await deriveKey(s, password, salt, k.iterations, 'decrypt');
-    plain = await s.decrypt({ name: 'AES-GCM', iv }, key, ct);
+    plain = await s.decrypt({ name: 'AES-GCM', iv, additionalData: aad(obj) }, key, ct);
   } catch {
     // тег GCM не сошёлся: неверный пароль или изменённый файл — одинаково, без подробностей
     throw new KeyCryptoError('KEY_PASSWORD', 'Неверный пароль или файл ключа повреждён');

@@ -12,7 +12,7 @@ import { isSupported, isPdfFile, resultType, mappingFileName, isInvalidatedError
 import { Link, contextValid, readOpenShadowFlag } from './runtime.js';
 import { exclusionValue } from '../ui/preview/model.js';
 import { shouldShowOrgPolicyHint, withMaskedCompany } from '../ui/panel/org-policy.js';
-import { HIDDEN_SETTINGS, hiddenFlagsFrom } from '../core/ooxml/hidden.js';
+import { HIDDEN_SETTINGS, hiddenFlagsFrom } from '../core/settings.js';
 
 /**
  * @typedef {{action: 'anonymized'|'original'|'cancel', files: File[]}} FlowResult
@@ -150,6 +150,18 @@ async function runOnce(originals, deps) {
         /* контекст инвалидирован */
       }
     },
+    // 0.5 (WP12-D, К8): «Сохранить с паролем…» — страницу расширения открывает background (MSG.OPEN_KEY_SAVE): пароль
+    // вводится там, а не на сайте (слушатели клавиатуры страницы видели бы его); карту страница берёт у хоста по docId
+    onSaveKeyProtected: (done) => {
+      try {
+        link
+          .get()
+          .request(MSG.OPEN_KEY_SAVE, { docIds: done.docIds, name: done.mappingName })
+          .catch(() => {});
+      } catch (err) {
+        if (isInvalidatedError(err)) invalidated();
+      }
+    },
     // 0.5 (WP12-D): переключатели скрытых данных запоминаются в настройках (removeComments, acceptRevisions, …)
     onHiddenPref: (flag, value) => {
       try {
@@ -258,6 +270,8 @@ async function runOnce(originals, deps) {
       let replacements = 0;
       const out = originals.slice();
       let stepNo = 0;
+      /** сессии отправки — для ключа с паролем на странице расширения (WP12-D) */
+      const docIds = [];
       const usedNames = new Set();
       const ready = procIdx.filter((i) => analyzed.has(i) && panel.getPreview(procIdx.indexOf(i)));
       for (const i of ready) {
@@ -270,6 +284,7 @@ async function runOnce(originals, deps) {
           onProgress: (stage, p) => panel.setApplyProgress(stage, Math.round(((stepNo + p / 100) / ready.length) * 100)),
         });
         stepNo++;
+        docIds.push(analyzed.get(i).docId);
         // имя — по исходному файлу (хост при повторе по sha отдаёт имя прежней сессии), расширение и тип — от хоста:
         // PDF уходит текстом .anon.md / .anon.txt (версия 0.3); остальные форматы — тем же форматом (0.5)
         // расширение от хоста — только у PDF: .txt и .md сами по себе (0.5) остаются собой
@@ -304,6 +319,7 @@ async function runOnce(originals, deps) {
         mappingText: merged ? JSON.stringify(merged, null, 2) : null,
         mappingName: mappingFileName(outFiles[0]?.name),
         hintMappingShown: deps.getSettings().hintMappingShown,
+        docIds,
       });
       decide('anonymized', out);
     } catch (err) {

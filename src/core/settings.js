@@ -48,6 +48,24 @@ export const CATEGORIES_05 = Object.freeze([
   ...['COURT_CASE', 'POA', 'NOTARY_REG', 'TENDER', 'ORDER_NO', 'INVOICE_NO', 'CLIENT_NO', 'IP_REG'],
 ]);
 
+/** Скрытые данные (0.5, WP12-D, ooxml/hidden.js): флаг выбора → ключ настроек; выбор запоминается. */
+export const HIDDEN_SETTINGS = Object.freeze({
+  comments: 'removeComments',
+  revisions: 'acceptRevisions',
+  hiddenText: 'removeHiddenText',
+  hiddenSheets: 'removeHiddenSheets',
+  hiddenSlides: 'removeHiddenSlides',
+});
+
+/**
+ * Выбор по скрытым данным из настроек (HiddenFlags, ooxml/hidden.js): по умолчанию всё выключено.
+ * @param {Record<string, any>} settings
+ * @returns {import('./ooxml/hidden.js').HiddenFlags}
+ */
+export function hiddenFlagsFrom(settings) {
+  return Object.fromEntries(Object.entries(HIDDEN_SETTINGS).map(([flag, key]) => [flag, settings?.[key] === true]));
+}
+
 /** Включает категории `pii`/`ids` в объекте категорий (миграция 2 → 3 и импорт старых конфигураций). */
 function forceAlwaysOn(categories) {
   return { ...categories, ...Object.fromEntries(ALWAYS_ON_IDS.map((id) => [id, true])) };

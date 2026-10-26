@@ -21,6 +21,7 @@
     { "$ref": "#/$defs/MODEL_CHANGED" },
     { "$ref": "#/$defs/MODEL_BOOTSTRAP" },
     { "$ref": "#/$defs/OPEN_OPTIONS" },
+    { "$ref": "#/$defs/OPEN_KEY_SAVE" },
     { "$ref": "#/$defs/MODEL_INSTALL" },
     { "$ref": "#/$defs/MODEL_INSTALLED" },
     { "$ref": "#/$defs/PROGRESS" },
@@ -227,6 +228,17 @@
         "type": { "const": "OPEN_OPTIONS" },
         "requestId": { "$ref": "#/$defs/requestId" },
         "section": { "enum": ["categories", "companies", "ner"] }
+      }
+    },
+    "OPEN_KEY_SAVE": {
+      "type": "object",
+      "description": "Сохранить ключ восстановления с паролем (0.5, WP12-D): пароль вводится только на странице расширения. Клиент → background, ответ — ACK; вкладка restore/restore.html?save=1&docId=…&name=….",
+      "required": ["type", "requestId", "docIds", "name"],
+      "properties": {
+        "type": { "const": "OPEN_KEY_SAVE" },
+        "requestId": { "$ref": "#/$defs/requestId" },
+        "docIds": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^d\\d{1,9}$" } },
+        "name": { "type": "string", "minLength": 1, "pattern": "\\.mapping\\.json$" }
       }
     },
     "MODEL_INSTALL": {

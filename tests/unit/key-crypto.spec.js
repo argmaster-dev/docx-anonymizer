@@ -10,6 +10,7 @@ import {
   KeyCryptoError,
   KDF_ITERATIONS,
   KDF_MIN_ITERATIONS,
+  KDF_MAX_ITERATIONS,
   KEY_ENC,
   KEY_ENC_VERSION,
 } from '../../src/core/key-crypto.js';
@@ -87,7 +88,10 @@ describe('шифрование ключа (К8)', () => {
     const hay = views(text).map((s) => s.toLowerCase());
     const secrets = secretsOf(MAPPING);
     expect(secrets.length).toBeGreaterThan(5);
-    for (const v of secrets) for (const h of hay) expect(h.includes(v.toLowerCase()), v).toBe(false);
+    // текст файла — все строки карты; байты шифротекста, соли и IV в однобайтовых кодировках — строки от 6 символов: случайные байты
+    // дают трёхбуквенные совпадения («inn» из категории INN) с заметной вероятностью, шестибуквенные — нет (≈ 10⁻¹⁰ на строку)
+    for (const v of secrets) expect(hay[0].includes(v.toLowerCase()) || hay[1].includes(v.toLowerCase()), v).toBe(false);
+    for (const v of secrets.filter((x) => x.length >= 6)) for (const h of hay.slice(2)) expect(h.includes(v.toLowerCase()), v).toBe(false);
     // ни меток, ни имён полей карты
     expect(text).not.toMatch(/entries|placeholder|ФИО|КОМПАНИЯ|ИНН/);
   });
@@ -129,12 +133,31 @@ describe('шифрование ключа (К8)', () => {
       { ...enc, ct: Buffer.alloc(8).toString('base64') },
       { ...enc, kdf: { ...enc.kdf, iterations: 1000 } }, // ниже требования — не принимается
       { ...enc, kdf: { ...enc.kdf, iterations: 1e9 } }, // подвесил бы страницу
+      { ...enc, kdf: { ...enc.kdf, iterations: KDF_MAX_ITERATIONS + 1 } },
       { ...enc, kdf: { ...enc.kdf, hash: 'SHA-1' } },
       { ...enc, enc: 'AES-CBC-256' },
       { ...enc, encVersion: 2 },
       MAPPING,
     ];
     for (const c of invalid) expect((await decryptMapping(c, PASSWORD).catch((e) => e)).code).toBe('KEY_INVALID');
+  });
+
+  it('заголовок — AAD: тот же шифротекст без заголовка в AAD не расшифровывается; итераций не больше 2·10⁶', async () => {
+    expect(KDF_MAX_ITERATIONS).toBe(2000000);
+    const s = globalThis.crypto.subtle;
+    const base = await s.importKey('raw', new TextEncoder().encode(PASSWORD.normalize('NFC')), 'PBKDF2', false, ['deriveKey']);
+    const key = await s.deriveKey(
+      { name: 'PBKDF2', hash: 'SHA-256', salt: Buffer.from(enc.kdf.salt, 'base64'), iterations: enc.kdf.iterations },
+      base,
+      { name: 'AES-GCM', length: 256 },
+      false,
+      ['decrypt'],
+    );
+    const iv = Buffer.from(enc.iv, 'base64');
+    const ct = Buffer.from(enc.ct, 'base64');
+    await expect(s.decrypt({ name: 'AES-GCM', iv }, key, ct)).rejects.toBeTruthy();
+    const aad = new TextEncoder().encode(JSON.stringify([enc.encVersion, enc.enc, enc.kdf.name, enc.kdf.hash, enc.kdf.iterations, enc.kdf.salt]));
+    expect(JSON.parse(new TextDecoder().decode(await s.decrypt({ name: 'AES-GCM', iv, additionalData: aad }, key, ct)))).toEqual(MAPPING);
   });
 
   it('итераций меньше 600 000 при сохранении не бывает', async () => {

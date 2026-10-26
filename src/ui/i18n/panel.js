@@ -87,19 +87,10 @@ export const panel = {
     hiddenOptSheets: 'Удалить скрытые листы, строки и столбцы',
     hiddenOptSlides: 'Удалить скрытые слайды',
     hiddenHint: 'Найденное в скрытом обезличивается в любом случае. Включённый переключатель удаляет сами элементы из отправляемого файла; выбор запоминается.',
-    // 0.5 (WP12-D): ключ восстановления с паролем
-    keyProtect: 'Защитить паролем',
-    keyPassword: 'Пароль',
-    keyPassword2: 'Повторите пароль',
-    keyPwMeter: 'Длина: {n} — {grade}',
-    keyPw_short: 'коротко, нужно не меньше {min}',
-    keyPw_fair: 'средне',
-    keyPw_good: 'хорошо',
-    keyPwWarn: 'Забытый пароль = потерянный ключ: восстановить его нельзя. Пароль нигде не сохраняется.',
-    keyPwTooShort: 'Пароль короче {min} символов',
-    keyPwMismatch: 'Пароли не совпадают',
-    keyEncrypting: 'Шифрование…',
-    keyEncryptFailed: 'Не удалось зашифровать ключ на этой странице. Сохраните его без пароля или повторите на другой вкладке',
+    hiddenHintSheets:
+      'Формулы, которые ссылаются на удаляемое, изменятся: ссылка на удалённый лист станет ошибкой #ССЫЛКА! (#REF!), итоги по очищенным ячейкам пересчитаются при открытии.',
+    // 0.5 (WP12-D): пароль вводится на странице расширения (restore.html?save=1), не на сайте
+    btnSaveKeyProtected: 'Сохранить с паролем…',
     errNeedDecision: 'Выберите, что сделать с файлом, который не удалось обработать.',
     asIsNote: 'Файл не будет обезличен.',
     disableSite: 'Отключить на этом сайте',
@@ -196,19 +187,10 @@ export const panel = {
     hiddenOptSlides: 'Remove hidden slides',
     hiddenHint:
       'Data found in hidden content is anonymized anyway. A switch that is on removes the elements themselves from the file being sent; the choice is remembered.',
-    // 0.5 (WP12-D): password-protected recovery key
-    keyProtect: 'Protect with a password',
-    keyPassword: 'Password',
-    keyPassword2: 'Repeat the password',
-    keyPwMeter: 'Length: {n} — {grade}',
-    keyPw_short: 'too short, at least {min}',
-    keyPw_fair: 'fair',
-    keyPw_good: 'good',
-    keyPwWarn: 'A forgotten password means a lost key: it cannot be recovered. The password is not stored anywhere.',
-    keyPwTooShort: 'The password is shorter than {min} characters',
-    keyPwMismatch: 'The passwords do not match',
-    keyEncrypting: 'Encrypting…',
-    keyEncryptFailed: 'Could not encrypt the key on this page. Save it without a password or try again in another tab',
+    hiddenHintSheets:
+      'Formulas that refer to removed content will change: a reference to a removed sheet becomes #REF!, totals over cleared cells are recalculated on opening.',
+    // 0.5 (WP12-D): the password is typed on an extension page (restore.html?save=1), not on the site
+    btnSaveKeyProtected: 'Save with a password…',
     errNeedDecision: 'Choose what to do with the file that could not be processed.',
     asIsNote: 'The file will not be anonymized.',
     disableSite: 'Turn off on this site',

@@ -29,23 +29,10 @@ import { CoreError } from '../errors.js';
  * @property {boolean} [hiddenSlides]  удалить скрытые слайды (PowerPoint)
  */
 
-/** Флаг → ключ настроек (core/settings.js): выбор запоминается. */
-export const HIDDEN_SETTINGS = Object.freeze({
-  comments: 'removeComments',
-  revisions: 'acceptRevisions',
-  hiddenText: 'removeHiddenText',
-  hiddenSheets: 'removeHiddenSheets',
-  hiddenSlides: 'removeHiddenSlides',
-});
+// выбор из настроек — в core/settings.js (его импортирует и content.js, без этого модуля и CoreError)
+import { HIDDEN_SETTINGS, hiddenFlagsFrom } from '../settings.js';
 
-/**
- * Выбор из настроек.
- * @param {Record<string, any>} settings
- * @returns {HiddenFlags}
- */
-export function hiddenFlagsFrom(settings) {
-  return Object.fromEntries(Object.entries(HIDDEN_SETTINGS).map(([flag, key]) => [flag, settings?.[key] === true]));
-}
+export { HIDDEN_SETTINGS, hiddenFlagsFrom };
 
 /** Включён ли хоть один переключатель. @param {HiddenFlags | null | undefined} flags */
 export function anyHidden(flags) {

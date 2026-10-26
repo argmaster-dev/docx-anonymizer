@@ -201,6 +201,69 @@ describe('Excel: переключатели (К7)', () => {
   });
 });
 
+describe('Excel: кэш формул и объединения при удалении скрытого (ревью WP12-D)', () => {
+  it('кэш формул на удалённый лист — #REF! (t="e"), на очищенные ячейки — снят (и транзитивно); якорь видимого объединения остаётся', async () => {
+    const { buildXlsx } = await import('../../scripts/office-writer.mjs');
+    const bytes = buildXlsx({
+      sheets: [
+        {
+          name: 'Данные',
+          hiddenRows: [3, 6],
+          rows: [
+            ['Заголовок', 'Сумма', 'Ссылка'],
+            ['ВИД_СТР2', 10, { f: "'Скрытый лист'!A1", v: 'Яковлева Дарья Сергеевна', str: true }],
+            ['СКРЫТАЯ_СТР Морозов Илья Петрович', 20, null],
+            ['ИТОГО', { f: 'SUM(B2:B3)', v: 30 }, { f: "SUM('Скрытый лист'!B1:B3)", v: 600 }],
+            ['ОБЪЕД_ВЕРХ_ВИДИМ', null, null],
+            [null, 'ОБЪЕД_СКРЫТ_ВЕРХ', null],
+            [null, null, 'ВИД_СТР7'],
+            [null, null, 'ВИД_СТР8'],
+          ],
+          merges: ['A5:A7', 'B6:B8'],
+        },
+        {
+          name: 'Скрытый лист',
+          hidden: true,
+          rows: [
+            ['Яковлева Дарья Сергеевна', 100],
+            ['СКР_ЛИСТ_2', 200],
+            ['СКР_ЛИСТ_3', 300],
+          ],
+        },
+        {
+          name: 'Итоги',
+          rows: [['ИТОГ_ЛИСТ', { f: "'Скрытый лист'!B2*2", v: 400 }, { f: 'Данные!B4', v: 30 }, { f: 'SUM(Источник)', v: 600 }, { f: 'B1+1', v: 401 }]],
+        },
+      ],
+      definedNames: [{ name: 'Источник', ref: "'Скрытый лист'!$A$1:$B$3" }],
+    });
+    const r = (await runOffice(bytes, 'книга.xlsx', { apply: { hidden: { hiddenSheets: true } } })).result;
+    assertValid(r.bytes, 'книга');
+    const p = unzipText(r.bytes);
+    const s1 = p['xl/worksheets/sheet1.xml'];
+    const s3 = p['xl/worksheets/sheet3.xml'];
+    // ссылка на удалённый лист: формула #REF!, ячейка-ошибка, кэш #REF! (значения скрытого листа не остаются)
+    expect(s1).toMatch(/<c r="C2" t="e"><f>#REF!<\/f><v>#REF!<\/v><\/c>/);
+    expect(s1).toMatch(/<c r="C4" t="e"><f>SUM\(#REF!\)<\/f><v>#REF!<\/v><\/c>/);
+    expect(s3).toMatch(/<c r="B1" t="e"><f>#REF!\*2<\/f><v>#REF!<\/v><\/c>/);
+    expect(s3).toMatch(/<c r="D1" t="e"><f>SUM\(Источник\)<\/f><v>#REF!<\/v><\/c>/);
+    // итог по очищенной скрытой строке — без кэша; зависящие от него и от ошибки формулы — тоже
+    expect(s1).toMatch(/<c r="B4"><f>SUM\(B2:B3\)<\/f><\/c>/);
+    expect(s3).toMatch(/<c r="C1"><f>Данные!B4<\/f><\/c>/);
+    expect(s3).toMatch(/<c r="E1"><f>B1\+1<\/f><\/c>/);
+    for (const v of ['>600<', '>400<', '>401<', '>30<', 'Яковлева', 'Морозов']) expect(`${s1}${s3}${p['xl/sharedStrings.xml']}`, v).not.toContain(v);
+    // объединение B6:B8 со скрытой строкой 6 видно в 7–8 — его текст остаётся; ячейка вне объединений в скрытой строке — удалена
+    expect(s1).toMatch(/<row r="6" hidden="1"><c r="B6" t="s">/);
+    expect(p['xl/sharedStrings.xml']).toContain('ОБЪЕД_СКРЫТ_ВЕРХ');
+    expect(s1).toMatch(/<row r="3" hidden="1"><\/row>/);
+    expect(p['xl/workbook.xml']).toMatch(/fullCalcOnLoad="1"/);
+    if (LO_ENABLED) {
+      const out = libreOfficeConvert([{ name: 'formulas.xlsx', bytes: r.bytes }], 'pdf', 'hidden-formulas');
+      expect(out.has('formulas.pdf')).toBe(true);
+    }
+  }, 120000);
+});
+
 describe('PowerPoint: переключатели (К7)', () => {
   const name = 'deck-hidden.pptx';
 

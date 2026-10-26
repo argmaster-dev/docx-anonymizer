@@ -1,6 +1,6 @@
 // Маршрутизатор: порты клиентов (content/popup/options/restore) ⇄ offscreen (§5.1, §5.4).
 // Background добавляет к сообщениям поле `settings` — offscreen не имеет доступа к chrome.storage.
-import { PORT_NAME, TARGET, MSG, OPTIONS_SECTIONS, errorMessage } from '../shared/protocol.js';
+import { PORT_NAME, TARGET, MSG, OPTIONS_SECTIONS, errorMessage, keySavePath } from '../shared/protocol.js';
 import { ensureOffscreen, hasDocument } from './offscreen-manager.js';
 import { loadSettings } from '../shared/settings-store.js';
 import { bootstrapBundledModel } from './bundled-model.js';
@@ -51,6 +51,18 @@ async function forward(clientId, port, msg) {
         return;
       }
       await chrome.tabs.create({ url: chrome.runtime.getURL(`options/options.html#${msg.section}`) });
+      port.postMessage({ type: MSG.ACK, requestId: msg.requestId });
+      return;
+    }
+    // 0.5 (WP12-D): «Сохранить с паролем…» из панели — пароль вводится только на странице расширения (на сайте его видели бы
+    // слушатели клавиатуры страницы); страница берёт карту сессий через GET_MAPPING и шифрует сама
+    if (msg.type === MSG.OPEN_KEY_SAVE) {
+      const path = keySavePath(msg);
+      if (!path) {
+        port.postMessage(errorMessage(msg.requestId, { code: 'INTERNAL', message: 'Неверный запрос сохранения ключа' }));
+        return;
+      }
+      await chrome.tabs.create({ url: chrome.runtime.getURL(path) });
       port.postMessage({ type: MSG.ACK, requestId: msg.requestId });
       return;
     }

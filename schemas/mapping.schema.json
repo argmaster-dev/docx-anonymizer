@@ -103,7 +103,7 @@
             "iterations": {
               "type": "integer",
               "minimum": 600000,
-              "maximum": 10000000
+              "maximum": 2000000
             },
             "salt": {
               "type": "string",

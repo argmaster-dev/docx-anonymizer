@@ -6,9 +6,13 @@
 // Склонение ФИО по контексту (FR-37, редакция 0.2) включено по умолчанию; склонённые подстановки подсвечиваются зелёным.
 // Ключ, защищённый паролем (0.5, WP12-D, К8): страница распознаёт зашифрованный .mapping.json и спрашивает пароль; неверный —
 // KEY_PASSWORD и понятный текст без частичного вывода; пароль нигде не хранится, расшифрованная карта живёт только в памяти страницы.
+// Сохранение ключа с паролем — тоже здесь (restore.html?save=1&docId=…&name=…, панель открывает через background, MSG.OPEN_KEY_SAVE):
+// пароль, набранный на сайте чата, видели бы слушатели клавиатуры страницы (ревью WP12-D); страница расширения сайту недоступна.
 import './restore.css';
 import { restoreDocx, restoreDocument, restoreText } from '../core/restore-doc.js';
 import { loadAdapter } from '../core/adapters.js';
+import { encryptMapping, MIN_PASSWORD_LENGTH } from '../core/key-crypto.js';
+import { mergeMappings } from '../core/mapping.js';
 import { MSG } from '../shared/protocol.js';
 import { connectClient } from '../shared/port-client.js';
 import { loadSettings } from '../shared/settings-store.js';
@@ -451,6 +455,7 @@ function render(lang) {
         'div',
         { class: 'restore' },
         h('header', { class: 'page-head' }, h('h1', {}, t('title')), h('p', {}, t('subtitle'))),
+        keySaveCard(),
         h('section', { class: 'card' }, h('h2', {}, t('input_h')), inputBox),
         h('section', { class: 'card' }, h('h2', {}, t('source_h')), sourceBox),
         h(
@@ -473,6 +478,92 @@ function render(lang) {
         h('div', { class: 'row between' }, helpLink(lang), madeByLine(lang)),
       ),
     );
+}
+
+/** Имя файла ключа из ссылки: только «*.mapping.json» без путей, иначе нейтральное. */
+function keyFileName(raw) {
+  const ok = typeof raw === 'string' && raw.length <= 200 && /\.mapping\.json$/i.test(raw) && !/[\\/]/.test(raw);
+  return ok ? raw : 'document.mapping.json';
+}
+
+/**
+ * «Сохранить ключ восстановления с паролем» (0.5, WP12-D, Ц5, К8) — только при ?save=1: пароль и повтор (не короче
+ * MIN_PASSWORD_LENGTH), индикатор длины, предупреждение «забытый пароль = потерянный ключ»; карта — у хоста по docId (GET_MAPPING,
+ * несколько файлов одной отправки склеиваются), шифрование — core/key-crypto.js, файл скачивается отсюда. Поля пароля очищаются
+ * после сохранения и при уходе со страницы; пароль никуда не пишется.
+ */
+function keySaveCard() {
+  const params = new URLSearchParams(location.search);
+  if (params.get('save') !== '1') return null;
+  const docIds = params.getAll('docId').filter((x) => /^d\d{1,9}$/.test(x));
+  const name = keyFileName(params.get('name'));
+  const field = (testid, label) =>
+    h('input', { type: 'password', autocomplete: 'new-password', placeholder: label, 'aria-label': label, dataset: { testid }, oninput: () => meter() });
+  const pw1 = field('key-save-password', t('save_password'));
+  const pw2 = field('key-save-password2', t('save_password2'));
+  const meterEl = h('div', { class: 'hint', dataset: { testid: 'key-save-meter' }, 'aria-live': 'polite' });
+  const status = h('div', { class: 'hint', role: 'alert', dataset: { testid: 'key-save-status' } });
+  const meter = () => {
+    const n = pw1.value.length;
+    const grade = n < MIN_PASSWORD_LENGTH ? 'short' : n < 12 ? 'fair' : 'good';
+    meterEl.className = grade === 'short' ? 'err' : grade === 'good' ? 'good' : 'hint';
+    meterEl.textContent = n ? t('save_meter', { n, grade: t(`save_${grade}`, { min: MIN_PASSWORD_LENGTH }) }) : '';
+    status.textContent = '';
+  };
+  const clear = () => {
+    pw1.value = '';
+    pw2.value = '';
+    meterEl.textContent = '';
+  };
+  // пароль не задерживается в полях: уход со страницы и скрытие вкладки — очистка
+  addEventListener('pagehide', clear);
+  const fail = (key, params2) => {
+    status.className = 'err';
+    status.textContent = t(key, params2);
+  };
+  const run = h('button', { type: 'button', class: 'btn primary', dataset: { testid: 'key-save-run' } }, t('save_run'));
+  const save = async () => {
+    if (!docIds.length) return fail('save_no_session');
+    if (pw1.value.length < MIN_PASSWORD_LENGTH) return fail('save_too_short', { min: MIN_PASSWORD_LENGTH });
+    if (pw1.value !== pw2.value) return fail('save_mismatch');
+    run.disabled = true;
+    run.textContent = t('save_busy');
+    try {
+      let mappings;
+      try {
+        mappings = await Promise.all(docIds.map(async (docId) => (await getClient().request(MSG.GET_MAPPING, { docId })).mapping));
+      } catch (err) {
+        return fail(err?.reason === 'NO_SESSION' ? 'session_gone' : err?.reason === 'NO_MAPPING' ? 'session_missing' : 'save_no_session');
+      }
+      let enc;
+      try {
+        enc = await encryptMapping(mappings.length === 1 ? mappings[0] : mergeMappings(mappings), pw1.value);
+      } catch {
+        return fail('save_failed');
+      }
+      downloadBlob(name, new Blob([JSON.stringify(enc, null, 2)], { type: 'application/json' }));
+      clear();
+      status.className = 'good';
+      status.textContent = t('save_done', { name });
+    } finally {
+      run.disabled = false;
+      run.textContent = t('save_run');
+    }
+  };
+  run.addEventListener('click', save);
+  pw2.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') save();
+  });
+  return h(
+    'section',
+    { class: 'card', dataset: { testid: 'key-save' } },
+    h('h2', {}, t('save_h')),
+    h('p', { class: 'hint' }, t('save_hint', { name })),
+    h('div', { class: 'field' }, pw1, pw2, meterEl),
+    h('p', { class: 'err' }, t('save_warn')),
+    h('div', { class: 'row' }, run),
+    status,
+  );
 }
 
 init();

@@ -33,6 +33,9 @@ export const MSG = Object.freeze({
   /** {section} — открыть страницу настроек на разделе (0.4, подсказка панели «организации — по желанию»): background
    *  открывает вкладку options.html#<section> и отвечает ACK; section ∈ OPTIONS_SECTIONS */
   OPEN_OPTIONS: 'OPEN_OPTIONS',
+  /** {docIds, name} — сохранить ключ восстановления с паролем (0.5, WP12-D, К8): пароль вводится только на странице расширения
+   *  (на сайте его видели бы слушатели страницы), поэтому background открывает restore.html?save=1&docId=…&name=… и отвечает ACK */
+  OPEN_KEY_SAVE: 'OPEN_KEY_SAVE',
   // bg → offscreen (clientId 'bootstrap', не порт клиента; WP10-C, docs/contracts.md §6.8)
   /** {url, id, sha256, version, extensionVersion} — установить пакет из архива расширения; ответ MODEL_INSTALLED */
   MODEL_INSTALL: 'MODEL_INSTALL',
@@ -50,9 +53,25 @@ export const MSG = Object.freeze({
   DEANON_RESULT: 'DEANON_RESULT',
   MAPPING: 'MAPPING',
   BATCH_DONE: 'BATCH_DONE',
-  /** Расширение протокола: подтверждение для DISCARD/CANCEL/CATALOG_CHANGED/MODEL_CHANGED/MODEL_BOOTSTRAP/OPEN_OPTIONS/BATCH_* без данных. */
+  /** Расширение протокола: подтверждение для DISCARD/CANCEL/CATALOG_CHANGED/MODEL_CHANGED/MODEL_BOOTSTRAP/OPEN_OPTIONS/OPEN_KEY_SAVE/BATCH_* без данных. */
   ACK: 'ACK',
 });
+
+/**
+ * Ссылка страницы сохранения ключа с паролем (OPEN_KEY_SAVE, 0.5, WP12-D): только id сессий вида d<N> (1–20) и имя файла ключа
+ * без путей (≤ 200 символов, *.mapping.json); иначе — null.
+ * @param {{docIds?: unknown, name?: unknown}} msg
+ * @returns {string | null}  путь относительно корня расширения
+ */
+export function keySavePath(msg) {
+  const ids = msg?.docIds;
+  if (!Array.isArray(ids) || !ids.length || ids.length > 20 || !ids.every((x) => typeof x === 'string' && /^d\d{1,9}$/.test(x))) return null;
+  const name = msg?.name;
+  if (typeof name !== 'string' || name.length > 200 || !/\.mapping\.json$/i.test(name) || /[\\/]/.test(name) || [...name].some((c) => c.charCodeAt(0) < 32))
+    return null;
+  const q = new URLSearchParams([['save', '1'], ...ids.map((id) => ['docId', id]), ['name', name]]);
+  return `restore/restore.html?${q}`;
+}
 
 /** Разделы страницы настроек, которые можно открыть сообщением OPEN_OPTIONS (0.4): якоря options.html#<раздел>. */
 export const OPTIONS_SECTIONS = Object.freeze(['categories', 'companies', 'ner']);
