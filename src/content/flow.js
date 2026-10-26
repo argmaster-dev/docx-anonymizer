@@ -12,6 +12,7 @@ import { isSupported, isPdfFile, resultType, mappingFileName, isInvalidatedError
 import { Link, contextValid, readOpenShadowFlag } from './runtime.js';
 import { exclusionValue } from '../ui/preview/model.js';
 import { shouldShowOrgPolicyHint, withMaskedCompany } from '../ui/panel/org-policy.js';
+import { HIDDEN_SETTINGS, hiddenFlagsFrom } from '../core/ooxml/hidden.js';
 
 /**
  * @typedef {{action: 'anonymized'|'original'|'cancel', files: File[]}} FlowResult
@@ -149,12 +150,23 @@ async function runOnce(originals, deps) {
         /* контекст инвалидирован */
       }
     },
+    // 0.5 (WP12-D): переключатели скрытых данных запоминаются в настройках (removeComments, acceptRevisions, …)
+    onHiddenPref: (flag, value) => {
+      try {
+        const key = HIDDEN_SETTINGS[flag];
+        if (key) saveSettingsPatch({ [key]: value }).catch(() => {});
+      } catch {
+        /* контекст инвалидирован */
+      }
+    },
   };
 
   // WP10-C: лёгкая сборка и модели нет — закрываемая подсказка в панели (в полной модель ставится сама или есть «Восстановить»)
   const nerHint = !BUNDLED && !settings.nerModel && !nerHintDismissed;
   const orgPolicyHint = shouldShowOrgPolicyHint(settings);
-  const panel = new Panel({ lang, catalog, origin, position: settings.panelPosition?.[origin], openShadow, handlers, nerHint, orgPolicyHint });
+  // скрытые данные (WP12-D): выбор из настроек; по умолчанию всё выключено — документ меняется только по явному действию
+  const hiddenPrefs = hiddenFlagsFrom(settings);
+  const panel = new Panel({ lang, catalog, origin, position: settings.panelPosition?.[origin], openShadow, handlers, nerHint, orgPolicyHint, hiddenPrefs });
   panel.mount();
 
   function invalidated() {
@@ -200,6 +212,7 @@ async function runOnce(originals, deps) {
         warnings: ent.warnings,
         restored: ent.restoredDecisions,
         kind: ent.kind,
+        hidden: ent.hidden,
         ext: settings.pdfMode === 'text' ? '.txt' : '.md',
         api: {
           getText: (from, count) => link.get().request(MSG.GET_TEXT, { docId: ent.docId, from, count }),
@@ -252,6 +265,8 @@ async function runOnce(originals, deps) {
         const res = await client.apply({
           docId: analyzed.get(i).docId,
           decisions: panel.getPreview(k).getDecisions(),
+          // скрытые данные: что удалить из результата (выбор панели, WP12-D)
+          options: { hidden: panel.hiddenFlags() },
           onProgress: (stage, p) => panel.setApplyProgress(stage, Math.round(((stepNo + p / 100) / ready.length) * 100)),
         });
         stepNo++;

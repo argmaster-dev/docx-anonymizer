@@ -329,6 +329,18 @@
     "strip": "614606b5631e8bad4285aec2c2f69bed312abf459a44440fdf146bd319797061",
     "restore": "b7c52881ad93fa44e302c668c3def1cdb1192f060fb204d3121969782651328d"
   },
+  "tests/fixtures/hidden/contract-hidden.docx": {
+    "normal": "a38e63b29420a3eb6ae6547dc8ebf3599a9f005ef379a6f972315070a50937cf",
+    "commercial": "c6e8715d137def1fe7e0ff1e126c8a027b5c5ed86af5f7ee896bc0a8846cd8df",
+    "strip": "b04d9fb12199a689954c29938524cd220a6d5caf19fe16d73c472cfd0cd8097d",
+    "restore": "37699a0eb1a82b0cbf633c3bfc0a5bc41f3c05da04eb544eabe8604c45b56dc4"
+  },
+  "tests/fixtures/hidden/real/lo-contract.docx": {
+    "normal": "29b0596c2537fb033a12f0f1178da996e92434bdf1aa47f6271296ccb1086dc2",
+    "commercial": "29b0596c2537fb033a12f0f1178da996e92434bdf1aa47f6271296ccb1086dc2",
+    "strip": "fada8db4213f8a617120b2f98df54ccbc34c6c4814bb1d8c20b1fcd3a4c34a99",
+    "restore": "5abc923850a16b6edd0ab405b31534cc4fc923ced4e2bac3ff5adbf2d81fb7f2"
+  },
   "tests/fixtures/office/real/review/n6.docx": {
     "normal": "71f3e8dfe955ff281910894420317d4f0eb7451d8dce8f2116a3c580b326ef8b",
     "commercial": "71f3e8dfe955ff281910894420317d4f0eb7451d8dce8f2116a3c580b326ef8b",

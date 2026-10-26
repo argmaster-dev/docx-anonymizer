@@ -5,6 +5,7 @@ import { parseAttrs, getAttr, tokenize } from '../ooxml/xml.js';
 import { parsePackage, addAttrStream, sortParts, detectLanguage } from '../ooxml/model.js';
 import { parseFlowPart, OBJ } from '../ooxml/flow.js';
 import { parseRelsPart, parseMetaPart, META_PART_RE } from '../ooxml/opc.js';
+import { countDocxHidden } from './hidden.js';
 
 export { detectLanguage, META_PART_RE };
 
@@ -113,11 +114,13 @@ const DOCX_PACKAGE = {
 
 /**
  * Разбирает .docx. Бросает CoreError с кодами NOT_DOCX / ENCRYPTED / PARSE_FAILED.
+ * `hidden` — счётчики скрытого (комментарии, история правок, скрытый текст; WP12-D, docx/hidden.js): потоки не меняются.
  * @param {Uint8Array} bytes
- * @returns {DocModel}
+ * @returns {DocModel & {hidden: import('../ooxml/hidden.js').HiddenCounts}}
  */
 export function parseDocx(bytes) {
-  return parsePackage(bytes, DOCX_PACKAGE);
+  const doc = parsePackage(bytes, DOCX_PACKAGE);
+  return Object.assign(doc, { hidden: countDocxHidden(doc) });
 }
 
 /* ---------- Текстовые части ---------- */

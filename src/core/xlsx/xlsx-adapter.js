@@ -18,6 +18,7 @@ import { escapeText, escapeAttr, unescapeXml } from '../ooxml/xml.js';
 import { registerAdapter } from '../adapters.js';
 import { parseChartPart } from '../ooxml/dml.js';
 import { attachEmbeddedBooksWith } from '../embedded.js';
+import { prepareXlsxHidden, applyXlsxHidden, REMOVED_SHEET, dropRemovedRefs } from './hidden.js';
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const EXTENSIONS = ['.xlsx', '.xlsm'];
@@ -61,7 +62,7 @@ export function serializeXlsx(doc, edits, options = {}) {
  * @param {ReturnType<typeof parseXlsx> & {chartEmbeds?: any[]}} doc
  * @param {Map<string, import('../ooxml/serialize.js').TextEdit[]>} byStream
  * @param {(part: string, e: {from: number, to: number, text: string}) => void} push
- * @param {{options: import('../ooxml/serialize.js').SerializeOptions, remove: (name: string) => void}} ctx
+ * @param {import('../ooxml/serialize.js').PlanContext} ctx
  */
 function planXlsx(doc, byStream, push, ctx) {
   const x = doc.xlsx;
@@ -166,7 +167,11 @@ function planXlsx(doc, byStream, push, ctx) {
     const root = x.pivotRoots.get(p);
     if (root && !/\brefreshOnLoad\s*=/.test(xmlOf(p).slice(0, root.at))) push(p, { from: root.at, to: root.at, text: ' refreshOnLoad="1"' });
   }
-  if (renames.size) {
+  // скрытые листы, которые удаляются по выбору пользователя (WP12-D): ссылки на них в формулах, именах, диаграммах → #REF!
+  const hidden = ctx.hidden ? prepareXlsxHidden(doc, ctx.hidden) : null;
+  const siteRenames = new Map(renames);
+  for (const s of hidden?.removed || []) siteRenames.set(s.name.toLowerCase(), REMOVED_SHEET);
+  if (siteRenames.size) {
     for (const site of x.sites) {
       const part = /** @type {any} */ (doc.parts.get(site.part));
       if (!part) continue;
@@ -175,8 +180,10 @@ function planXlsx(doc, byStream, push, ctx) {
       const raw = part.xml.slice(site.start, site.end);
       const old = unescapeXml(raw);
       let next;
-      if (site.kind === 'sheet') next = renames.get(old.toLowerCase()) ?? old;
-      else next = renameSheets(old, renames);
+      // источник сводной на удалённом листе остаётся как был (сводная обновится с ошибкой, файл открывается)
+      if (site.kind === 'sheet') next = siteRenames.get(old.toLowerCase()) ?? old;
+      else next = dropRemovedRefs(renameSheets(old, siteRenames));
+      if (next === REMOVED_SHEET) next = old;
       if (next === old) continue;
       // формула — текст элемента; ссылка «#лист» и источник сводной — атрибут (в двойных кавычках апостроф не экранируется)
       const attrText = part.xml[site.start - 1] === "'" ? escapeAttr(next) : escapeText(next).replace(/"/g, '&quot;');
@@ -189,6 +196,8 @@ function planXlsx(doc, byStream, push, ctx) {
     const value = applyEdits(s.text, connEdits.get(s.id) || []).replace(CREDENTIALS_RE, '$1***');
     if (value !== s.text) push(s.part, { from: /** @type {number} */ (s.valueStart), to: /** @type {number} */ (s.valueEnd), text: escapeAttr(value) });
   }
+  // скрытые данные по выбору пользователя (WP12-D): листы, строки и столбцы, примечания и цепочки комментариев
+  if (hidden && applyXlsxHidden(doc, hidden, ctx, push)) cellsChanged = true;
   // «Удалять встроенные объекты»: книга данных диаграммы и ссылка на неё (диаграмма остаётся с кэшем значений)
   if (ctx.options.stripEmbedded) {
     for (const e of doc.chartEmbeds || []) {

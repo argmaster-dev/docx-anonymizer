@@ -5,6 +5,7 @@
 // что по желанию (организации модели — только в коммерческом режиме), список компаний, бренд Sitimlab не маскируется; модель 1.1.0.
 // Версия 0.5 (WP12-B): Excel, PowerPoint и текстовые файлы — тем же форматом, восстановление .xlsx/.pptx/.csv/.json, сканы — в 0.6.
 // Версия 0.5 (WP12-C): новые категории — паспорт по частям, документы, транспорт, суды, недвижимость; особые категории — только по метке.
+// Версия 0.5 (WP12-D): скрытые данные (комментарии, история правок, скрытый текст, скрытые листы и слайды) и ключ восстановления с паролем.
 export const HELP_DICT = {
   ru: {
     title: 'Справка',
@@ -31,6 +32,14 @@ export const HELP_DICT = {
       'По желанию: коммерческая информация — названия организаций, номера договоров, закупок ЕИС, заказов, счетов и клиентов, патенты, товарные знаки и регистрация программ для ЭВМ, суммы. По умолчанию выключена; включается переключателем «Коммерческая информация» в настройках, раздел «Что маскируется». Организации, найденные моделью NER, панель показывает только в этом режиме. Sitimlab — бренд разработчика расширения — не маскируется никогда.',
     policy_4:
       'Список компаний: названия, которые нужно скрывать всегда (свою фирму, ключевых клиентов), впишите в настройках, раздел «Компании для маскирования», или нажмите «Маскировать всегда» в строке организации панели. Они ищутся во всех падежах, с юридической формой и без, кириллицей и латиницей, и получают одну метку на компанию.',
+    hidden_h: 'Скрытые данные и ключ с паролем',
+    hidden_1:
+      'Панель сообщает, что в документе есть скрытое: комментарии, история правок и скрытый текст в Word, скрытые листы, строки и столбцы, примечания и цепочки комментариев в Excel, скрытые слайды и комментарии в PowerPoint («В документе: 3 комментария, история правок, скрытый текст»).',
+    hidden_2:
+      'Найденные в скрытом персональные данные и идентификаторы обезличиваются в любом случае. Удалить сами элементы можно переключателями панели: «Удалить комментарии», «Принять исправления» (вставки становятся обычным текстом, удалённое исчезает), «Удалить скрытый текст», для Excel — «Удалить скрытые листы, строки и столбцы» (ячейки скрытых строк и столбцов очищаются, сами строки и столбцы остаются на месте, ссылки формул на удалённый лист становятся #REF!), для PowerPoint — «Удалить скрытые слайды». По умолчанию всё выключено, выбор запоминается.',
+    hidden_3:
+      'Ключ восстановления можно сохранить с паролем: «Ещё» → флажок «Защитить паролем» → пароль (не короче 8 символов) и повтор → «Сохранить ключ восстановления». Файл шифруется на этом компьютере (PBKDF2-SHA-256, 600 000 итераций, AES-GCM-256) и без пароля бесполезен; страница «Восстановить текст» спросит пароль при загрузке такого ключа.',
+    hidden_4: 'Забытый пароль = потерянный ключ: восстановить ни пароль, ни ключ нельзя. Пароль нигде не сохраняется и никуда не отправляется.',
     privacy_h: 'Данные не покидают ваш компьютер',
     privacy_1: 'Расширение не делает ни одного сетевого запроса: это закреплено политикой безопасности расширения и проверяется тестами.',
     privacy_2: 'Документ обрабатывается в изолированном окне самого браузера и никуда не отправляется.',
@@ -73,6 +82,14 @@ export const HELP_DICT = {
       'Optional: commercial information — company names, contract, tender, order, invoice and customer numbers, patents, trademarks and software registrations, amounts. Off by default; turn it on with the “Commercial information” switch in the settings, “What is masked”. Companies found by the NER model appear in the panel only in this mode. Sitimlab, the extension developer’s brand, is never masked.',
     policy_4:
       'Company list: names that must always be hidden (your own firm, key clients) — add them in the settings, “Companies to mask”, or press “Always mask” in a company row of the panel. They are found in every grammatical case, with or without the legal form, in Cyrillic and Latin, and get one label per company.',
+    hidden_h: 'Hidden content and a password-protected key',
+    hidden_1:
+      'The panel tells you when the document has hidden content: comments, tracked changes and hidden text in Word; hidden sheets, rows and columns, notes and comment threads in Excel; hidden slides and comments in PowerPoint (“The document has: 3 comments, tracked changes, hidden text”).',
+    hidden_2:
+      'Personal data and identifiers found in hidden content are anonymized anyway. The elements themselves can be removed with the panel switches: “Remove comments”, “Accept tracked changes” (insertions become regular text, deletions disappear), “Remove hidden text”, for Excel — “Remove hidden sheets, rows and columns” (cells of hidden rows and columns are cleared, the rows and columns stay in place, formula references to a removed sheet become #REF!), for PowerPoint — “Remove hidden slides”. Everything is off by default; the choice is remembered.',
+    hidden_3:
+      'The recovery key can be saved with a password: “More” → “Protect with a password” → password (at least 8 characters) and repeat → “Save the recovery key”. The file is encrypted on this computer (PBKDF2-SHA-256, 600,000 iterations, AES-GCM-256) and is useless without the password; the “Restore text” page asks for the password when you load such a key.',
+    hidden_4: 'A forgotten password means a lost key: neither the password nor the key can be recovered. The password is not stored or sent anywhere.',
     privacy_h: 'Your data never leaves your computer',
     privacy_1: 'The extension makes no network requests at all: this is enforced by the extension security policy and checked by tests.',
     privacy_2: 'The document is processed in an isolated browser window and is not sent anywhere.',

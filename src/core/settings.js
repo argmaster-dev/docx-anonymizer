@@ -76,6 +76,11 @@ function forceAlwaysOn(categories) {
  * @property {string} bundledModelError  код последней неудачной автоустановки встроенного пакета ('' — нет; WP10-C, К15), не экспортируется
  * @property {boolean} keepMetadata
  * @property {boolean} stripEmbedded
+ * @property {boolean} removeComments      скрытые данные (0.5, WP12-D, К7): удалить комментарии (Word, Excel, PowerPoint); по умолчанию нет
+ * @property {boolean} acceptRevisions     принять исправления Word (история правок); по умолчанию нет
+ * @property {boolean} removeHiddenText    удалить скрытый текст Word; по умолчанию нет
+ * @property {boolean} removeHiddenSheets  удалить скрытые листы, строки и столбцы Excel; по умолчанию нет
+ * @property {boolean} removeHiddenSlides  удалить скрытые слайды PowerPoint; по умолчанию нет
  * @property {number} maxFileSizeMB
  * @property {'auto'|'ru'|'en'} uiLanguage
  * @property {{value: string, category: string}[]} exclusions
@@ -120,6 +125,13 @@ export function defaultSettings() {
     bundledModelError: '',
     keepMetadata: false,
     stripEmbedded: false,
+    // скрытые данные (0.5, WP12-D): документ меняется только по явному выбору в панели, выбор запоминается здесь.
+    // Новые ключи со значением по умолчанию — миграция схемы не нужна (migrateSettings дополняет дефолтами)
+    removeComments: false,
+    acceptRevisions: false,
+    removeHiddenText: false,
+    removeHiddenSheets: false,
+    removeHiddenSlides: false,
     maxFileSizeMB: 50,
     uiLanguage: 'auto',
     exclusions: [],
@@ -173,6 +185,11 @@ export const VALIDATORS = Object.freeze({
   bundledModelError: (v) => v === '' || (typeof v === 'string' && /^[A-Z_]{1,40}$/.test(v)),
   keepMetadata: (v) => typeof v === 'boolean',
   stripEmbedded: (v) => typeof v === 'boolean',
+  removeComments: (v) => typeof v === 'boolean',
+  acceptRevisions: (v) => typeof v === 'boolean',
+  removeHiddenText: (v) => typeof v === 'boolean',
+  removeHiddenSheets: (v) => typeof v === 'boolean',
+  removeHiddenSlides: (v) => typeof v === 'boolean',
   maxFileSizeMB: (v) => Number.isInteger(v) && v >= 1 && v <= 100,
   uiLanguage: (v) => ['auto', 'ru', 'en'].includes(v),
   exclusions: (v) => Array.isArray(v) && v.every((x) => isPlainObject(x) && typeof x.value === 'string' && typeof x.category === 'string'),

@@ -203,3 +203,32 @@ test('сессия без карты и исчезнувшая сессия — 
   await page.getByTestId('restore-run').click();
   await expect(page.getByTestId('restore-error')).toContainText('больше недоступна');
 });
+
+// 0.5 (WP12-D, К8): ключ, защищённый паролем, — страница спрашивает пароль; неверный — понятный текст без вывода, верный — восстановление
+test('ключ с паролем из файла: неверный пароль — KEY_PASSWORD без вывода, верный — восстановление', async ({ context, extensionId }) => {
+  const { encryptMapping } = await import('../../src/core/key-crypto.js');
+  const dir = resolve('test-output');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, 'e2e-locked.mapping.json');
+  writeFileSync(file, JSON.stringify(await encryptMapping(fx.mapping, 'Пароль-для-теста-1')));
+  const net = await captureAllRequests(context);
+  const page = await context.newPage();
+  await page.goto(`chrome-extension://${extensionId}/restore/restore.html`);
+  await page.evaluate(() => chrome.storage.local.set({ settings: { uiLanguage: 'ru' } }));
+  await page.reload();
+  await page.getByTestId('restore-input').fill('Договор подписал [ФИО_1].');
+  await page.getByTestId('mapping-file').setInputFiles(file);
+  await expect(page.getByTestId('file-info')).toContainText('Ключ защищён паролем');
+  await page.getByTestId('key-password').fill('Пароль-для-теста-2');
+  await page.getByTestId('key-unlock').click();
+  await expect(page.getByTestId('file-info')).toContainText('Неверный пароль или файл ключа повреждён', { timeout: 30000 });
+  await page.getByTestId('restore-run').click();
+  await expect(page.getByTestId('restore-error')).toContainText('введите пароль');
+  await expect(page.getByTestId('restore-output')).not.toContainText('Иванов');
+  await page.getByTestId('key-password').fill('Пароль-для-теста-1');
+  await page.getByTestId('key-unlock').click();
+  await expect(page.getByTestId('file-info')).toContainText('Ключ открыт', { timeout: 30000 });
+  await page.getByTestId('restore-run').click();
+  await expect(page.getByTestId('restore-output')).toHaveText('Договор подписал Иванов Пётр Сергеевич.');
+  expect(externalRequests(await net.stop()), 'К13').toEqual([]);
+});

@@ -11,6 +11,7 @@ import { createPreview } from '../preview/preview.js';
 import { PANEL_CSS } from './styles.js';
 import { formatSize } from '../../content/files.js';
 import { shouldShowMappingHint } from './done-hint.js';
+import { encryptMapping, MIN_PASSWORD_LENGTH } from '../../core/key-crypto.js';
 
 export const PANEL_TAG = 'docx-anonymizer-root';
 
@@ -34,6 +35,28 @@ export const WARN_KEYS = Object.freeze({
   JSON_INVALID: 'warnJsonInvalid',
 });
 const SVG_NS = 'http://www.w3.org/2000/svg';
+
+/**
+ * Форма числа для словаря: ru — one/few/many («1 комментарий», «3 комментария», «5 комментариев»), en — one/many.
+ * @param {number} n @param {'ru'|'en'} lang
+ */
+export function pluralForm(n, lang) {
+  if (lang !== 'ru') return n === 1 ? 'one' : 'many';
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return 'one';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'few';
+  return 'many';
+}
+
+/** Скрытые данные (WP12-D): флаг выбора → (что найдено в документе) и ключ подписи переключателя. */
+const HIDDEN_OPTS = [
+  ['hiddenSlides', (c) => c.hiddenSlides, 'hiddenOptSlides'],
+  ['comments', (c) => c.comments, 'hiddenOptComments'],
+  ['revisions', (c) => c.revisions, 'hiddenOptRevisions'],
+  ['hiddenText', (c) => c.hiddenText, 'hiddenOptText'],
+  ['hiddenSheets', (c) => c.hiddenSheets || c.hiddenRows || c.hiddenCols, 'hiddenOptSheets'],
+];
 
 function logo() {
   const svg = document.createElementNS(SVG_NS, 'svg');
@@ -67,17 +90,23 @@ function logo() {
  * @property {() => void} [onDismissNerHint]  подсказка «установите модель NER» закрыта (WP10-C): больше не показывать на странице
  * @property {() => void} [onOrgPolicyHintShown]  подсказка о политике 0.4 («организации — по желанию») показана: снять orgPolicyHintPending
  * @property {(section: 'categories'|'companies'|'ner') => void} [onOpenOptions]  открыть страницу настроек на разделе (0.4, MSG.OPEN_OPTIONS)
+ * @property {(flag: string, value: boolean) => void} [onHiddenPref]  переключатель скрытых данных изменён (0.5, WP12-D): запомнить в настройках
  */
 
 export class Panel {
   /**
    * @param {{lang: 'ru'|'en', catalog: any, origin: string, position?: {x: number, y: number}, openShadow?: boolean, handlers: PanelHandlers,
-   *   nerHint?: boolean, orgPolicyHint?: boolean}} o  nerHint — показать подсказку о модели NER (WP10-C: модели нет, встроенная не ставилась);
-   *   orgPolicyHint — один раз показать подсказку о политике 0.4 (settings.orgPolicyHintPending после обновления с 0.3)
+   *   nerHint?: boolean, orgPolicyHint?: boolean, hiddenPrefs?: Record<string, boolean>}} o  nerHint — показать подсказку о модели NER (WP10-C:
+   *   модели нет, встроенная не ставилась); orgPolicyHint — один раз показать подсказку о политике 0.4 (settings.orgPolicyHintPending после
+   *   обновления с 0.3); hiddenPrefs — выбор по скрытым данным из настроек (0.5, WP12-D: {comments, revisions, hiddenText, hiddenSheets, hiddenSlides})
    */
   constructor(o) {
     this.o = o;
     this.lang = o.lang;
+    /** выбор по скрытым данным — общий для всех файлов панели (WP12-D) */
+    this.hiddenPrefs = { ...(o.hiddenPrefs || {}) };
+    /** @type {HTMLInputElement[]} */
+    this.hiddenInputs = [];
     this.t = createT({ ru: { ...common.ru, ...dict.ru }, en: { ...common.en, ...dict.en } }, o.lang);
     /** @type {any[]} */
     this.files = [];
@@ -272,7 +301,61 @@ export class Panel {
     if (box?.classList.contains('warns') && !box.childElementCount) box.remove();
   }
 
-  /** @param {number} i @param {{entities: any[], warnings?: any[], restored?: boolean, kind?: 'docx'|'pdf'|'xlsx'|'pptx'|'plain', ext?: string, api: any}} d */
+  /**
+   * Скрытые данные документа (0.5, WP12-D, Ц4, К7): строка «В документе: 3 комментария, история правок, скрытый текст» и переключатели
+   * «удалить» — только для найденного. По умолчанию выключены (документ меняется только по явному выбору); выбор общий для файлов
+   * панели и запоминается в настройках (onHiddenPref). Найденное в скрытом маскируется в любом случае.
+   * @param {Record<string, number> | undefined} c  счётчики ENTITIES.hidden
+   */
+  hiddenBox(c) {
+    if (!c) return null;
+    const t = this.t;
+    const n = (key, k) => t(`${key}_${pluralForm(k, this.lang)}`, { n: k });
+    const items = [
+      c.comments && n('hiddenComments', c.comments),
+      c.revisions && t('hiddenRevisions'),
+      c.hiddenText && t('hiddenTextFound'),
+      c.hiddenSheets && n('hiddenSheets', c.hiddenSheets),
+      c.hiddenRows && t('hiddenRows'),
+      c.hiddenCols && t('hiddenCols'),
+      c.hiddenSlides && n('hiddenSlides', c.hiddenSlides),
+    ].filter(Boolean);
+    if (!items.length) return null;
+    const opts = HIDDEN_OPTS.filter(([, has]) => has(c)).map(([flag, , key]) => {
+      const box = /** @type {HTMLInputElement} */ (
+        h('input', {
+          type: 'checkbox',
+          checked: !!this.hiddenPrefs[flag],
+          'data-testid': `hidden-${flag}`,
+          'data-flag': flag,
+          onChange: (e) => this.setHiddenPref(flag, e.target.checked),
+        })
+      );
+      this.hiddenInputs.push(box);
+      return h('label', { class: 'hid-opt' }, box, h('span', { text: t(key) }));
+    });
+    return h(
+      'div',
+      { class: 'hid', 'data-testid': 'hidden-data' },
+      h('div', { class: 'hid-sum', text: t('hiddenSummary', { list: items.join(', ') }), 'data-testid': 'hidden-summary' }),
+      h('div', { class: 'hid-opts' }, ...opts),
+      h('div', { class: 'hid-hint', text: t('hiddenHint') }),
+    );
+  }
+
+  /** Переключатель скрытых данных: один выбор на все файлы панели, запоминается в настройках. */
+  setHiddenPref(flag, value) {
+    this.hiddenPrefs[flag] = value;
+    for (const el of this.hiddenInputs) if (el.dataset.flag === flag) el.checked = value;
+    this.o.handlers.onHiddenPref?.(flag, value);
+  }
+
+  /** Выбор для APPLY.options.hidden (WP12-D): что удалить из результата. */
+  hiddenFlags() {
+    return Object.fromEntries(HIDDEN_OPTS.map(([flag]) => [flag, this.hiddenPrefs[flag] === true]));
+  }
+
+  /** @param {number} i @param {{entities: any[], warnings?: any[], restored?: boolean, kind?: 'docx'|'pdf'|'xlsx'|'pptx'|'plain', ext?: string, hidden?: Record<string, number>, api: any}} d */
   setReady(i, d) {
     const f = this.files[i];
     if (!f) return;
@@ -356,6 +439,8 @@ export class Panel {
       warns.push(h('div', { class: 'warn', text }));
     }
     if (warns.length) f.view.append(h('div', { class: 'warns' }, ...warns));
+    const hidden = this.hiddenBox(d.hidden);
+    if (hidden) f.view.append(hidden);
     if (!d.entities.length) {
       f.view.append(
         h(
@@ -623,16 +708,15 @@ export class Panel {
       this.menu = h(
         'div',
         { class: 'menu', role: 'menu', hidden: true, 'data-testid': 'more-menu' },
+        // 0.5 (WP12-D): «Защитить паролем» и поля пароля — над кнопкой сохранения
+        ...this.keyProtectForm(),
         h('button', {
           class: 'menu-item',
           type: 'button',
           role: 'menuitem',
           text: t('btnDownloadMapping'),
           'data-testid': 'btn-download-mapping',
-          onClick: () => {
-            this.saveMapping();
-            this.closeMenu();
-          },
+          onClick: () => this.onSaveMappingClick(),
         }),
       );
     }
@@ -661,6 +745,88 @@ export class Panel {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  /**
+   * «Защитить паролем» в меню «Ещё» (0.5, WP12-D, Ц5, К8): флажок, пароль и повтор, индикатор длины, предупреждение
+   * «забытый пароль = потерянный ключ». Пароль живёт только в поле ввода до сохранения и нигде не запоминается.
+   * @returns {HTMLElement[]}
+   */
+  keyProtectForm() {
+    const t = this.t;
+    const k = {};
+    const meter = () => {
+      const n = k.pw1.value.length;
+      const grade = n < MIN_PASSWORD_LENGTH ? 'short' : n < 12 ? 'fair' : 'good';
+      k.meter.dataset.grade = grade;
+      k.meter.textContent = n ? t('keyPwMeter', { n, grade: t(`keyPw_${grade}`, { min: MIN_PASSWORD_LENGTH }) }) : '';
+      k.err.textContent = '';
+    };
+    const field = (testid, label) =>
+      h('input', {
+        class: 'pw',
+        type: 'password',
+        autocomplete: 'new-password',
+        placeholder: label,
+        'aria-label': label,
+        'data-testid': testid,
+        onInput: meter,
+        onKeydown: (e) => {
+          if (e.key === 'Enter') this.onSaveMappingClick();
+        },
+      });
+    k.pw1 = field('mapping-password', t('keyPassword'));
+    k.pw2 = field('mapping-password2', t('keyPassword2'));
+    k.meter = h('div', { class: 'pw-meter', 'data-testid': 'mapping-pw-meter', 'aria-live': 'polite' });
+    k.err = h('div', { class: 'pw-err', role: 'alert', 'data-testid': 'mapping-pw-error' });
+    k.form = h('div', { class: 'pw-form', hidden: true }, k.pw1, k.pw2, k.meter, h('div', { class: 'pw-warn', text: t('keyPwWarn') }), k.err);
+    k.protect = h('input', {
+      type: 'checkbox',
+      'data-testid': 'mapping-protect',
+      onChange: () => {
+        k.form.hidden = !k.protect.checked;
+        k.err.textContent = '';
+        if (k.protect.checked) k.pw1.focus();
+      },
+    });
+    this.keyForm = k;
+    return [h('label', { class: 'menu-check' }, k.protect, h('span', { text: t('keyProtect') })), k.form];
+  }
+
+  /** «Сохранить ключ восстановления»: без пароля — как раньше; с паролем — зашифрованный файл (core/key-crypto.js). */
+  async onSaveMappingClick() {
+    const k = this.keyForm;
+    if (!k?.protect.checked) {
+      this.saveMapping();
+      this.closeMenu();
+      return;
+    }
+    const d = this.done;
+    if (!d || d.mappingText == null || this.encrypting) return;
+    const t = this.t;
+    const pw = k.pw1.value;
+    if (pw.length < MIN_PASSWORD_LENGTH) return void (k.err.textContent = t('keyPwTooShort', { min: MIN_PASSWORD_LENGTH }));
+    if (pw !== k.pw2.value) return void (k.err.textContent = t('keyPwMismatch'));
+    const btn = /** @type {HTMLButtonElement} */ (this.menu?.querySelector('[data-testid="btn-download-mapping"]'));
+    this.encrypting = true;
+    btn.disabled = true;
+    btn.textContent = t('keyEncrypting');
+    try {
+      const enc = await encryptMapping(d.mappingText, pw);
+      this.download(d.mappingName, new Blob([JSON.stringify(enc, null, 2)], { type: 'application/json' }));
+      this.mappingSaved = true;
+      k.pw1.value = '';
+      k.pw2.value = '';
+      k.meter.textContent = '';
+      this.closeMenu();
+    } catch {
+      // без подробностей: в сообщении не должно быть ни пароля, ни данных
+      k.err.textContent = t('keyEncryptFailed');
+    } finally {
+      this.encrypting = false;
+      btn.disabled = false;
+      btn.textContent = t('btnDownloadMapping');
+    }
   }
 
   /** Ключ восстановления (карта замен) → файл .mapping.json (FR-28). */

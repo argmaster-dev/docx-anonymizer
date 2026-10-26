@@ -3,6 +3,8 @@
 // записи — встроенные объекты (stripEmbedded). Разметка ранов — из описания части (WORDML, docx/model.js).
 import { serializePackage } from '../ooxml/serialize.js';
 import { EMBEDDED_PART_RE } from './model.js';
+import { planDocxHidden } from './hidden.js';
+import { anyHidden } from '../ooxml/hidden.js';
 
 export { relsBaseDir, resolveTarget } from '../ooxml/opc.js';
 
@@ -18,5 +20,7 @@ export { relsBaseDir, resolveTarget } from '../ooxml/opc.js';
  * @returns {{bytes: Uint8Array, changedParts: string[], removedParts: string[]}}
  */
 export function serializeDocx(doc, edits, options = {}) {
-  return serializePackage(doc, edits, options, { embeddedParts: EMBEDDED_PART_RE });
+  // скрытые данные (WP12-D): план — только при выборе пользователя; без него сборка прежняя (снимок docx-regression)
+  const plan = anyHidden(options.hidden) ? (d, byStream, push, ctx) => planDocxHidden(d, ctx) : undefined;
+  return serializePackage(doc, edits, options, { embeddedParts: EMBEDDED_PART_RE, plan });
 }

@@ -1,6 +1,7 @@
-// Логика страницы «Восстановить» без DOM: разбор файла карты, подготовка текста с подсветкой нераспознанного и склонённого (FR-36, FR-37),
-// файл от ИИ — вид, имя результата, MIME, предвыбор сессии (FR-36а, WP10-B).
+// Логика страницы «Восстановить» без DOM: разбор файла карты (с 0.5 — и зашифрованного паролем, WP12-D, К8), подготовка текста
+// с подсветкой нераспознанного и склонённого (FR-36, FR-37), файл от ИИ — вид, имя результата, MIME, предвыбор сессии (FR-36а, WP10-B).
 import { mergeMappings } from '../../core/mapping.js';
+import { decryptMapping, isEncryptedKey } from '../../core/key-crypto.js';
 
 /**
  * Разбирает содержимое .mapping.json (или нескольких файлов) в один маппинг.
@@ -8,14 +9,21 @@ import { mergeMappings } from '../../core/mapping.js';
  * @returns {{mapping?: any, error?: 'json'|'shape'}}
  */
 export function parseMappingFiles(texts) {
-  const list = [];
+  const objs = [];
   for (const t of texts) {
-    let j;
     try {
-      j = JSON.parse(t);
+      objs.push(JSON.parse(t));
     } catch {
       return { error: 'json' };
     }
+  }
+  return mappingFromObjects(objs);
+}
+
+/** Объекты файлов карты → один маппинг (проверка формы, склейка нескольких). */
+function mappingFromObjects(objs) {
+  const list = [];
+  for (const j of objs) {
     if (
       !j ||
       typeof j !== 'object' ||
@@ -28,6 +36,41 @@ export function parseMappingFiles(texts) {
   }
   if (!list.length) return { error: 'shape' };
   return { mapping: list.length === 1 ? list[0] : mergeMappings(list) };
+}
+
+/**
+ * Файлы карты, среди которых могут быть зашифрованные паролем (0.5, WP12-D): без пароля — `needPassword` (страница спрашивает
+ * пароль); с паролем — расшифровка всех зашифрованных одним паролем. Неверный пароль или повреждённый шифротекст — `error:
+ * 'password'` (код KEY_PASSWORD), не тот формат — `error: 'invalid'`; частичного результата нет. Пароль не сохраняется.
+ * @param {string[]} texts
+ * @param {string} [password]
+ * @returns {Promise<{mapping?: any, error?: 'json'|'shape'|'password'|'invalid', code?: string, needPassword?: boolean, encrypted: number}>}
+ */
+export async function readMappingFiles(texts, password) {
+  const objs = [];
+  for (const t of texts) {
+    try {
+      objs.push(JSON.parse(t));
+    } catch {
+      return { error: 'json', encrypted: 0 };
+    }
+  }
+  const encrypted = objs.filter(isEncryptedKey).length;
+  if (encrypted && !password) return { needPassword: true, encrypted };
+  const plain = [];
+  for (const j of objs) {
+    if (!isEncryptedKey(j)) {
+      plain.push(j);
+      continue;
+    }
+    try {
+      plain.push(await decryptMapping(j, /** @type {string} */ (password)));
+    } catch (e) {
+      const code = /** @type {any} */ (e)?.code || 'KEY_INVALID';
+      return { error: code === 'KEY_PASSWORD' ? 'password' : 'invalid', code, encrypted };
+    }
+  }
+  return { ...mappingFromObjects(plain), encrypted };
 }
 
 /**

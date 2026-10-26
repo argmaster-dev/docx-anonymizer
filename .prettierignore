@@ -8,3 +8,5 @@ vendor/dict
 # снимки покрытия (scripts/coverage-grid.mjs) — генерируемые, компактный JSON
 tests/fixtures/coverage/corpus.json
 tests/fixtures/coverage/prev-*.json
+# ожидания фикстур скрытых данных генерирует scripts/gen-hidden-fixtures.mjs (WP12-D; --check сверяет байты)
+tests/fixtures/hidden/expected.json

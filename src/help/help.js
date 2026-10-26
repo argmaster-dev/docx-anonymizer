@@ -1,4 +1,5 @@
-// Справка: что делает расширение, как им пользоваться, что маскируется (политика 0.4), что данные не покидают компьютер.
+// Справка: что делает расширение, как им пользоваться, что маскируется (политика 0.4), скрытые данные и ключ с паролем (0.5),
+// что данные не покидают компьютер.
 // Статичный текст из src/ui/i18n/help.js, язык — из настроек. Сети не использует.
 import './help.css';
 import { loadSettings } from '../shared/settings-store.js';
@@ -32,6 +33,8 @@ function render(lang) {
       h('section', { class: 'card', dataset: { testid: 'help-how' } }, h('h2', {}, t('how_h')), list('ol', t, 'how', 4)),
       // политика маскирования 0.4: что всегда, что по желанию, список компаний
       h('section', { class: 'card', dataset: { testid: 'help-policy' } }, h('h2', {}, t('policy_h')), list('ul', t, 'policy', 4)),
+      // скрытые данные и ключ с паролем (0.5, WP12-D)
+      h('section', { class: 'card', dataset: { testid: 'help-hidden' } }, h('h2', {}, t('hidden_h')), list('ul', t, 'hidden', 4)),
       h('section', { class: 'card', dataset: { testid: 'help-privacy' } }, h('h2', {}, t('privacy_h')), list('ul', t, 'privacy', 4)),
       h('section', { class: 'card', dataset: { testid: 'help-check' } }, h('h2', {}, t('check_h')), list('ul', t, 'check', 4)),
       h(

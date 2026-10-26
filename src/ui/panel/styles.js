@@ -56,6 +56,12 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .warns { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 .warn { padding: 7px 11px; border-radius: 9px; background: var(--warn-soft); color: var(--warn); font-size: 13px; }
 .note { padding: 7px 11px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-size: 13px; margin-bottom: 8px; }
+/* скрытые данные документа (0.5, WP12-D) */
+.hid { padding: 8px 11px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface); font-size: 13px; margin-bottom: 8px; }
+.hid-sum { font-weight: 600; }
+.hid-opts { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 4px 0 2px; }
+.hid-opt, .menu-check { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.hid-hint { color: var(--muted); font-size: 12px; }
 .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 12px; padding: 12px 24px; }
 .center h3 { margin: 0; font-size: 16px; font-weight: 650; }
 .center p { margin: 0; color: var(--muted); max-width: 440px; }
@@ -75,6 +81,13 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .menu[hidden] { display: none; }
 .menu-item { text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 7px; color: var(--text); }
 .menu-item:hover, .menu-item:focus-visible { background: var(--surface); }
+/* ключ с паролем (0.5, WP12-D) */
+.menu-check { padding: 6px 10px; font-size: 13px; }
+.pw-form { display: flex; flex-direction: column; gap: 6px; padding: 2px 10px 8px; font-size: 12.5px; }
+.pw { font: inherit; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); color: var(--text); }
+.pw-meter[data-grade="short"], .pw-err { color: var(--danger); }
+.pw-meter[data-grade="good"] { color: var(--ok); }
+.pw-warn { color: var(--warn); }
 .btn { border: 1px solid var(--border); background: var(--bg); padding: 8px 14px; border-radius: 10px; font-weight: 550; white-space: nowrap; }
 .btn:hover { background: var(--surface); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }

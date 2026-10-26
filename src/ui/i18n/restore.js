@@ -1,4 +1,4 @@
-// Словарь страницы «Восстановить текст» (WP4; склонение ФИО — WP6, FR-37; файл от ИИ — WP10-B, FR-36а).
+// Словарь страницы «Восстановить текст» (WP4; склонение ФИО — WP6, FR-37; файл от ИИ — WP10-B, FR-36а; ключ с паролем — WP12-D, К8).
 export const RESTORE_DICT = {
   ru: {
     title: 'Восстановить текст',
@@ -19,6 +19,13 @@ export const RESTORE_DICT = {
     file_bad: 'Файл не подходит: {why}',
     file_bad_json: 'это не JSON',
     file_bad_shape: 'нет списка entries',
+    key_encrypted: 'Ключ защищён паролем — введите пароль и нажмите «Открыть»',
+    key_password: 'Пароль ключа',
+    key_unlock: 'Открыть',
+    key_password_bad: 'Неверный пароль или файл ключа повреждён — ключ не открыт. Проверьте пароль и попробуйте снова',
+    key_invalid: 'Файл ключа повреждён или создан другой программой — открыть его нельзя',
+    key_unlocked: 'Ключ открыт, записей: {n}. Пароль нигде не сохранён',
+    need_password: 'Ключ защищён паролем: введите пароль и нажмите «Открыть»',
     restore: 'Восстановить',
     result_h: '3. Результат',
     result_empty: 'Здесь появится текст с настоящими значениями.',
@@ -78,6 +85,13 @@ export const RESTORE_DICT = {
     file_bad: 'Unsuitable file: {why}',
     file_bad_json: 'not valid JSON',
     file_bad_shape: 'no entries list',
+    key_encrypted: 'The key is password-protected — enter the password and press “Open”',
+    key_password: 'Key password',
+    key_unlock: 'Open',
+    key_password_bad: 'Wrong password or the key file is damaged — the key was not opened. Check the password and try again',
+    key_invalid: 'The key file is damaged or was created by another program — it cannot be opened',
+    key_unlocked: 'Key opened, entries: {n}. The password is not stored anywhere',
+    need_password: 'The key is password-protected: enter the password and press “Open”',
     restore: 'Restore',
     result_h: '3. Result',
     result_empty: 'Text with the real values will appear here.',

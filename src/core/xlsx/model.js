@@ -17,6 +17,7 @@ import { CoreError } from '../errors.js';
 import { parseCell, parseRange, scanFormula, formulaRefs, spreadShared } from './refs.js';
 import { intDigits, parseStyles, formatOf, renderDigits, padByHeader } from './numfmt.js';
 import { tableBlocks, headerRow } from '../table-blocks.js';
+import { countXlsxHidden } from './hidden.js';
 
 /** Разметка общих и inline-строк SpreadsheetML: текст <t> прямо в <si>/<is> или в ранах <r>; <rPh> (фонетика) — не текст. */
 /** @type {import('../ooxml/flow.js').FlowMarkup} */
@@ -354,6 +355,8 @@ export function parseXlsx(bytes) {
     chartEmbeds,
     blocks,
     viewParts: [...(sharedPart ? [sharedPart] : []), ...info.sheets.map((s) => s.part).filter(Boolean)],
+    // скрытые листы, строки, столбцы, примечания и цепочки комментариев (WP12-D, xlsx/hidden.js) — только счётчики
+    hidden: countXlsxHidden(doc, (n) => xlsxRole(n, typesOf), sheets),
   });
 
   /* ---------- общие строки ---------- */

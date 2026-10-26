@@ -18,6 +18,7 @@ import { registerAdapter } from '../adapters.js';
 import { tableBlocks } from '../table-blocks.js';
 import { attachEmbeddedBooksWith } from '../embedded.js';
 import { XLSX_ADAPTER } from '../xlsx/xlsx-adapter.js';
+import { countPptxHidden, planPptxHidden } from './hidden.js';
 
 export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 const EXTENSIONS = ['.pptx', '.pptm'];
@@ -185,7 +186,8 @@ export function parsePptx(bytes) {
     doc.entries.map((e) => e.name),
     (n) => pptxRole(n, typesOf),
   );
-  return Object.assign(doc, { blocks, viewParts: order, chartEmbeds });
+  // скрытые слайды и комментарии (WP12-D, pptx/hidden.js) — только счётчики
+  return Object.assign(doc, { blocks, viewParts: order, chartEmbeds, hidden: countPptxHidden(doc, (n) => pptxRole(n, typesOf)) });
 
   /**
    * Вид абзаца по фигуре (К10 0.4): текст заголовка (<p:ph type="title|ctrTitle">) — 'heading', ячейка таблицы — 'cell';
@@ -275,6 +277,8 @@ export const PPTX_ADAPTER = Object.freeze({
     const out = serializePackage(doc, edits, options, {
       embeddedParts: /^$/,
       plan: (d, byStream, push, ctx) => {
+        // скрытые слайды и комментарии по выбору пользователя (WP12-D)
+        planPptxHidden(d, ctx);
         if (!ctx.options.stripEmbedded) return;
         for (const e of /** @type {any} */ (d).chartEmbeds || []) {
           ctx.remove(e.embed);

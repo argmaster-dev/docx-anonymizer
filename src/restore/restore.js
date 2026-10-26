@@ -4,6 +4,8 @@
 // restoreDocx() для DOCX, restoreDocument() с адаптером формата для Excel, PowerPoint, CSV и JSON (структура и форматирование
 // сохраняются). Адаптеры форматов в бандле страницы (esbuild встраивает динамический import в IIFE) — сети нет.
 // Склонение ФИО по контексту (FR-37, редакция 0.2) включено по умолчанию; склонённые подстановки подсвечиваются зелёным.
+// Ключ, защищённый паролем (0.5, WP12-D, К8): страница распознаёт зашифрованный .mapping.json и спрашивает пароль; неверный —
+// KEY_PASSWORD и понятный текст без частичного вывода; пароль нигде не хранится, расшифрованная карта живёт только в памяти страницы.
 import './restore.css';
 import { restoreDocx, restoreDocument, restoreText } from '../core/restore-doc.js';
 import { loadAdapter } from '../core/adapters.js';
@@ -18,7 +20,7 @@ import {
   countUnresolved,
   mimeFor,
   mixedValueWarnings,
-  parseMappingFiles,
+  readMappingFiles,
   pickSession,
   restoredName,
   toSegments,
@@ -35,6 +37,9 @@ let sessions = [];
 let source = 'session';
 let sessionId = '';
 let fileMapping = null;
+/** Выбранные файлы ключа, среди которых есть зашифрованные, — ждут пароля (WP12-D); сам пароль не хранится */
+/** @type {string[] | null} */
+let lockedTexts = null;
 /** Что восстанавливаем: вставленный текст или файл от ИИ (FR-36а) */
 let mode = 'text';
 /** @type {{name: string, size: number, kind: 'docx'|'xlsx'|'pptx'|'csv'|'json'|'text', bytes?: Uint8Array, text?: string} | null} */
@@ -208,6 +213,45 @@ function render(lang) {
     } else {
       const info = h('div', { class: 'hint', dataset: { testid: 'file-info' } });
       if (fileMapping) info.textContent = t('file_loaded', { n: fileMapping.entries.length });
+      /** Итог разбора файлов ключа: карта, просьба пароля или понятная ошибка (без содержимого ключа). */
+      const show = (r) => {
+        fileMapping = r.mapping || null;
+        lockedTexts = r.needPassword || r.error === 'password' ? lockedTexts : null;
+        unlock.hidden = !lockedTexts;
+        info.className = r.mapping || r.needPassword ? 'hint' : 'err';
+        if (r.mapping) info.textContent = t(r.encrypted ? 'key_unlocked' : 'file_loaded', { n: r.mapping.entries.length });
+        else if (r.needPassword) info.textContent = t('key_encrypted');
+        else if (r.error === 'password') info.textContent = t('key_password_bad');
+        else if (r.error === 'invalid') info.textContent = t('key_invalid');
+        else info.textContent = t('file_bad', { why: t(r.error === 'json' ? 'file_bad_json' : 'file_bad_shape') });
+      };
+      const password = h('input', {
+        type: 'password',
+        autocomplete: 'current-password',
+        dataset: { testid: 'key-password' },
+        'aria-label': t('key_password'),
+        placeholder: t('key_password'),
+        onkeydown: (e) => {
+          if (e.key === 'Enter') tryUnlock();
+        },
+      });
+      const unlockBtn = h('button', { type: 'button', class: 'btn', dataset: { testid: 'key-unlock' }, onclick: () => tryUnlock() }, t('key_unlock'));
+      // обёртка без класса: у .row свой display, он перебил бы атрибут hidden
+      const unlock = h('div', { hidden: !lockedTexts }, h('div', { class: 'row' }, password, unlockBtn));
+      const tryUnlock = async () => {
+        if (!lockedTexts) return;
+        const pw = password.value;
+        password.value = ''; // пароль не задерживается в поле и нигде не запоминается
+        if (!pw) return show({ needPassword: true, encrypted: 1 });
+        unlockBtn.disabled = true;
+        try {
+          show(await readMappingFiles(lockedTexts, pw));
+        } finally {
+          unlockBtn.disabled = false;
+        }
+        if (fileMapping) lockedTexts = null;
+        unlock.hidden = !lockedTexts;
+      };
       const file = h('input', {
         type: 'file',
         multiple: true,
@@ -217,19 +261,12 @@ function render(lang) {
         onchange: async () => {
           invalidate();
           const texts = await Promise.all([...file.files].map((f) => f.text()));
-          const r = parseMappingFiles(texts);
-          if (r.error) {
-            fileMapping = null;
-            info.className = 'err';
-            info.textContent = t('file_bad', { why: t(r.error === 'json' ? 'file_bad_json' : 'file_bad_shape') });
-          } else {
-            fileMapping = r.mapping;
-            info.className = 'hint';
-            info.textContent = t('file_loaded', { n: r.mapping.entries.length });
-          }
+          lockedTexts = texts;
+          show(await readMappingFiles(texts));
+          if (lockedTexts && !unlock.hidden) password.focus();
         },
       });
-      body = h('div', { class: 'field' }, h('span', { class: 'lbl' }, t('file_pick')), file, info);
+      body = h('div', { class: 'field' }, h('span', { class: 'lbl' }, t('file_pick')), file, info, unlock);
     }
     sourceBox.replaceChildren(seg, body);
   };
@@ -238,7 +275,7 @@ function render(lang) {
   /** Карта: из файла или из сессии (GET_MAPPING); null — сообщение уже показано. */
   const getMapping = async () => {
     if (source === 'file') {
-      if (!fileMapping) msg.textContent = t('need_mapping');
+      if (!fileMapping) msg.textContent = t(lockedTexts ? 'need_password' : 'need_mapping');
       return fileMapping;
     }
     if (!sessionId) {

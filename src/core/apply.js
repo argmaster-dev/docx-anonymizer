@@ -16,6 +16,8 @@ import { splitFileNameEdits } from './file-name.js';
  * @property {'ru'|'en'|'both'} [language]            язык документа — пишется в маппинг
  * @property {boolean} [keepMetadata=false]
  * @property {boolean} [stripEmbedded=false]
+ * @property {import('./ooxml/hidden.js').HiddenFlags} [hidden]  скрытые данные, которые удалить (WP12-D, К7): комментарии, исправления,
+ *   скрытый текст, скрытые листы/строки/столбцы, скрытые слайды; по умолчанию — ничего (документ меняется только по явному выбору)
  * @property {{name: string, sha256?: string, resultName?: string}} [document]
  * @property {string} [createdAt]                     ISO-время (для детерминированных тестов)
  * @property {string} [toolVersion]
@@ -88,7 +90,7 @@ export function applyDecisions(doc, groups, options = {}) {
   } else {
     const adapter = adapterForKind(/** @type {any} */ (doc).kind);
     if (!adapter) throw new CoreError('INTERNAL', 'Нет адаптера для вида документа');
-    out = adapter.serialize(doc, edits, { keepMetadata: options.keepMetadata, stripEmbedded: options.stripEmbedded });
+    out = adapter.serialize(doc, edits, { keepMetadata: options.keepMetadata, stripEmbedded: options.stripEmbedded, hidden: options.hidden });
     // MIME — адаптера; сериализатор может уточнить его по документу (книга с макросами, CSV/JSON у текстовых форматов, WP12-B)
     mime = /** @type {any} */ (out).mime || adapter.mime;
   }

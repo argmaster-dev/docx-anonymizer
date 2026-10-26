@@ -1157,6 +1157,54 @@ e2e и сборка — под `flock /home/alexf14/.local/tmp/claude-1000/docx-
   причинами). `npm test` — Test Files 78 passed | 1 skipped, Tests 2837 passed | 25 skipped | 2 todo; e2e — 85 passed, 7 skipped; `npm run pack` —
   6 510 170 байт; eval-genres — без изменений.
 
+## WP12-D — скрытые данные и шифрование ключа (версия 0.5)
+
+**Файлы.** Новые: `src/core/ooxml/hidden.js`, `src/core/docx/hidden.js`, `src/core/xlsx/hidden.js`, `src/core/pptx/hidden.js`, `src/core/key-crypto.js`,
+`scripts/gen-hidden-fixtures.mjs`, `tests/fixtures/hidden/**` (3 синтетических файла, `expected.json`, `real/` — 3 файла LibreOffice и их плоские ODF),
+`tests/integration/hidden.spec.js`, `tests/unit/key-crypto.spec.js`, `tests/unit/ui/hidden-panel.spec.js`, `tests/e2e/hidden.spec.js`.
+Изменяемые: `src/core/ooxml/serialize.js` (`PlanContext`: `strip`, `hidden`, `remove` с файлом связей; `resolveStrips`), `src/core/docx/{model,replace}.js`,
+`src/core/xlsx/{model,xlsx-adapter}.js`, `src/core/pptx/pptx-adapter.js`, `src/core/{apply,settings}.js`, `src/offscreen/host.js`, `src/content/flow.js`,
+`src/ui/panel/{panel,styles}.js`, `src/ui/deanon/index.js`, `src/restore/restore.js`, `src/help/help.js`, `src/ui/i18n/{panel,restore,help}.js`,
+`schemas/{mapping,protocol}.schema.json`, `docs/contracts.md` (§0, §9.9), этот раздел; тесты — `tests/integration/pack.spec.js` (лимит `content.js`),
+`tests/fixtures/docx-regression.json` (две новые записи), `tests/e2e/restore.spec.js` (+1 тест).
+Не трогались: `src/core/ner/**`, `tools/ner-train/**`, `src/core/ner/known-packs.js`, тесты NER/bundled-model/heldout/genres (WP12-E).
+
+**Сделано** (подробно — `docs/contracts.md` §9.9):
+1. Скрытые данные: счётчики при разборе (`doc.hidden`, ENTITIES.hidden) для Word (комментарии, история правок, скрытый текст — в т.ч. стилем), Excel (скрытые
+   листы, строки, столбцы, примечания и цепочки), PowerPoint (скрытые слайды, комментарии обоих видов); удаление по выбору — план сериализатора формата
+   (`ctx.strip`/`ctx.remove`), удаления важнее правок сущностей внутри, «осиротевшие» части — вместе с удалённой (`collectOrphans`).
+2. Панель: строка «В документе: 3 комментария, история правок, скрытый текст» и переключатели только для найденного («Удалить комментарии», «Принять
+   исправления», «Удалить скрытый текст»; Excel — «Удалить скрытые листы, строки и столбцы»; PowerPoint — «Удалить скрытые слайды»); по умолчанию выключены,
+   выбор общий для файлов панели и запоминается в настройках (`removeComments`, `acceptRevisions`, `removeHiddenText`, `removeHiddenSheets`,
+   `removeHiddenSlides`; схема настроек остаётся 4 — новые ключи с дефолтом дополняет `migrateSettings`); выбор уходит в `APPLY.options.hidden`.
+3. Ключ с паролем: «Ещё» → «Защитить паролем», пароль и повтор (≥ 8 символов), индикатор длины, предупреждение «забытый пароль = потерянный ключ»;
+   PBKDF2-SHA-256 600 000 итераций, соль 16 байт → AES-GCM-256, IV 12 байт; формат `{encVersion, enc, kdf {name, hash, iterations, salt}, iv, ct}` — схема
+   `mapping.schema.json` (`oneOf` открытой карты и зашифрованного ключа). Страница восстановления распознаёт зашифрованный ключ, спрашивает пароль;
+   неверный — `KEY_PASSWORD`, текст «Неверный пароль или файл ключа повреждён», карты и вывода нет; пароль не хранится.
+4. Тексты ru/en панели, страницы восстановления и справки (раздел «Скрытые данные и ключ с паролем», 4 пункта).
+
+**Приёмка:**
+
+| Критерий | Проверка | Факт |
+|---|---|---|
+| К7: счётчики комментариев, правок, скрытого текста (и листов, строк, столбцов, слайдов) верны на фикстурах | `tests/integration/hidden.spec.js` | 6 файлов (3 синтетических + 3 LibreOffice 26.2 из плоских ODF): ожидания считает генератор при сборке, независимо от разбора; все совпали (`contract-hidden.docx` 3/12/5, `book-hidden.xlsx` 2 комм., 2 листа, 1 строка, 1 столбец, `deck-hidden.pptx` 3 комм., 1 слайд) |
+| К7: каждый переключатель удаляет свои элементы, файл целый, LibreOffice открывает | `hidden.spec.js` | Word: части комментариев, связи, типы, якоря, ран ссылки, `people.xml` (если правок нет или приняты); ни одного `w:ins/del/moveFrom/moveTo/*Change/cellIns`, перемещённый текст — один раз, склейка абзаца, удалённая строка таблицы; ни одного `w:vanish`/скрытого стиля. Excel: примечания, цепочки, люди, VML и `legacyDrawing`; 2 листа из 4, локальные имена со сдвигом, `#REF!`, `activeTab`, пустая скрытая строка, без ячеек столбца C, пустые общие строки. PowerPoint: слайд и заметки, `sldId`, показ, раздел, гиперссылка; комментарии, авторы, `commentRel`. Пакет: типы содержимого и цели связей целы, все XML корректны; LibreOffice: 20 файлов (все фикстуры × переключатели по одному и все вместе) → PDF |
+| К7: при выключенных переключателях документ структурно не меняется | `hidden.spec.js`, `docx-regression.spec.js` | байты с `hidden` из всех `false` = байты без выбора, части и число скрытых элементов те же; снимок `docx-regression` — прежние 59 записей без изменений, добавлены 2 новые DOCX-фикстуры |
+| найденное в скрытом маскируется в любом режиме | `hidden.spec.js` | 6 файлов × (без выбора, все `false`, каждый переключатель, все) + режим маски: ни одного секрета (значения только из комментариев, удалённого текста, скрытых ранов, листов, строк, столбцов, слайдов, заметок, авторов) ни в одной части zip (UTF-8, UTF-16LE, Windows-1251, без тегов) |
+| К8: ключ расшифровывается только верным паролем; неверный — `KEY_PASSWORD` без вывода; в файле нет ни одного исходного значения; KDF не ниже требования; повреждённые `ct`/`iv` — ошибка | `tests/unit/key-crypto.spec.js` (10), e2e `hidden.spec.js`, `restore.spec.js` | да: 3 неверных пароля и пустой — `KEY_PASSWORD`; изменённые `ct`, тег, `iv`, соль, итерации — `KEY_PASSWORD`; неверные длины, не base64, итерации < 600 000 или > 10⁷, SHA-1, AES-CBC, версия 2 — `KEY_INVALID`; ни одна строка карты (значения, варианты, метки, имена документов) не найдена в файле и в байтах `ct`/`iv`/соли в UTF-8/Latin-1/UTF-16LE/Windows-1251; NFC/NFD пароля — один ключ; e2e: сохранение из панели (короткий пароль и несовпадение — отказ) → страница восстановления: без пароля и с неверным — нет вывода, с верным — все метки восстановлены, пароля нет в `chrome.storage` |
+| К13: ни одного http(s)-запроса | e2e `hidden.spec.js` (2), `restore.spec.js` (+1) через `tests/e2e/helpers/network.js` | 0 запросов вне страницы теста |
+| бюджеты | `pack.spec.js`, `npm run pack` | код `worker.js` без ORT 474 190 байт (≤ 512 КиБ; WP12-C — 463 499); `content.js` 169 929 байт (лимит 150 → 180 КБ, см. «Изменённые ожидания»); лёгкий архив 6 607 835 байт, полный 36 151 016 |
+| `npm run lint`, `npm test`, `npm run e2e`, `npm run pack` | запуск | см. «Статус» |
+
+**Изменённые ожидания:**
+
+| Тест | Было | Стало | Причина |
+|---|---|---|---|
+| `tests/integration/pack.spec.js` | `content.js` < 150 КБ | < 180 КБ | панель получила блок скрытых данных и форму пароля, content script — шифрование WebCrypto (+18 КБ, код не минифицируется); сторож «словарей в content.js нет» остаётся (словари — 350+ КБ) |
+| `tests/fixtures/docx-regression.json` | 59 записей | 61 (+ `hidden/contract-hidden.docx`, `hidden/real/lo-contract.docx`) | тест берёт все `tests/fixtures/**/*.docx`; прежние записи не менялись |
+
+**Статус:** выполнено 26.10.2026.
+
 ## Бэклог после 0.4
 
 Версия 0.4.0: политика маскирования, список компаний, корпус жанров, модель 1.1.0 (WP11-A…D). Отложено:

@@ -17,6 +17,7 @@ import { deanonymize } from '../core/deanon.js';
 import { findOccurrences } from '../core/search.js';
 import { getParagraphs, occurrenceContext } from '../core/text-view.js';
 import { migrateSettings } from '../core/settings.js';
+import { hiddenFlagsFrom } from '../core/ooxml/hidden.js';
 import { PlaceholderAllocator, resolvePlaceholderLanguage } from '../core/placeholders.js';
 import { registerBuiltinDetectors } from '../core/detect/index.js';
 import { CoreError } from '../core/errors.js';
@@ -278,6 +279,8 @@ export function createHost(env) {
       language: s.analysis.language,
       keepMetadata: opts.keepMetadata ?? settings.keepMetadata,
       stripEmbedded: opts.stripEmbedded ?? settings.stripEmbedded,
+      // скрытые данные (WP12-D): выбор панели в APPLY.options.hidden, иначе — из настроек (по умолчанию ничего не удаляется)
+      hidden: opts.hidden ?? hiddenFlagsFrom(settings),
       document,
       toolVersion: env.toolVersion,
       textFormat,
@@ -418,6 +421,8 @@ export function createHost(env) {
       warnings: s.analysis.warnings,
       stats: s.analysis.stats,
       restoredDecisions: restored,
+      // что скрыто в документе (комментарии, история правок, скрытый текст, листы, строки, слайды — WP12-D); у PDF и текста нет
+      ...(s.doc.hidden ? { hidden: s.doc.hidden } : {}),
     };
   }
 

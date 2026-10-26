@@ -22,6 +22,8 @@ popup / content / options / restore ──port "docx"──► background (route
 | `src/core/ooxml/xml.js` | линейный токенизатор XML, (un)escape, `applyRangeEdits` (до 0.5 — `core/docx/xml.js`, реэкспорт) | фундамент; WP12-A |
 | `src/core/ooxml/model.js`, `flow.js`, `opc.js`, `serialize.js`, `adapter.js` | общий слой OOXML (§9): каркас пакета `parsePackage`, потоки/charMap/замена через раны по описанию разметки `FlowMarkup`, rels/docProps/чистка ссылок, сборка `serializePackage`, интерфейс `DocumentAdapter` | WP12-A |
 | `src/core/adapters.js` | реестр адаптеров форматов: `DOCUMENT_ADAPTERS` (Word + лёгкие записи форматов по требованию), `adapterForKind`, `detectAdapter`, `loadAdapter`, `registerAdapter` (§9, §9.8) | WP12-A; WP12-B |
+| `src/core/ooxml/hidden.js`, `src/core/docx/hidden.js`, `src/core/xlsx/hidden.js`, `src/core/pptx/hidden.js` | скрытые данные (§9.9): счётчики `doc.hidden`, удаление по выбору (`HiddenFlags`, план сериализатора `ctx.strip`/`ctx.remove`), `resolveStrips`, `collectOrphans` | WP12-D |
+| `src/core/key-crypto.js` | ключ восстановления с паролем (§9.9): `encryptMapping`/`decryptMapping`, PBKDF2-SHA-256 → AES-GCM-256, `KeyCryptoError` (`KEY_PASSWORD`, `KEY_INVALID`) | WP12-D |
 | `src/core/ooxml/dml.js` | DrawingML и общее Excel/PowerPoint: `DML`, `parseDrawingPart` (alt-тексты), `addElementTextStreams`, `addAttrStreams`, `linkAuthors`, `embeddedWarning` (§9.8) | WP12-B |
 | `src/core/xlsx/` | Excel по требованию: `model.js` (`parseXlsx`, `SML`, части и порядок, числа-идентификаторы, колонтитулы, имена листов, формулы), `refs.js` (ссылки A1, переименование листа, `safeSheetName`), `xlsx-adapter.js` (`XLSX_ADAPTER`, сериализация `plan`, `xlsxWarnings`) (§9.8) | WP12-B |
 | `src/core/pptx/pptx-adapter.js` | PowerPoint по требованию: `parsePptx`, `PPTX_ADAPTER`, части и порядок, комментарии и авторы, таблицы слайдов (§9.8) | WP12-B |
@@ -76,7 +78,7 @@ popup / content / options / restore ──port "docx"──► background (route
 | `src/core/detect/index.js` | `registerBuiltinDetectors` — регистрация детекторов WP1/WP2/WP4 | фундамент |
 | `src/ui/i18n/*.js`, `src/_locales/` | словари интерфейса ru/en по модулям (ключи ru/en совпадают — тесты паритета); `messages.json` — имя и описание расширения | все |
 | `src/ui/components/dom.js` | `h`, `clear` — построение DOM без `innerHTML` | 0.1 |
-| `schemas/` | `mapping`, `protocol`, `model-pack` (JSON Schema draft 2020-12) | WP5; WP8 |
+| `schemas/` | `mapping` (с 0.5 — `oneOf`: открытая карта `$defs/mapping` или зашифрованный ключ `$defs/encrypted`), `protocol`, `model-pack` (JSON Schema draft 2020-12) | WP5; WP8; WP12-D |
 | `scripts/build.mjs`, `pack.mjs` | сборка `dist/` (`--e2e` → `dist-e2e/`, `--with-model=<zip>` — полная), архивы релиза: лёгкий и `-full` (§6.8) | фундамент; WP6, WP8, WP10-C |
 | `scripts/make-dicts.mjs` | генератор словарей ФИО из закреплённых коммитов (`npm run dicts`, `--check`) → `vendor/dict/` | WP7; WP12-A |
 | `scripts/dicts-node.mjs` | словари в Node: `readDictFromDisk`, `loadDictsFromDisk` (тесты — `tests/setup/dicts.js`, скрипты) | WP12-A |
@@ -1384,3 +1386,77 @@ bytes, name ──► detectAdapter: проход 1 — только содер�
 **Не сделано / ограничения**: ФИО в %-кодированной гиперссылке («Договор%20Горбунова») — бэклог; упоминания `@Имя` в цепочке комментариев Excel (`<mention startIndex length>`) не пересчитываются; `chartEx` и OLE-объекты
 (кроме книг Excel) не разбираются и не удаляются (предупреждение `EMBEDDED_NOT_PROCESSED`); `docProps/custom.xml` при «Сохранять метаданные» не меняется
 (как в DOCX); скрытые листы, строки и слайды обрабатываются как обычные (счётчики и удаление — WP12-D).
+
+### 9.9. Скрытые данные и ключ с паролем (версия 0.5, WP12-D, `docs/concept-0.5.md` п. 6–7, Ц4, Ц5, К7, К8, К13)
+
+```
+parse ──► adapter.parse: doc.hidden = {comments, revisions, hiddenText | hiddenSheets, hiddenRows, hiddenCols | hiddenSlides} ──► ENTITIES.hidden
+панель: «В документе: 3 комментария, история правок, скрытый текст» + переключатели (по умолчанию выключены, settings.remove*) ──► APPLY.options.hidden
+applyDecisions({hidden}) ──► adapter.serialize(doc, edits, {keepMetadata, stripEmbedded, hidden}) ──► план формата: ctx.strip(part, {from, to, text?}), ctx.remove(name)
+                         ──► serializePackage: удаления важнее правок сущностей внутри (resolveStrips) ──► cleanupReferences ([Content_Types].xml, *.rels)
+```
+
+**Счётчики** (`doc.hidden`, `HiddenCounts` в `ooxml/hidden.js`; в ENTITIES — поле `hidden`, схема протокола): Word — `comments` (элементы `w:comment`
+в `word/comments.xml`), `revisions` (элементы `w:ins`, `w:del`, `w:moveFrom`, `w:moveTo`, `w:*Change`, `w:cellIns|cellDel|cellMerge` во всех текстовых частях),
+`hiddenText` (раны с содержимым, у которых текст скрыт: `w:vanish` в свойствах рана, `w:specVanish`, стиль символа или абзаца со скрытым текстом с учётом
+`w:basedOn` и стиля абзаца по умолчанию; `w:vanish w:val="0"` — видимый; свойства внутри `*Change` не считаются); Excel — `hiddenSheets`
+(`state="hidden|veryHidden"`), `hiddenRows`, `hiddenCols` (сумма ширин диапазонов `<col hidden>`), `comments` (max(примечаний, корневых комментариев цепочек):
+Excel пишет к цепочке примечание-заглушку); PowerPoint — `hiddenSlides` (`<p:sld show="0">`), `comments` (`p:cm` и `p188:cm`). Word считает при разборе
+только части, где быстрая проверка нашла признаки скрытого (регулярное выражение на XML части, styles.xml читается, только если в нём есть `w:vanish`):
+20-страничный договор без скрытого — +0,03 мс к разбору 4,2 мс.
+
+**Выбор** (`HiddenFlags`): `comments`, `revisions`, `hiddenText` (Word), `hiddenSheets` (Excel: листы, строки и столбцы — один переключатель), `hiddenSlides`;
+настройки `removeComments`, `acceptRevisions`, `removeHiddenText`, `removeHiddenSheets`, `removeHiddenSlides` (по умолчанию `false`, `HIDDEN_SETTINGS`,
+`hiddenFlagsFrom`; новые ключи с дефолтом — схема настроек остаётся 4, `migrateSettings` дополняет). Панель шлёт свой выбор в `APPLY.options.hidden`;
+хост без него берёт выбор из настроек. Ни один флаг не включён — план формата ничего не делает, байты результата прежние (снимок `docx-regression`
+— только добавлены записи двух новых DOCX-фикстур `tests/fixtures/hidden/`, прежние 59 не менялись).
+
+**Общий сериализатор** (`ooxml/serialize.js`): план адаптера получает `PlanContext {options, remove, strip, hidden}`; `remove(name)` удаляет и файл связей
+части (`relsPartOf`); правки с `strip: true` (и удаление ранов встроенных объектов при «Удалять встроенные объекты») сводятся `resolveStrips`: вложенное
+удаление — внешнее, частично пересекающиеся удаления без замены — объединение, правка или вставка внутри удаления — отбрасывается; часть, которая удалена,
+не собирается и не попадает в `changedParts`. `collectOrphans(relations, removed, names)` — части, на которые ссылались только удалённые (заметки
+скрытого слайда, рисунки и примечания скрытого листа, их картинки и диаграммы), транзитивно; часть с входящей связью от корня или живой части остаётся.
+
+| Формат | Переключатель | Что делается |
+|---|---|---|
+| Word | «Удалить комментарии» | `word/comments.xml`, `commentsExtended.xml`, `commentsIds.xml`, `commentsExtensible.xml` (со связями и типами); `w:commentRangeStart/End`, `w:commentReference` (ран только из ссылки — целиком); `word/people.xml` — если правок нет или они принимаются |
+| Word | «Принять исправления» | `w:ins`/`w:moveTo` — разворачиваются (удаляются только теги); `w:del`/`w:moveFrom` — с содержимым; `w:*Change`, метки `w:ins`/`w:del` в свойствах, `w:cellIns|cellDel|cellMerge`, метки диапазонов перемещения — удаляются; удалённый знак абзаца — абзац склеивается со следующим того же уровня (от `</w:p>` до конца `w:pPr` следующего; остаются свойства первого; не склеивается через разрыв раздела); удалённая строка таблицы (`w:trPr/w:del`) — строка, все строки — таблица; `settings.xml` (`w:trackRevisions`) не меняется |
+| Word | «Удалить скрытый текст» | раны со скрытым текстом; абзац со скрытым знаком и без видимого текста — целиком, кроме последнего блока ячейки, колонтитула, сноски, надписи, тела |
+| Excel | «Удалить комментарии» | примечания и цепочки листов, `persons`, VML примечаний (только примечания — часть и `<legacyDrawing>` листа; есть другие фигуры — фигуры с `ObjectType="Note"`) |
+| Excel | «Удалить скрытые листы, строки и столбцы» | `<sheet>` скрытых листов, их части и всё, на что ссылались только они; локальные имена этих листов — удаляются, `localSheetId` остальных и `activeTab`/`firstSheet` — со сдвигом; ссылки на удалённые листы в формулах ячеек, именах книги, диаграммах, ссылках «#Лист!A1» → `#REF!` (то же переименование листов `refs.js renameSheets` с заглушкой `REMOVED_SHEET`, как делает Excel), источник сводной на удалённом листе — как был; ячейки скрытых строк и столбцов — удаляются (строки и столбцы на месте: адреса и формулы не сдвигаются; у владельца общей/массивной формулы остаётся формула без значения); общие строки без ссылок — пустые `<si><t></t></si>` (индексы прочих на месте); `calcChain.xml` — удаляется, `fullCalcOnLoad="1"` |
+| PowerPoint | «Удалить скрытые слайды» | часть слайда и всё, на что ссылался только он (заметки, комментарии, картинки); `<p:sldId>`, слайд в произвольных показах (`p:custShow/p:sldLst/p:sld`) и разделах (`p14:sldId`); гиперссылки других частей на него (`a:hlinkClick|hlinkHover`) |
+| PowerPoint | «Удалить комментарии» | части комментариев обоих видов, `commentAuthors.xml`, `authors.xml`; в слайде — `<p:ext>` с `p188:commentRel` |
+
+Найденное в скрытом маскируется при любом выборе (общие потоки: удалённый текст `deleted`, комментарии, авторы, скрытые листы и слайды — как в 0.4).
+Проверка — `tests/integration/hidden.spec.js` (счётчики; каждый переключатель — элементы удалены, пакет цел, XML корректен, LibreOffice конвертирует;
+выключенные — те же байты; ни одного секрета из скрытого в результате ни при каком выборе и в режиме маски; протокол ENTITIES/APPLY), фикстуры
+`scripts/gen-hidden-fixtures.mjs` (`--check`; `--real` — настоящие файлы LibreOffice из плоских ODF в `tests/fixtures/hidden/real/`), e2e `hidden.spec.js`.
+
+**Ограничения**: склейка абзацев по удалённому знаку берёт свойства первого абзаца (Word — последнего); удалённая ячейка (`w:cellDel`) и объединение
+(`w:cellMerge`) — снимаются только метки; правки в `styles.xml` и `numbering.xml` не принимаются (там нет текста документа); ссылки других книг на
+удалённый лист и именованные диапазоны внешних книг не пересчитываются; у Excel «скрытые строки» по `sheetFormatPr zeroHeight` и сгруппированные
+свёрнутые столбцы без `hidden` не считаются; во встроенных книгах (данные диаграмм, `*/embeddings/*.xlsx`) скрытое не удаляется (найденное в них
+обезличивается, как в 0.5).
+
+**Ключ с паролем** (`core/key-crypto.js`; схема — `schemas/mapping.schema.json#/$defs/encrypted`, корень схемы — `oneOf` открытой карты и зашифрованного ключа,
+протокол ссылается на `#/$defs/mapping`):
+
+```json
+{ "encVersion": 1, "enc": "AES-GCM-256",
+  "kdf": { "name": "PBKDF2", "hash": "SHA-256", "iterations": 600000, "salt": "<16 байт, base64>" },
+  "iv": "<12 байт, base64>", "ct": "<AES-GCM(JSON карты) + тег 16 байт, base64>" }
+```
+
+`encryptMapping(mapping|json, password, {iterations?})` — WebCrypto (`globalThis.crypto.subtle`: content script на https-странице, страница расширения,
+Node ≥ 20), пароль — NFC, соль и IV — `getRandomValues`, итераций 600 000 (меньше `KDF_MIN_ITERATIONS` = 600 000 не принимается); в файле нет ни значений, ни
+меток, ни имён документов. `decryptMapping(obj, password)` — неверный пароль и изменённые `ct`/`iv`/соль/итерации неразличимы (тег GCM) → `KeyCryptoError
+('KEY_PASSWORD')` без частичного результата; не тот формат (версия, алгоритм, хэш, итерации вне [600 000; 10 000 000], длины соли/IV, не base64) →
+`'KEY_INVALID'`; WebCrypto нет (страница без защищённого контекста) → `'KEY_CRYPTO_UNAVAILABLE'`. Коды — не протокола §5.4 (ключ не ходит через хост).
+Интерфейс: меню «Ещё» панели — флажок «Защитить паролем», пароль и повтор (не короче `MIN_PASSWORD_LENGTH` = 8), индикатор длины, предупреждение «забытый
+пароль = потерянный ключ»; файл — то же имя `.mapping.json`. Страница восстановления — `readMappingFiles(texts, password?)` (`ui/deanon/index.js`):
+зашифрованный ключ → поле пароля и «Открыть»; неверный — «Неверный пароль или файл ключа повреждён» (карты нет, вывода нет); пароль после попытки
+стирается из поля, в хранилище не пишется; расшифрованная карта — только в памяти страницы. Других мест импорта ключа нет (настройки импортируют
+конфигурацию, не ключ). Проверка — `tests/unit/key-crypto.spec.js`, e2e `hidden.spec.js` (сохранение из панели → восстановление) и `restore.spec.js`.
+
+**Бюджеты**: код `worker.js` без ORT 474 190 байт (≤ 512 КиБ); `content.js` 169 929 байт — лимит сторожа `pack.spec.js` поднят со 150 до 180 КБ
+(скрытые данные в панели и шифрование ключа в content script; словарей в нём по-прежнему нет).
