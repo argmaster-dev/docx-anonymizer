@@ -1,6 +1,6 @@
 # Рабочие пакеты
 
-Пакеты WP1–WP5 — MVP (версия 0.1). Пакеты WP6–WP9 — версия 0.2 (`docs/concept-0.2.md`). Пакеты WP10-A…D — версия 0.3 (`docs/concept-0.3.md`). Пакеты WP11-A…D — версия 0.4 (`docs/concept-0.4.md`; сводка — раздел «Версия 0.4: итог» перед бэклогом).
+Пакеты WP1–WP5 — MVP (версия 0.1). Пакеты WP6–WP9 — версия 0.2 (`docs/concept-0.2.md`). Пакеты WP10-A…D — версия 0.3 (`docs/concept-0.3.md`). Пакеты WP11-A…D — версия 0.4 (`docs/concept-0.4.md`; сводка — раздел «Версия 0.4: итог» перед бэклогом). Пакеты WP12-A…F — версия 0.5 (`docs/concept-0.5.md`).
 
 Фундамент готов: каркас MV3, ядро DOCX, контракты, протокол, конвейер popup → offscreen → worker (см. `docs/contracts.md`).
 Оставшаяся работа MVP (`docs/mvp-scope.md`) разбита на 5 независимых пакетов. Пакеты работают параллельно:
@@ -833,6 +833,53 @@ WP11-C3 — `a132e47`; документация и версия 0.4.0 — `1aa69
 | документация | `tests/integration/genres.spec.js` гейт К6/К7 с моделью | жёсткий только при `GENRES_MODEL_GATES=1` | жёсткий под `NER_MODEL_DIR` по умолчанию, `GENRES_MODEL_GATES=0` — печать | пакет 1.1.0 выпущен (К6/К7) |
 | WP11-E | `tests/integration/pack.spec.js` бюджет кода `worker.js` | ≤ 400 КиБ | ≤ 416 КиБ | правила по финальной проверке (решение координатора) |
 | WP11-E | `tests/unit/names/vocative.spec.js` (5 строк), `tests/unit/names/heldout-names.spec.js` («без модели — ни одного лица») | только обращение; ничего | + подпись реплики одним именем («Иван:»); «Нурланову О.» | подпись реплики — человек; «Фамилия И.» с одним инициалом — PERSON (п. 6) |
+
+## Версия 0.5: план (`docs/concept-0.5.md`, утверждена 26.10.2026)
+
+Волны: **WP12-A** → (**WP12-B** ∥ **WP12-C**) → (**WP12-D** ∥ **WP12-E**) → **WP12-F**. Ревью каждого WP (`wp-reviewer`); одновременно тесты гоняют не более двух агентов;
+e2e и сборка — под `flock /home/alexf14/.local/tmp/claude-1000/docx-e2e.lock`; CI — один раз в конце. Техзадания WP12-B…F детализируются координатором перед своей волной
+(по итогам WP12-A: интерфейс `DocumentAdapter`, бюджет `worker.js`).
+
+## WP12-A — фундамент: словари в `vendor/dict`, общий слой OOXML, CI (версия 0.5)
+
+**Файлы.** Новые: `vendor/dict/*.txt` (или генерируемые сборкой из `scripts/make-dicts.mjs`), `src/core/detect/names/dict/load.js`, `src/core/ooxml/**`,
+`tests/unit/dict-load.spec.js`, `tests/unit/ooxml/*.spec.js`, `tests/integration/docx-regression.spec.js` (+ снимки хешей).
+Изменяемые: `src/core/detect/names/dict/index.js`, `scripts/make-dicts.mjs`, `scripts/build.mjs`, `src/offscreen/{host,worker,package-fetch}.js`,
+`src/core/docx/**` (перенос общего в `src/core/ooxml/`, docx остаётся адаптером), `src/core/apply.js`, `src/core/index.js`, `tests/integration/pack.spec.js`,
+`tests/unit/bundled-model.spec.js`, `eslint.config.js`, `.github/workflows/ci.yml`, `docs/contracts.md` (новый §9), этот раздел.
+Не трогать: детекторы (`src/core/detect/**`, кроме `names/dict/`), `src/core/ner/**`, `tools/ner-train/**`, UI.
+
+**Сделать:**
+1. **Словари вне кода `worker.js`.** Списки `ru-surnames`, `ru-first`, `en-first`, `en-surnames` — файлы пакета `vendor/dict/*.txt` (формат — на выбор исполнителя:
+   тот же `codec` или строки; размер в архиве не хуже текущего). Загрузка — асинхронная, один раз на жизнь воркера: `await loadDicts(read)` до первого анализа,
+   где `read` в браузере — `readPackageFile` (`package-fetch.js` расширяется вторым разрешённым путём `/vendor/dict/<имя>.txt` с той же защитой от обхода пути,
+   регулярка и тест-сторож дополняются), в Node — чтение с диска. `getDicts()` остаётся синхронным и бросает понятную ошибку, если словари не загружены;
+   все вызывающие (`person-dict`, `vocative`, `kb`, `ner/filters-pl`) не меняются. Не загрузились — анализ идёт без словарного детектора, предупреждение
+   `DICT_FAILED {details: {reason}}` (по образцу `NER_FAILED`).
+2. **Бюджет.** `worker.js` без ORT ≤ 400 КиБ (лимит возвращается с 416 на 400 в `pack.spec.js`); словари в `worker.js` — 0 байт; размер `vendor/dict/` печатает сборка.
+   Холодный старт воркера и анализ 20-страничного договора — не медленнее 0.4 (замер `npm run bench` до и после, числа — в «Статус»).
+3. **Общий слой OOXML** `src/core/ooxml/`: ZIP (`zip.js`), токенизатор XML (`xml.js`), построение потоков/virtualText/charMap и замена по ранам — параметризованы
+   описанием разметки (имена элементов параграфа, рана, текста, спецэлементов, удалённого текста), чтобы адаптеры WP12-B (SpreadsheetML `<si>/<r>/<t>`,
+   DrawingML `<a:p>/<a:r>/<a:t>`) подключались без копирования кода. Word становится первым адаптером `src/core/docx/` поверх слоя.
+   Интерфейс `DocumentAdapter` (ТЗ §5.3): `kind`, распознавание по имени/сигнатуре, `parse(bytes) → doc`, `serialize(doc, decisions) → bytes`, список частей;
+   описание — `docs/contracts.md` §9. Поведение DOCX не меняется.
+4. **Регрессия DOCX байт-в-байт.** До переноса — снимок sha256 результата `apply` для всех DOCX-фикстур (`tests/fixtures/docs/**`, `tests/fixtures/genres/**`,
+   образец) в обычном и коммерческом режиме; после — те же хеши (`tests/integration/docx-regression.spec.js`). Ни одно существующее ожидание тестов не меняется.
+5. **CI.** Actions на рантайме Node 24 (актуальные мажорные версии `actions/checkout`, `actions/setup-node`, `actions/upload-artifact` — проверить по их релизам),
+   `node-version` — актуальная LTS, раннер закреплён (`ubuntu-24.04`) вместо `ubuntu-latest`. CI не запускать — запустит координатор в конце версии.
+
+**Приёмка:**
+
+| Проверка | Как |
+|---|---|
+| словари грузятся из `vendor/dict`; `getDicts()` до загрузки — ошибка; сбой загрузки → `DICT_FAILED`, сущности правил и модели на месте | `tests/unit/dict-load.spec.js`, `tests/integration/host.spec.js` |
+| `readPackageFile`: разрешены только `/models/*.zip` и `/vendor/dict/*.txt` того же расширения; обход пути, чужой origin, http(s) — отказ | `tests/unit/bundled-model.spec.js` |
+| `worker.js` без ORT ≤ 400 КиБ, словарей в нём нет; лёгкий архив ≤ 12 МБ | `tests/integration/pack.spec.js` |
+| хеши `apply` всех DOCX-фикстур совпадают со снимком до переноса | `tests/integration/docx-regression.spec.js` |
+| слой OOXML: токенизатор и charMap на синтетической разметке с другими именами элементов (заготовка под WP12-B) | `tests/unit/ooxml/*.spec.js` |
+| ни одного http(s)-запроса в сценариях перехвата и анализа со словарями | e2e `nfr.spec.js`, `ner.spec.js` |
+| время до/после (`npm run bench`) — в «Статус» | запуск |
+| `npm run lint`, `npm test`, `npm run e2e`, `npm run pack` зелёные | запуск |
 
 ## Бэклог после 0.4
 
