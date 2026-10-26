@@ -4,9 +4,12 @@
 // сериализатор пакета (ooxml/serialize.js) отдаёт правки книги её адаптеру и кладёт новую книгу на место старой.
 // Без загрузчика или при сбое разбора книга остаётся как есть — предупреждение EMBEDDED_NOT_PROCESSED. Чистый JS (NFR-14).
 import { inflateEntry } from './ooxml/zip.js';
+import { readXmlEntry } from './ooxml/model.js';
 
 /** Встроенная книга Excel внутри пакета. */
 export const EMBEDDED_BOOK_RE = /(?:^|\/)embeddings\/[^/]+\.xls[xm]$/i;
+/** Диаграмма Word (word/charts/chartN.xml): заголовки, подписи и кэш строк — те же ФИО, что в тексте. */
+const DOCX_CHART_RE = /^word\/charts\/chart[^/]*\.xml$/;
 
 /**
  * Разбирает встроенные книги и добавляет их потоки, абзацы и таблицы в модель (doc.embedded — что и как собрать обратно).
@@ -16,14 +19,19 @@ export const EMBEDDED_BOOK_RE = /(?:^|\/)embeddings\/[^/]+\.xls[xm]$/i;
  * @returns {Promise<number>}  сколько книг разобрано
  */
 export async function attachEmbeddedBooks(doc, load) {
-  if (doc.embedded || !(doc.entries || []).some((e) => EMBEDDED_BOOK_RE.test(e.name))) return doc.embedded?.length || 0;
+  const entries = doc.entries || [];
+  const books = !doc.embedded && entries.some((e) => EMBEDDED_BOOK_RE.test(e.name));
+  // диаграммы Word тоже разбирает модуль Excel (разметка диаграммы) — та же загрузка
+  const charts = doc.kind === 'docx' && entries.some((e) => DOCX_CHART_RE.test(e.name) && !doc.parts.has(e.name));
+  if (!books && !charts) return doc.embedded?.length || 0;
   let adapter;
   try {
     adapter = await load('xlsx');
   } catch {
     return 0;
   }
-  return attachEmbeddedBooksWith(doc, adapter);
+  if (charts) attachDocxChartsWith(doc, adapter);
+  return books ? attachEmbeddedBooksWith(doc, adapter) : doc.embedded?.length || 0;
 }
 
 /**
@@ -94,4 +102,48 @@ function rekey(sub, prefix, entryName) {
     for (const tc of x.tableColumns || [])
       Object.assign(tc, { columnStream: prefix + tc.columnStream, headerStream: tc.headerStream && prefix + tc.headerStream });
   if (x?.pivotItems) x.pivotItems = new Map([...x.pivotItems].map(([k, v]) => [prefix + k, v]));
+}
+
+/**
+ * Диаграммы Word (ревью WP12-B): части разбираются разметкой диаграммы из модуля Excel и входят в модель документа (id с префиксом
+ * «c<N>/»); общий сериализатор пакета правит их как обычные части. Сбой — диаграмма как есть.
+ * @param {any} doc  модель Word
+ * @param {any} adapter  адаптер Excel (parseChartPart)
+ * @returns {number}
+ */
+function attachDocxChartsWith(doc, adapter) {
+  const charts = (doc.entries || []).filter((e) => DOCX_CHART_RE.test(e.name) && !doc.parts.has(e.name));
+  if (!charts.length || !adapter.parseChartPart) return 0;
+  let n = 0;
+  for (const entry of charts) {
+    const ctx = { pidCounter: 0, attrCounter: 0, paragraphs: [] };
+    let part;
+    try {
+      part = adapter.parseChartPart(entry.name, readXmlEntry(entry), ctx);
+    } catch {
+      continue;
+    }
+    const prefix = `c${++n}/`;
+    for (const s of part.streams) {
+      s.id = prefix + s.id;
+      if (s.pid) s.pid = prefix + s.pid;
+      s.order = doc.streams.length;
+      doc.streams.push(s);
+      doc.streamById.set(s.id, s);
+    }
+    for (const p of ctx.paragraphs) {
+      p.pid = prefix + p.pid;
+      p.streams = Object.fromEntries(Object.entries(p.streams).map(([k, v]) => [k, prefix + v]));
+      doc.paragraphs.push(p);
+    }
+    doc.parts.set(entry.name, part);
+  }
+  const w = (doc.warnings || []).find((x) => x.code === 'EMBEDDED_NOT_PROCESSED');
+  if (w && n && w.details && typeof w.details.charts === 'number') {
+    const done = Math.min(n, w.details.charts);
+    w.details.charts -= done;
+    w.count = Math.max(0, (w.count || 0) - done);
+    if (!w.count) doc.warnings = doc.warnings.filter((x) => x !== w);
+  }
+  return n;
 }

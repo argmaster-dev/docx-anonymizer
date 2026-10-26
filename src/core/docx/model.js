@@ -105,7 +105,9 @@ const DOCX_PACKAGE = {
       else if (/^word\/media\//.test(e.name)) counts.media++;
     }
     const embeddedTotal = counts.embeddings + counts.charts + counts.media;
-    return embeddedTotal ? [{ code: 'EMBEDDED_NOT_PROCESSED', count: embeddedTotal, details: counts }] : [];
+    // макросы .docm (ревью WP12-B): код VBA не разбирается — предупреждение
+    const macros = entries.some((e) => /(?:^|\/)vbaProject\.bin$/i.test(e.name)) ? [{ code: 'MACROS_NOT_PROCESSED', count: 1 }] : [];
+    return [...(embeddedTotal ? [{ code: 'EMBEDDED_NOT_PROCESSED', count: embeddedTotal, details: counts }] : []), ...macros];
   },
 };
 

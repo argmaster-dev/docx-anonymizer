@@ -16,6 +16,7 @@ import { serializePackage } from '../ooxml/serialize.js';
 import { zipHasEntry, hasExtension } from '../ooxml/adapter.js';
 import { escapeText, escapeAttr, unescapeXml } from '../ooxml/xml.js';
 import { registerAdapter } from '../adapters.js';
+import { parseChartPart } from '../ooxml/dml.js';
 import { attachEmbeddedBooksWith } from '../embedded.js';
 
 export const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -76,6 +77,20 @@ function planXlsx(doc, byStream, push, ctx) {
     if (!col || !head || col.text !== head.text) continue;
     if (byStream.has(tc.columnStream) && !byStream.has(tc.headerStream)) byStream.set(tc.headerStream, byStream.get(tc.columnStream));
     else if (byStream.has(tc.headerStream)) byStream.set(tc.columnStream, /** @type {any} */ (byStream.get(tc.headerStream)));
+  }
+
+  // кэш сводной — копия ячеек: число, заменённое на листе, заменяется и в кэше той же меткой (даже если в кэше его не нашли)
+  const key = (t) => t.replace(/\D/g, '').replace(/^0+/, '');
+  /** @type {Map<string, string>} */
+  const replacedNumbers = new Map();
+  for (const [id, list] of byStream) {
+    const s = /** @type {any} */ (doc.streamById.get(id));
+    if (s?.attrKind === 'cell-number' && list.length) replacedNumbers.set(key(s.text), applyEdits(s.text, list));
+  }
+  for (const s of /** @type {any[]} */ (doc.streams)) {
+    if ((s.attrKind !== 'pivot-number' && s.attrKind !== 'pivot-minmax') || byStream.has(s.id) || /^e\d+\//.test(s.id)) continue;
+    const v = replacedNumbers.get(key(s.text));
+    if (v !== undefined) byStream.set(s.id, [{ streamId: s.id, start: 0, end: s.text.length, newText: v }]);
   }
 
   /** @type {Map<string, string>} */
@@ -174,10 +189,6 @@ function planXlsx(doc, byStream, push, ctx) {
     const value = applyEdits(s.text, connEdits.get(s.id) || []).replace(CREDENTIALS_RE, '$1***');
     if (value !== s.text) push(s.part, { from: /** @type {number} */ (s.valueStart), to: /** @type {number} */ (s.valueEnd), text: escapeAttr(value) });
   }
-  // путь внешней книги (file:///C:/Users/<логин>/…/<ФИО>.xlsx) — заменяется всегда: связь остаётся, след человека — нет
-  for (const p of x.externalPaths) {
-    if (doc.parts.has(p.part)) push(p.part, { from: p.valueStart, to: p.valueEnd, text: `external-link-${p.index}.xlsx` });
-  }
   // «Удалять встроенные объекты»: книга данных диаграммы и ссылка на неё (диаграмма остаётся с кэшем значений)
   if (ctx.options.stripEmbedded) {
     for (const e of doc.chartEmbeds || []) {
@@ -250,6 +261,8 @@ export const XLSX_ADAPTER = Object.freeze({
   serialize: serializeXlsx,
   parts: xlsxParts,
   analysisWarnings: xlsxWarnings,
+  // разбор части диаграммы — для диаграмм Word (core/embedded.js attachDocxCharts)
+  parseChartPart,
 });
 
 registerAdapter(XLSX_ADAPTER);

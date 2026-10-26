@@ -179,3 +179,22 @@ describe('хост: встроенные книги и имя файла (рев
     expect((await apply('r6', plain.docId)).begin.name).toBe('выгрузка.anon.xlsx');
   });
 });
+
+describe('хост: тот же файл под другим именем (ревью WP12-B, п. 3)', () => {
+  it('«договор.docx», затем те же байты как «Кравченко_Ольга_Петровна.docx» — имя анализируется, решения перенесены', async () => {
+    const { makeDocx, para, run } = await import('../helpers/docx.js');
+    const bytes = makeDocx(para(run('Подписала Кравченко Ольга Петровна, почта k.olga@example.org.')));
+    const { upload, apply, send, out } = setup();
+    const a = (await upload('r1', bytes, 'договор.docx')).find((m) => m.type === MSG.ENTITIES);
+    const email = a.entities.find((e) => e.category === 'EMAIL');
+    await send({ type: MSG.APPLY, requestId: 'r2', docId: a.docId, decisions: [{ entityId: email.id, action: 'skip' }] });
+    expect(out.find((m) => m.requestId === 'r2' && m.type === MSG.RESULT_BEGIN).name).toBe('договор.anon.docx');
+    const b = (await upload('r3', bytes, 'Кравченко_Ольга_Петровна.docx')).find((m) => m.type === MSG.ENTITIES);
+    expect(b.docId).not.toBe(a.docId);
+    expect(b.restoredDecisions).toBe(true);
+    expect(b.entities.find((e) => e.category === 'EMAIL').enabled).toBe(false); // решение «не заменять» перенесено
+    const r = await apply('r4', b.docId);
+    expect(r.begin.name).not.toMatch(/Кравченко/);
+    expect(r.begin.name).toMatch(/^\[ФИО_\d+\]\.anon\.docx$/);
+  });
+});

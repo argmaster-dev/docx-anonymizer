@@ -68,6 +68,7 @@ const ROLE_BY_TYPE = {
   chart: 'chart',
   pivotCacheDefinition: 'pivot',
   pivotCacheRecords: 'pivot',
+  pivotTable: 'pivotTable',
   table: 'table',
   externalLink: 'external',
   connections: 'connections',
@@ -86,6 +87,7 @@ const ROLE_BY_PATH = [
   [/^xl\/drawings\/[^/]+\.vml$/, 'vml'],
   [/^xl\/charts\/chart[^/]*\.xml$/, 'chart'],
   [/^xl\/pivotCache\/pivotCache(?:Definition|Records)[^/]*\.xml$/, 'pivot'],
+  [/^xl\/pivotTables\/[^/]+\.xml$/, 'pivotTable'],
   [/^xl\/tables\/[^/]+\.xml$/, 'table'],
   [/^xl\/externalLinks\/[^/]+\.xml$/, 'external'],
   [/^xl\/connections\.xml$/, 'connections'],
@@ -109,6 +111,7 @@ const RANK = {
   table: 6,
   workbook: 7,
   pivot: 8,
+  pivotTable: 8,
   external: 8,
   connections: 8,
   rels: 9,
@@ -222,6 +225,9 @@ export function parseXlsx(bytes) {
   /** @type {(string | null)[]} */
   let siPids = [];
   let headSeq = 0;
+  /** имена полей кэша сводной по части определения; номер таблицы заголовков сводной */
+  const pivotFields = new Map();
+  let pivotSeq = 0;
   /** @type {Map<string, string>} pid → «таблица:строка» первого вхождения */
   const seenData = new Map();
   /** @type {Map<string, string>} pid абзаца → текст его live-потока */
@@ -296,6 +302,7 @@ export function parseXlsx(bytes) {
       if (role === 'table') return parseTable(name, xml, ctx);
       if (role === 'workbook') return parseWorkbook(name, xml, ctx);
       if (role === 'pivot') return parsePivot(name, xml, ctx);
+      if (role === 'pivotTable') return parsePivotTable(name, xml, ctx);
       if (role === 'external') return parseExternal(name, xml, ctx);
       if (role === 'connections') {
         const part = { name, kind: 'text', xml, streams: [], embeddedRuns: [] };
@@ -312,8 +319,8 @@ export function parseXlsx(bytes) {
         // путь внешней книги (file:///C:/Users/<логин>/…/<ФИО>.xlsx) — не данные ячеек, а след: заменяется всегда
         const source = name.replace(/_rels\/([^/]+)\.rels$/, '$1');
         if (externalParts.has(source)) {
+          // путь (`rel-external`) заменяет общий сериализатор пакета; здесь — только счёт для предупреждения
           for (const s of part.streams) {
-            s.attrKind = 'external-path';
             info.externalPaths.push({
               part: name,
               valueStart: /** @type {number} */ (s.valueStart),
@@ -657,18 +664,62 @@ export function parseXlsx(bytes) {
    */
   function parsePivot(name, xml, ctx) {
     const part = { name, kind: 'text', xml, streams: [], embeddedRuns: [] };
+    // поля кэша: имена из определения (cacheField/@name) — заголовки чисел (ведущие нули, метка «Телефон» над номером);
+    // записи (pivotCacheRecords) — поле по номеру дочернего элемента <r>, имена — из своего определения (по связи)
+    const def = rels.all.find((r) => r.type === 'pivotCacheRecords' && r.target === name)?.source;
+    const fields = def ? pivotFields.get(def) || [] : [];
+    if (!def) pivotFields.set(name, fields);
+    const table = `piv${pivotSeq++}`;
     let items = null;
+    let field = -1;
+    let row = 0;
+    let child = 0;
+    let inRecord = false;
+    const header = new Set();
+    const numberStream = (t, a, kind, col) => {
+      const digits = /** @type {string} */ (intDigits(a.raw));
+      const text = padByHeader(digits, fields[col]);
+      /** @type {any} */
+      const s = addAttrStream(part, ctx, { ...a, raw: text }, kind, kind === 'pivot-number' ? 'n/@v' : 'sharedItems/@minmax');
+      s.text = text;
+      const para = { pid: `p${ctx.pidCounter++}`, part: name, depth: 0, pos: a.valueStart, streams: { live: s.id }, kind: 'cell' };
+      ctx.paragraphs.push(para);
+      s.pid = para.pid;
+      // таблица «имя поля | значения» — заголовок столбца для детекторов (detect/tables.js)
+      if (fields[col] && !header.has(col)) {
+        header.add(col);
+        blocks.push({ pid: `h${headSeq++}`, kind: 'cell', text: fields[col], table: { index: table, row: 0, col } });
+      }
+      blocks.push({ pid: s.pid, kind: 'cell', text, table: { index: table, row: ++row, col } });
+      return s;
+    };
+    let depth = 0;
     tokenize(xml, (t) => {
       if (t.type === 'close') {
         if (t.name === 'sharedItems') items = null;
+        if (inRecord && --depth === 0) inRecord = false;
         return;
       }
       if (t.type !== 'open' && t.type !== 'selfclose') return;
       const nm = t.name;
+      // в записи <r> номер поля — номер прямого дочернего элемента
+      let col = field;
+      if (inRecord) {
+        if (depth === 1) col = child++;
+        if (t.type === 'open') depth++;
+      }
       if (nm === 'pivotCacheDefinition') {
         info.pivotRoots.set(name, { at: t.attrEnd });
         const a = getAttr(xml, t.attrStart, t.attrEnd, 'refreshedBy');
         if (a && a.raw) addAttrStream(part, ctx, a, 'author', 'pivotCacheDefinition/@refreshedBy');
+      } else if (nm === 'cacheField') {
+        field++;
+        const a = getAttr(xml, t.attrStart, t.attrEnd, 'name');
+        fields[field] = a ? unescapeXml(a.raw) : '';
+      } else if (nm === 'r' && t.type === 'open' && !inRecord) {
+        inRecord = true;
+        depth = 1;
+        child = 0;
       } else if (nm === 'worksheetSource') {
         // источник сводной таблицы: <worksheetSource sheet="Лист1"> — имя листа переименовывается вместе с листом
         const a = getAttr(xml, t.attrStart, t.attrEnd, 'sheet');
@@ -678,8 +729,8 @@ export function parseXlsx(bytes) {
         items = t.type === 'open' ? tag : null;
         for (const a of parseAttrs(xml, t.attrStart, t.attrEnd)) {
           if ((a.name === 'minValue' || a.name === 'maxValue') && ID_DIGITS_RE.test(intDigits(a.raw) || '')) {
-            const s = addAttrStream(part, ctx, { ...a, raw: /** @type {string} */ (intDigits(a.raw)) }, 'pivot-minmax', `sharedItems/@${a.name}`);
-            info.pivotItems.set(s.id, tag);
+            const st = numberStream(t, a, 'pivot-minmax', field);
+            info.pivotItems.set(st.id, tag);
           }
         }
       } else if (nm === 's') {
@@ -688,12 +739,24 @@ export function parseXlsx(bytes) {
       } else if (nm === 'n' && t.type === 'selfclose') {
         const a = getAttr(xml, t.attrStart, t.attrEnd, 'v');
         const digits = a ? intDigits(a.raw) : null;
-        if (a && digits && ID_DIGITS_RE.test(digits)) {
-          const s = addAttrStream(part, ctx, { ...a, raw: digits }, 'pivot-number', 'n/@v');
-          s.el = { start: t.start, end: t.end, attrStart: t.attrStart, attrEnd: t.attrEnd };
-          if (items) info.pivotItems.set(s.id, items);
+        if (a && digits && digits.length >= 5 && ID_DIGITS_RE.test(padByHeader(digits, fields[col]))) {
+          const st = numberStream(t, a, 'pivot-number', col);
+          st.el = { start: t.start, end: t.end, attrStart: t.attrStart, attrEnd: t.attrEnd };
+          if (items) info.pivotItems.set(st.id, items);
         }
       }
+    });
+    return part;
+  }
+
+  /** Сводная таблица: её имя, подписи полей и данных, элементы с заданным текстом (item/@n) — `alt`. */
+  function parsePivotTable(name, xml, ctx) {
+    const part = { name, kind: 'text', xml, streams: [], embeddedRuns: [] };
+    addAttrStreams(part, ctx, {
+      pivotTableDefinition: { name: 'alt', dataCaption: 'alt', grandTotalCaption: 'alt', rowHeaderCaption: 'alt', colHeaderCaption: 'alt' },
+      pivotField: { name: 'alt' },
+      dataField: { name: 'alt' },
+      item: { n: 'alt' },
     });
     return part;
   }

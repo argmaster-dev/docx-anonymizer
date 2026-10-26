@@ -305,10 +305,14 @@ describe('host: PDF (версия 0.3)', () => {
     expect(text).toMatch(/\[EMAIL_\d+\]/);
     expect(text).not.toContain('info@romashka.ru');
     expect(end.mapping.documents[0]).toMatchObject({ name: 'договор.pdf', resultName: 'договор.anon.md' });
+    // тот же файл под другим именем (0.5, ревью WP12-B): новый анализ — в имени могут быть данные; решения прежней сессии перенесены
     const again = await upload('p3', pdf('sample-contract'), 'копия.pdf');
     const ent2 = again.find((m) => m.type === MSG.ENTITIES);
     expect(ent2.restoredDecisions).toBe(true);
-    expect(ent2.docId).toBe(ent.docId);
+    expect(ent2.docId).not.toBe(ent.docId);
+    expect(ent2.name).toBe('копия.pdf');
+    const same = (await upload('p4', pdf('sample-contract'), 'копия.pdf')).find((m) => m.type === MSG.ENTITIES);
+    expect(same.docId).toBe(ent2.docId); // то же имя — прежняя сессия
   }, 30000);
 
   it("pdfMode: 'text' → .anon.txt и text/plain; DOCX — MIME .docx", async () => {
@@ -593,41 +597,47 @@ describe('host: MODEL_INSTALL поверх установленной прежн
   });
   const slots = () => [...(root.c.get('models')?.c.keys() ?? [])].sort();
 
-  it('установлен {id, sha 1.0.0} → MODEL_INSTALL sha 1.1.0 → installed; прежний слот удалён, активен новый', async () => {
-    const store = await import('../../src/shared/model-store.js');
-    const [v1, v2] = [fakePack('1.0.0'), fakePack('1.1.0')];
-    await store.install(v1.zip, { extensionVersion: '0.4.0' }); // как ручной импорт 1.0.0 в 0.3
-    expect(slots()).toEqual(['upd-pack']);
-    expect((await store.listInstalled()).map((m) => [m.id, m.version, m.packSha256])).toEqual([['upd-pack', '1.0.0', v1.sha256]]);
+  // 0.4 (WP11-C3): 1.0.0 → 1.1.0; 0.5 (WP12-E): 1.1.0 → 1.2.0 — тот же путь обновления встроенной модели
+  for (const [OLD_V, NEW_V, EXT_V] of [
+    ['1.0.0', '1.1.0', '0.4.0'],
+    ['1.1.0', '1.2.0', '0.5.0'],
+  ]) {
+    it(`установлен {id, sha ${OLD_V}} → MODEL_INSTALL sha ${NEW_V} → installed; прежний слот удалён, активен новый`, async () => {
+      const store = await import('../../src/shared/model-store.js');
+      const [v1, v2] = [fakePack(OLD_V), fakePack(NEW_V)];
+      await store.install(v1.zip, { extensionVersion: EXT_V }); // как ручной импорт прежней версии
+      expect(slots()).toEqual(['upd-pack']);
+      expect((await store.listInstalled()).map((m) => [m.id, m.version, m.packSha256])).toEqual([['upd-pack', OLD_V, v1.sha256]]);
 
-    const out = [];
-    const read = [];
-    const host = createHost({
-      post: (clientId, m) => out.push({ clientId, ...m }),
-      modelStore: { ...store, inspectPack: async (b, o) => ({ ...(await store.inspectPack(b, o)), verified: true }) },
-      readPackageFile: async (url) => {
-        read.push(url);
-        return v2.zip;
-      },
+      const out = [];
+      const read = [];
+      const host = createHost({
+        post: (clientId, m) => out.push({ clientId, ...m }),
+        modelStore: { ...store, inspectPack: async (b, o) => ({ ...(await store.inspectPack(b, o)), verified: true }) },
+        readPackageFile: async (url) => {
+          read.push(url);
+          return v2.zip;
+        },
+      });
+      const url = `chrome-extension://extid/models/docx-anonymizer-ner-upd-pack-${NEW_V}.zip`;
+      const msg = { type: MSG.MODEL_INSTALL, requestId: 'up1', url, id: 'upd-pack', sha256: v2.sha256, version: NEW_V, extensionVersion: EXT_V };
+      await host.handle('bootstrap', msg);
+      const r = out.find((m) => m.type === MSG.MODEL_INSTALLED);
+      expect(r).toMatchObject({ clientId: 'bootstrap', status: 'installed', id: 'upd-pack', sha256: v2.sha256, version: NEW_V });
+      expect(read).toEqual([url]); // другой sha того же id — не `present`: zip читается и ставится
+      // переустановка писала в неактивный слот <id>.1 и удалила прежний <id>
+      expect(slots()).toEqual(['upd-pack.1']);
+      const list = await store.listInstalled();
+      expect(list.map((m) => [m.id, m.version, m.packSha256])).toEqual([['upd-pack', NEW_V, v2.sha256]]);
+      expect(new TextDecoder().decode(await store.readFile('upd-pack', 'vocab.txt'))).toContain(`v${NEW_V}`);
+
+      // повторный запуск с тем же sha новой версии → present, файлы не переписываются
+      await host.handle('bootstrap', { ...msg, requestId: 'up2' });
+      expect(out.find((m) => m.requestId === 'up2').status).toBe('present');
+      expect(read).toHaveLength(1);
+      expect(slots()).toEqual(['upd-pack.1']);
     });
-    const url = 'chrome-extension://extid/models/docx-anonymizer-ner-upd-pack-1.1.0.zip';
-    const msg = { type: MSG.MODEL_INSTALL, requestId: 'up1', url, id: 'upd-pack', sha256: v2.sha256, version: '1.1.0', extensionVersion: '0.4.0' };
-    await host.handle('bootstrap', msg);
-    const r = out.find((m) => m.type === MSG.MODEL_INSTALLED);
-    expect(r).toMatchObject({ clientId: 'bootstrap', status: 'installed', id: 'upd-pack', sha256: v2.sha256, version: '1.1.0' });
-    expect(read).toEqual([url]); // другой sha того же id — не `present`: zip читается и ставится
-    // переустановка писала в неактивный слот <id>.1 и удалила прежний <id>
-    expect(slots()).toEqual(['upd-pack.1']);
-    const list = await store.listInstalled();
-    expect(list.map((m) => [m.id, m.version, m.packSha256])).toEqual([['upd-pack', '1.1.0', v2.sha256]]);
-    expect(new TextDecoder().decode(await store.readFile('upd-pack', 'vocab.txt'))).toContain('v1.1.0');
-
-    // повторный запуск с тем же sha 1.1.0 → present, файлы не переписываются
-    await host.handle('bootstrap', { ...msg, requestId: 'up2' });
-    expect(out.find((m) => m.requestId === 'up2').status).toBe('present');
-    expect(read).toHaveLength(1);
-    expect(slots()).toEqual(['upd-pack.1']);
-  });
+  }
 });
 
 // WP12-A (К14): словари ФИО — файлы vendor/dict/*.txt, хост грузит их через env.readDictFile один раз при создании.

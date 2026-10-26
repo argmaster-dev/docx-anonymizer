@@ -340,23 +340,44 @@ export function scanJson(text) {
   return out;
 }
 
-function jsonBlocks(text) {
+function jsonBlocks(text, nest = null, seq = { table: 0, nest: 0 }) {
   const out = [];
-  let t = 0;
+  const objBase = nest ? nest.id * 100000 : 0;
   for (const v of scanJson(text)) {
     // ключ — тоже текст (ревью WP12-B, п. 14): «{"Иванов Иван": {...}}» — поток; при замене ключа дубли не создаются
     if (v.kind === 'key') {
       if (/\p{L}{2}|\d{5}/u.test(v.value))
-        out.push({ kind: 'p', text: v.value, start: v.start, end: v.end, write: 'json', key: true, obj: v.obj, stream: true });
+        out.push({
+          kind: 'p',
+          text: v.value,
+          start: v.start,
+          end: v.end,
+          write: 'json',
+          key: true,
+          obj: objBase + /** @type {number} */ (v.obj),
+          nest,
+          stream: true,
+        });
       continue;
+    }
+    // строка, которая сама — JSON («"meta": "{\"tel\": 79267771122}"»): разбирается рекурсивно (ревью WP12-B)
+    if (v.kind === 'string' && /^\s*[[{]/.test(v.value)) {
+      try {
+        const inner = { id: ++seq.nest, start: v.start, end: v.end, text: v.value, parent: nest, depth: (nest?.depth ?? 0) + 1 };
+        out.push(...jsonBlocks(v.value, inner, seq));
+        continue;
+      } catch {
+        /* не JSON — обычная строка */
+      }
     }
     const { label } = keyLabel(v.key);
     // любое целое из 6–20 цифр — поток (ключ — только метка): «clientInn», «contactPhone», «id» с ИНН — закроются по формату
     if (v.kind === 'number' && !/^\d{6,20}$/.test(v.value)) continue;
     if (v.kind === 'string' && !v.value.trim()) continue;
     // ключ и значение — строка таблицы «ключ | значение»: ключ становится меткой строки (rowHeader, detect/tables.js)
-    const index = t++;
-    if (label) out.push({ kind: 'cell', text: label, start: v.start, end: v.start, write: 'json', table: { index, row: 0, col: 0, cols: 2 }, stream: false });
+    const index = seq.table++;
+    if (label)
+      out.push({ kind: 'cell', text: label, start: v.start, end: v.start, write: 'json', nest, table: { index, row: 0, col: 0, cols: 2 }, stream: false });
     out.push({
       kind: 'cell',
       text: v.value,
@@ -364,6 +385,7 @@ function jsonBlocks(text) {
       end: v.end,
       write: 'json',
       number: v.kind === 'number',
+      nest,
       table: { index, row: 0, col: 1, cols: 2 },
       stream: true,
     });
@@ -443,8 +465,9 @@ export function parsePlain(bytes, name) {
     blocks: tables,
     plain: { text, encoding: enc.encoding, bom: enc.bom, delimiter, items: blocks.filter((b) => b.stream) },
     warnings,
-    // язык — по значениям: латинские ключи JSON («fio», «phone») не делают русскую выгрузку английской
-    language: detectLanguage(streams, (s) => s.type === 'live' && !s.jsonKey),
+    // язык — по значениям и ключам на кириллице: латинские ключи JSON («fio», «phone») не делают русскую выгрузку английской,
+    // а ФИО только в ключах — даёт русские метки
+    language: detectLanguage(streams, (s) => s.type === 'live' && (!s.jsonKey || /[А-Яа-яЁё]/.test(s.text))),
     size: bytes.length,
   };
 }
@@ -452,11 +475,15 @@ export function parsePlain(bytes, name) {
 /* ---------- запись ---------- */
 
 /**
- * Правки → тот же формат и кодировка. Неизменённые куски файла — символ в символ.
+ * Правки → тот же формат и кодировка. Неизменённые куски файла — символ в символ. JSON внутри строки JSON — собирается заново
+ * и кладётся обратно строкой. `options.restore` (восстановление, ревью WP12-B) — пометки из карты: метки, бывшие числами, снова
+ * пишутся числами; ключи, получившие суффикс « (2)», возвращают исходный текст.
  * @param {ReturnType<typeof parsePlain>} doc
  * @param {import('../ooxml/serialize.js').TextEdit[]} edits
+ * @param {{restore?: {numbers?: string[], keys?: [string, string][]}}} [options]
+ * @returns {{bytes: Uint8Array, text: string, changedParts: string[], removedParts: string[], mime: string, restore?: {numbers: string[], keys: [string, string][]}}}
  */
-export function serializePlain(doc, edits) {
+export function serializePlain(doc, edits, options = {}) {
   /** @type {Map<string, import('../ooxml/serialize.js').TextEdit[]>} */
   const byStream = new Map();
   for (const e of edits) {
@@ -467,44 +494,80 @@ export function serializePlain(doc, edits) {
     if (!arr) byStream.set(e.streamId, (arr = []));
     arr.push(e);
   }
-  const byPid = new Map(doc.plain.items.map((b) => [b.pid, b]));
   const delim = doc.plain.delimiter || ',';
-  const raw = [];
+  const back = options.restore || {};
+  const wasNumber = new Set(back.numbers || []);
+  const keyBack = new Map(back.keys || []);
+  /** пометки для восстановления (кладутся в карту, core/apply.js) */
+  const notes = { numbers: [], keys: [] };
+  /** правки по «текстам»: файл (null) и строки с JSON внутри (nest) */
+  /** @type {Map<any, {from: number, to: number, text: string}[]>} */
+  const raws = new Map([[null, []]]);
+  const push = (nest, r) => {
+    if (!raws.has(nest)) raws.set(nest, []);
+    /** @type {any[]} */ (raws.get(nest)).push(r);
+  };
   // ключи JSON по объектам: новый ключ не должен совпасть с другим ключом того же объекта (иначе JSON с дублем)
   /** @type {Map<number, Set<string>>} */
   const keysOf = new Map();
   for (const b of doc.plain.items) if (b.key) (keysOf.get(b.obj) || keysOf.set(b.obj, new Set()).get(b.obj)).add(b.text);
-  for (const [id, list] of byStream) {
-    list.sort((a, b) => a.start - b.start || a.end - b.end);
-    for (let i = 1; i < list.length; i++) if (list[i].start < list[i - 1].end) throw new CoreError('INTERNAL', `Пересекающиеся правки в потоке ${id}`);
-    const s = doc.streamById.get(id);
-    const b = /** @type {PlainBlock} */ (byPid.get(s.pid));
+  for (const b of doc.plain.items) {
+    const s = doc.streamById.get(`${b.pid}:live`);
+    const list = byStream.get(s.id) || [];
+    list.sort((a, c) => a.start - c.start || a.end - c.end);
+    for (let i = 1; i < list.length; i++) if (list[i].start < list[i - 1].end) throw new CoreError('INTERNAL', `Пересекающиеся правки в потоке ${s.id}`);
+    if (b.key && keyBack.has(s.text)) {
+      const keys = /** @type {Set<string>} */ (keysOf.get(b.obj));
+      keys.delete(s.text);
+      keys.add(/** @type {string} */ (keyBack.get(s.text)));
+      push(b.nest, { from: b.start, to: b.end, text: JSON.stringify(keyBack.get(s.text)) });
+      continue;
+    }
+    if (!list.length) continue;
     let t = s.text;
     for (let i = list.length - 1; i >= 0; i--) t = t.slice(0, list[i].start) + list[i].newText + t.slice(list[i].end);
     if (b.write === 'raw') {
-      for (const e of list) raw.push({ from: b.start + e.start, to: b.start + e.end, text: e.newText });
+      for (const e of list) push(null, { from: b.start + e.start, to: b.start + e.end, text: e.newText });
     } else if (b.write === 'csv') {
       const needQuote = b.quoted || t.includes(delim) || /["\r\n]/.test(t);
-      raw.push({ from: b.start, to: b.end, text: needQuote ? `"${t.replace(/"/g, '""')}"` : t });
+      push(null, { from: b.start, to: b.end, text: needQuote ? `"${t.replace(/"/g, '""')}"` : t });
     } else if (b.key) {
       const keys = /** @type {Set<string>} */ (keysOf.get(b.obj));
       keys.delete(s.text);
       let k = t;
       for (let n = 2; keys.has(k); n++) k = `${t} (${n})`;
       keys.add(k);
-      raw.push({ from: b.start, to: b.end, text: JSON.stringify(k) });
-    } else raw.push({ from: b.start, to: b.end, text: JSON.stringify(t) });
+      if (k !== t) notes.keys.push([k, s.text]);
+      push(b.nest, { from: b.start, to: b.end, text: JSON.stringify(k) });
+    } else if (wasNumber.has(s.text) && /^-?\d+(?:\.\d+)?$/.test(t)) {
+      push(b.nest, { from: b.start, to: b.end, text: t }); // метка была числом — восстанавливается числом
+    } else {
+      if (b.number && /^\[[^\]]+\]$/.test(t)) notes.numbers.push(t);
+      push(b.nest, { from: b.start, to: b.end, text: JSON.stringify(t) });
+    }
   }
-  raw.sort((a, b) => a.from - b.from);
+  // строки с JSON внутри — от самых вложенных: новый внутренний текст кладётся строкой в объемлющий
+  const nests = [...raws.keys()].filter(Boolean).sort((a, c) => c.depth - a.depth);
+  for (const n of nests) push(n.parent, { from: n.start, to: n.end, text: JSON.stringify(applyRaw(n.text, /** @type {any[]} */ (raws.get(n)))) });
+  const top = /** @type {any[]} */ (raws.get(null));
+  const out = applyRaw(doc.plain.text, top);
+  const changed = top.length ? [MAIN] : [];
+  /** @type {any} */
+  const res = { bytes: encodeText(out, doc.plain), text: out, changedParts: changed, removedParts: [], mime: MIME[doc.format] || 'text/plain' };
+  if (notes.numbers.length || notes.keys.length) res.restore = notes;
+  return res;
+}
+
+/** Замены диапазонов текста (не пересекаются). */
+function applyRaw(text, list) {
+  const sorted = [...list].sort((a, b) => a.from - b.from);
   let out = '';
   let pos = 0;
-  for (const r of raw) {
-    out += doc.plain.text.slice(pos, r.from) + r.text;
+  for (const r of sorted) {
+    out += text.slice(pos, r.from) + r.text;
     pos = r.to;
   }
-  out += doc.plain.text.slice(pos);
-  const changed = raw.length ? [MAIN] : [];
-  return { bytes: encodeText(out, doc.plain), text: out, changedParts: changed, removedParts: [], mime: MIME[doc.format] || 'text/plain' };
+  return out + text.slice(pos);
 }
 
 /**
@@ -529,7 +592,7 @@ export const PLAIN_ADAPTER = Object.freeze({
   mime: 'text/plain',
   detect: (bytes, name) => hasExtension(name, EXTENSIONS),
   parse: (bytes, name) => parsePlain(bytes, name),
-  serialize: (doc, edits) => serializePlain(/** @type {any} */ (doc), edits),
+  serialize: (doc, edits, options) => serializePlain(/** @type {any} */ (doc), edits, /** @type {any} */ (options)),
   parts: () => [],
   analysisWarnings: plainWarnings,
 });

@@ -1006,6 +1006,50 @@ e2e и сборка — под `flock /home/alexf14/.local/tmp/claude-1000/docx-
   лимит `pack.spec.js` 400 → 512 КиБ (решение владельца), бюджет модулей форматов считает и общие куски; `person-dict.perf.spec.js` (WP7) —
   порог прежний (≤ 130 %), замер — лучший из чередующихся прогонов (под нагрузкой параллельных тестов отношение двух медиан дрожало: 1,306).
   Итог доработки: `npm test` дважды подряд — 85 файлов (1 пропущен), 2 146 тестов пройдено; `npm run e2e` — 93 пройдено, 7 пропущено.
+- **Повторное ревью** (после слияния WP12-C, `e1db44c`): закрыты пункты 1–9 (`docs/contracts.md` §9.8 «Повторное ревью»): кэш и части сводных
+  таблиц; имя файла с точками; тот же файл под другим именем — новый анализ, нейтральное имя при сбое, уникальные имена в отправке (e2e
+  `formats.spec.js`); внешние цели связей (аудио, видео, шаблоны) — нейтральное имя всегда; JSON в строке JSON; `MACROS_NOT_PROCESSED`;
+  восстановление JSON (числа — числами, ключи — исходными, пометки в карте); имя «Резюме Анна» не становится ФИО; язык меток по ключам на
+  кириллице; справка ru/en; плюс диаграммы Word (`word/charts`) по прогону конвейера ревьюера. Файлы ревьюера и его генераторы —
+  `tests/fixtures/office/real/review/` (тест `real-office.spec.js`, бэклог — ФИО в %-кодированной гиперссылке).
+  **Снимок `docx-regression` переснят** после слияния. Доказательство: код `f86cdc1` давал ровно прежний снимок на всех 42 файлах;
+  находки (категория, метка, тексты вхождений) кода `f86cdc1` и после слияния сравнены по каждому файлу и режиму — каждый изменившийся хеш
+  объясняется только категориями WP12-C и частями паспорта (CARD → OMS у 16-значного полиса ОМС, OGRN → VEHICLE_DOC у номера ЭПТС — переклассы
+  WP12-C); файлов с прежними находками и другим хешем — 0; 15 файлов — новые DOCX-жанры WP12-C (court, form, medical, realty, vehicle);
+  ещё 2 — файлы ревьюера `office/real/review/n6.docx`, `n7.docx` (новые записи снимка; хеши остальных 57 после доработки не менялись).
+  «PASSPORT» в обеих колонках — группа паспорта сменилась: орган, код и дата выдачи ушли в свои категории.
+
+  | Файл | Изменились режимы | Появились категории | Исчезли |
+  |---|---|---|---|
+  | `genres/court/court-claim.docx` | normal, commercial, strip | CLIENT_NO, COURT_CASE, INVOICE_NO, IP, IP_REG, MAC, NOTARY_REG, ORDER_NO, POA, TENDER | — |
+  | `genres/court/court-enforcement.docx` | normal, commercial, strip, restore | COURT_CASE, DRIVER_LICENSE, ENFORCEMENT | PASSPORT |
+  | `genres/court/court-ruling.docx` | normal, commercial, strip, restore | COURT_CASE, PASSPORT, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER | PASSPORT |
+  | `genres/form/form-employee.docx` | normal, commercial, strip | CIVIL_CERT, DRIVER_LICENSE, INTL_PASSPORT, MILITARY_ID, NICKNAME, OMS, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER, SPECIAL | CARD, PASSPORT |
+  | `genres/form/form-family.docx` | normal, commercial, strip | CIVIL_CERT, OMS, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER, SPECIAL | CARD |
+  | `genres/form/form-migrant.docx` | normal, commercial, strip | MIGRATION_CARD, OMS, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER, RESIDENCE_PERMIT, SPECIAL | CARD |
+  | `genres/invoice/invoice-licenses.docx` | commercial, strip | INVOICE_NO | — |
+  | `genres/invoice/invoice-services.docx` | commercial, strip | INVOICE_NO | — |
+  | `genres/invoice/upd-ip.docx` | commercial, strip | INVOICE_NO | — |
+  | `genres/letter/letter-guarantee.docx` | commercial, strip | INVOICE_NO | — |
+  | `genres/letter/letter-reply.docx` | commercial, strip | ORDER_NO | — |
+  | `genres/medical/med-certificate.docx` | normal, commercial, strip | HEALTH, OMS | — |
+  | `genres/medical/med-discharge.docx` | normal, commercial, strip | HEALTH, OMS | CARD |
+  | `genres/medical/med-driver.docx` | normal, commercial, strip | DRIVER_LICENSE, HEALTH, OMS | — |
+  | `genres/realty/realty-land.docx` | normal, commercial, strip, restore | CADASTRAL, EGRN_RECORD, PASSPORT, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER | PASSPORT |
+  | `genres/realty/realty-lease.docx` | normal, commercial, strip, restore | CADASTRAL, EGRN_RECORD, PASSPORT, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER | PASSPORT |
+  | `genres/realty/realty-sale.docx` | normal, commercial, strip, restore | CADASTRAL, EGRN_RECORD, NOTARY_REG, PASSPORT, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER, POA | PASSPORT |
+  | `genres/reconciliation/reconciliation-ao.docx` | commercial, strip | INVOICE_NO | — |
+  | `genres/reconciliation/reconciliation-ip.docx` | commercial, strip | INVOICE_NO | — |
+  | `genres/reconciliation/reconciliation-ooo.docx` | commercial, strip | INVOICE_NO | — |
+  | `genres/vehicle/vehicle-epts.docx` | normal, commercial, strip, restore | DRIVER_LICENSE, PASSPORT, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER, PLATE, VEHICLE_DOC, VIN | OGRN, PASSPORT |
+  | `genres/vehicle/vehicle-lease.docx` | normal, commercial, strip, restore | DRIVER_LICENSE, PASSPORT, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER, PLATE, VEHICLE_DOC, VIN | PASSPORT |
+  | `genres/vehicle/vehicle-sale.docx` | normal, commercial, strip, restore | DRIVER_LICENSE, PASSPORT, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER, PLATE, VEHICLE_DOC, VIN | PASSPORT |
+  | `heldout/contract/01-dogovor-uslug.docx` | normal, commercial, strip, restore | PASSPORT, PASSPORT_DATE, PASSPORT_ISSUER | PASSPORT |
+  | `sample-contract.docx` | normal, commercial, strip, restore | PASSPORT, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER | PASSPORT |
+  | `scripts/make-sample.mjs#buildSampleDocx` | normal, commercial, strip, restore | PASSPORT, PASSPORT_DATE, PASSPORT_DEPT, PASSPORT_ISSUER | PASSPORT |
+
+  Изменённые ожидания повторного ревью: `text-formats.spec.js` — в `.log` IP теперь `[IP_1]` (категория 0.5); `host.spec.js` (PDF) — тот же файл
+  под другим именем получает новую сессию с перенесёнными решениями (прежде — ту же сессию); снимок `docx-regression.json` — см. выше.
 - **Не сделано:** упоминания `@Имя` в цепочках комментариев Excel (`startIndex`/`length`) не пересчитываются; `chartEx` и OLE-объекты, кроме книг
   Excel, не разбираются и не удаляются (предупреждение остаётся); у Word встроенные книги обезличиваются только через хост (прямой `parseDocx` их не
   видит) и при восстановлении файла не разбираются; изображения и сканы не перехватываются (OCR — 0.6). Варианты ФИО (инициалы, падежи) и инициалы

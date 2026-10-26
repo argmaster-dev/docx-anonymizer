@@ -145,3 +145,39 @@ test.describe('восстановление файла от ИИ: .xlsx, .pptx, 
     });
   }
 });
+
+test.describe('имя файла (ревью WP12-B)', () => {
+  test('тот же файл под именем с ФИО → сайт получает имя с меткой, не исходное; два файла с одной меткой в имени — разные имена', async ({
+    context,
+    extensionId,
+  }) => {
+    const { makeDocx, para, run } = await import('../helpers/docx.js');
+    const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    const bytes = Buffer.from(makeDocx(para(run('Подписала Кравченко Ольга Петровна, почта k.olga@example.org.'))));
+    const page = await setup(context, extensionId);
+    await page.setInputFiles('#single', { name: 'договор.docx', mimeType: DOCX, buffer: bytes });
+    await expect(page.getByTestId('btn-anonymize')).toBeEnabled({ timeout: 60000 });
+    await page.getByTestId('btn-anonymize').click();
+    await expect(page.getByTestId('done-title')).toBeVisible({ timeout: 30000 });
+    await page.getByTestId('btn-done-close').click();
+    await page.setInputFiles('#single', { name: 'Кравченко_Ольга_Петровна.docx', mimeType: DOCX, buffer: bytes });
+    await expect(page.getByTestId('btn-anonymize')).toBeEnabled({ timeout: 60000 });
+    await page.getByTestId('btn-anonymize').click();
+    await expect(page.getByTestId('done-title')).toBeVisible({ timeout: 30000 });
+    const got = await dump(page);
+    expect(got.map((g) => g.name)).toEqual(['договор.anon.docx', expect.stringMatching(/^\[ФИО_\d+\]\.anon\.docx$/)]);
+    await page.getByTestId('btn-done-close').click();
+    // одна отправка: два разных файла с одним человеком в имени — имена результатов не совпадают
+    await page.setInputFiles('#multi', [
+      { name: 'Иванов Иван Петрович.docx', mimeType: DOCX, buffer: Buffer.from(makeDocx(para(run('Первый файл.')))) },
+      { name: 'Иванов_Иван_Петрович.docx', mimeType: DOCX, buffer: Buffer.from(makeDocx(para(run('Второй файл.')))) },
+    ]);
+    await expect(page.getByTestId('btn-anonymize')).toBeEnabled({ timeout: 60000 });
+    await page.getByTestId('btn-anonymize').click();
+    await expect(page.getByTestId('done-title')).toBeVisible({ timeout: 30000 });
+    const names = (await dump(page)).slice(2).map((g) => g.name);
+    expect(names).toHaveLength(2);
+    expect(new Set(names).size).toBe(2);
+    for (const n of names) expect(n).not.toMatch(/Иванов/);
+  });
+});

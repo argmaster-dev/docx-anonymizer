@@ -194,7 +194,7 @@ describe('.txt, .log, .md — как есть', () => {
     expect(out.text).toBe('# Отчёт\r\n\r\n- менеджер: [ФИО_1]\r\n- почта: [EMAIL_1]\r\n\r\n| a | b |\r\n');
     const log = '2026-10-26 10:00:01 INFO login user=a.laptev@example.com ip=10.0.0.1\n2026-10-26 10:00:02 INFO ok\n';
     const r = await run(enc(log), 'app.log');
-    expect(r.out.text).toBe('2026-10-26 10:00:01 INFO login user=[EMAIL_1] ip=10.0.0.1\n2026-10-26 10:00:02 INFO ok\n');
+    expect(r.out.text).toBe('2026-10-26 10:00:01 INFO login user=[EMAIL_1] ip=[IP_1]\n2026-10-26 10:00:02 INFO ok\n');
     expect(r.result.mime).toBe('text/plain');
   });
 

@@ -8,7 +8,7 @@ import { common } from '../ui/i18n/common.js';
 import { panel as panelDict } from '../ui/i18n/panel.js';
 import { MSG, ProtocolError, makeRequestId } from '../shared/protocol.js';
 import { saveSettingsPatch } from '../shared/settings-store.js';
-import { isSupported, isPdfFile, resultType, mappingFileName, isInvalidatedError, makeResultName } from './files.js';
+import { isSupported, isPdfFile, resultType, mappingFileName, isInvalidatedError, makeResultName, neutralName, uniqueResultName } from './files.js';
 import { Link, contextValid, readOpenShadowFlag } from './runtime.js';
 import { exclusionValue } from '../ui/preview/model.js';
 import { shouldShowOrgPolicyHint, withMaskedCompany } from '../ui/panel/org-policy.js';
@@ -245,6 +245,7 @@ async function runOnce(originals, deps) {
       let replacements = 0;
       const out = originals.slice();
       let stepNo = 0;
+      const usedNames = new Set();
       const ready = procIdx.filter((i) => analyzed.has(i) && panel.getPreview(procIdx.indexOf(i)));
       for (const i of ready) {
         const k = procIdx.indexOf(i);
@@ -261,9 +262,14 @@ async function runOnce(originals, deps) {
         const own = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|log|md|csv|json)$/i.test(originals[i].name || '');
         const ext = isPdfFile(originals[i]) ? /\.(md|txt)$/i.exec(res.name || '')?.[0] : own ? undefined : /\.(xlsx|pptx)$/i.exec(res.name || '')?.[0];
         // имя от хоста — если сессия этого же файла: в нём найденное в имени заменено метками (ревью WP12-B, п. 16);
-        // сессия прежнего файла с тем же содержимым (§3.6) — по имени исходного файла, как раньше
-        const resultName =
-          analyzed.get(i).name === originals[i].name && res.name ? res.name : makeResultName(originals[i].name, settings.outputSuffix, ext ? { ext } : {});
+        // fail-closed: имени хоста нет или оно от другой сессии — нейтральное «document.anon.<расширение>», а не исходное имя;
+        // в одной отправке имена не повторяются (два «[ФИО_1].anon.docx» → второй «[ФИО_1] (2).anon.docx»)
+        const ownName = analyzed.get(i).name === originals[i].name && res.name;
+        const resultName = uniqueResultName(
+          ownName ? res.name : makeResultName(neutralName(originals[i].name), settings.outputSuffix, ext ? { ext } : {}),
+          usedNames,
+          settings.outputSuffix,
+        );
         const file = new File([res.bytes], resultName, {
           type: resultType(originals[i], res.mime),
           lastModified: Date.now(),

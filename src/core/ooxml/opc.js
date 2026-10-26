@@ -13,7 +13,8 @@ const CORE_META = new Set(['dc:creator', 'cp:lastModifiedBy', 'dc:title', 'dc:su
 const APP_META = new Set(['Company', 'Manager', 'HyperlinkBase']);
 
 /**
- * Связи части (FR-13): внешние ссылки (`TargetMode="External"`) — атрибутные потоки `rel-target`.
+ * Связи части (FR-13): внешние ссылки (`TargetMode="External"`) — атрибутные потоки `rel-target` (гиперссылки) и `rel-external`
+ * (прочие внешние цели — путь заменяется всегда, ooxml/serialize.js).
  * @param {string} name
  * @param {string} xml
  * @param {import('./model.js').ParseContext} ctx
@@ -28,7 +29,10 @@ export function parseRelsPart(name, xml, ctx) {
     const mode = attrs.find((x) => x.name === 'TargetMode');
     const target = attrs.find((x) => x.name === 'Target');
     if (mode && mode.raw === 'External' && target && target.raw) {
-      addAttrStream(part, ctx, target, 'rel-target', 'Relationship/@Target');
+      // гиперссылка — `rel-target` (FR-13: метка в URL); прочие внешние цели (аудио, видео, рисунок, шаблон, внешняя книга:
+      // file:///C:/Users/<логин>/…/Звонок Иванову.mp3) — `rel-external`: путь заменяется нейтральным именем всегда (ревью WP12-B)
+      const type = String(attrs.find((x) => x.name === 'Type')?.raw || '').replace(/^.*\//, '');
+      addAttrStream(part, ctx, target, type && type !== 'hyperlink' ? 'rel-external' : 'rel-target', 'Relationship/@Target');
     }
   });
   return part;

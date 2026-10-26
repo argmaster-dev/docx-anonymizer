@@ -145,6 +145,20 @@ export function linkAuthors(list) {
  * @param {string} root  'xl/' или 'ppt/'
  */
 export function embeddedWarning(entries, root) {
+  return [...embeddedCount(entries, root), ...macroWarning(entries)];
+}
+
+/**
+ * Макросы (vbaProject.bin в .xlsm, .pptm, .docm; ревью WP12-B): код VBA и его строки не разбираются — предупреждение
+ * MACROS_NOT_PROCESSED (файл уходит с макросами как есть).
+ * @param {import('./zip.js').ZipEntry[]} entries
+ */
+export function macroWarning(entries) {
+  return entries.some((e) => /(?:^|\/)vbaProject\.bin$/i.test(e.name)) ? [{ code: 'MACROS_NOT_PROCESSED', count: 1 }] : [];
+}
+
+/** Счётчик встроенных объектов и медиа (FR-15). */
+function embeddedCount(entries, root) {
   const counts = { embeddings: 0, media: 0 };
   for (const e of entries) {
     if (e.name.startsWith(`${root}embeddings/`)) counts.embeddings++;
@@ -227,4 +241,17 @@ export function chartExternalData(name, xml, rels) {
     }
   });
   return out;
+}
+
+/**
+ * Часть диаграммы (chartN.xml): заголовки и подписи DrawingML + кэш строк рядов и категорий `<c:v>` в `c:strCache`/`c:lvl`
+ * (`cell-cache`). Общая для Excel, PowerPoint и Word (у Word диаграммы разбирает хост, core/embedded.js).
+ * @param {string} name
+ * @param {string} xml
+ * @param {import('./model.js').ParseContext} ctx
+ */
+export function parseChartPart(name, xml, ctx) {
+  const part = parseDrawingPart(name, xml, ctx);
+  addElementTextStreams(part, ctx, (n, stack) => (n === 'c:v' && stack.some((x) => x === 'c:strCache' || x === 'c:lvl') ? 'cell-cache' : null));
+  return part;
 }

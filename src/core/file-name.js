@@ -6,8 +6,13 @@
 export const FILE_NAME_PART = '#file-name';
 const ID = 'fname';
 
+/** Слова-типы документа в начале имени («Резюме Анна», «Договор Иванов И.И.») — со строчной, чтобы не стать частью ФИО. */
+const DOC_WORDS_RE =
+  /(^|[\s_])(резюме|заявка|заявление|договор|счёт|счет|акт|анкета|паспорт|карточка|отчёт|отчет|справка|приказ|доверенность|письмо|выгрузка)(?=[\s_.,-]|$)/giu;
+
 /**
- * Добавляет поток имени файла (без расширения; «_» и «.» читаются как пробелы — позиции те же). Повторно — не добавляет.
+ * Добавляет поток имени файла (без расширения; «_» читается как пробел — позиции те же, точки остаются: «Иванов И.И. договор»).
+ * Повторно — не добавляет.
  * @param {any} doc
  * @param {string} name
  */
@@ -15,6 +20,7 @@ export function addFileNameStream(doc, name) {
   if (!name || doc.streamById?.has(ID)) return;
   const base = String(name).replace(/\.[^./\\]+$/, '');
   if (!/\p{L}|\d{5}/u.test(base)) return;
+  const text = base.replace(/_/g, ' ').replace(DOC_WORDS_RE, (m, sep, w) => sep + w.toLowerCase());
   const s = {
     id: ID,
     part: FILE_NAME_PART,
@@ -22,7 +28,7 @@ export function addFileNameStream(doc, name) {
     type: 'attr',
     attrKind: 'file-name',
     xpath: 'file name',
-    text: base.replace(/[_.]/g, ' '),
+    text,
     pos: 0,
     order: doc.streams.length,
     base,

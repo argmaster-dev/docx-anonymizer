@@ -47,22 +47,58 @@
     "strip": "aa5b6c5982a9ac9f1230e104a66a47c67d579ac47e83132f8ad7731c93f0ce5b",
     "restore": "6cce4881849ccbf5e6b6ab789e19d2f2451f7049ebab03cd319bfff9e9330d23"
   },
+  "tests/fixtures/genres/court/court-claim.docx": {
+    "normal": "24876c9811db5dbe86bbf5f09dacc8b5143ae8acf416a8abbcf8a5df9ac74169",
+    "commercial": "f1110a09ae00341ddee0033db973c333e99b8d1dd7e51ea7d9cecd724f373779",
+    "strip": "adad8a20855c19da726339cab94e2969370228539a276e76cfac2f1672e8cbf6",
+    "restore": "ac50306fe51e3e49250a7deda6d5d4cbb663d4b8355424fbcddf02174244ae7d"
+  },
+  "tests/fixtures/genres/court/court-enforcement.docx": {
+    "normal": "636069587120e1ca9c12124e453720918c1b773f13076a993c279a8e0307ad41",
+    "commercial": "636069587120e1ca9c12124e453720918c1b773f13076a993c279a8e0307ad41",
+    "strip": "c830ecfbb5e139a331826e78f42a009099689d086459f2b7d8fc288b13f9f597",
+    "restore": "27156059cfa781f6052bbfb2105bbfa840600a0ecc1293bf83b04ed3941f629d"
+  },
+  "tests/fixtures/genres/court/court-ruling.docx": {
+    "normal": "055353ecac06b66d493ba3c8eb46dd556b92ac8463fa05799a5fef04e02768e7",
+    "commercial": "055353ecac06b66d493ba3c8eb46dd556b92ac8463fa05799a5fef04e02768e7",
+    "strip": "03ebf40d5d9d395cd63f9df9e5982820959477384e3c3c2b5a8a3340f7e05b08",
+    "restore": "bae60d82c78e4b015d6089435671c3ab3adb154a91cd03f238e794b3542c5394"
+  },
+  "tests/fixtures/genres/form/form-employee.docx": {
+    "normal": "7db83072136961a1451985d973d2bde7c915763c8630439b55a72e08a7daa9e7",
+    "commercial": "7db83072136961a1451985d973d2bde7c915763c8630439b55a72e08a7daa9e7",
+    "strip": "30b18f6afd3ba66086a101a9d526ae67566730316299f2e14c0fec27e9187a3e",
+    "restore": "edcc49f472619f27f38872564674953f8f39c1b5aa598c60c12a901b6710523a"
+  },
+  "tests/fixtures/genres/form/form-family.docx": {
+    "normal": "d5acf453068ad2b9d82c3ad81a9f3a12a6af1df2e4a2ea73ef814a571c2d69ba",
+    "commercial": "d5acf453068ad2b9d82c3ad81a9f3a12a6af1df2e4a2ea73ef814a571c2d69ba",
+    "strip": "6a6b26f4e2dad61866769101c1200a1f528998e598766f2a7f1fc4c052c0c753",
+    "restore": "b4fcbde5ef42d2ca09dacce0122fff134d26e9a9db75c88e56edc99d9e26b670"
+  },
+  "tests/fixtures/genres/form/form-migrant.docx": {
+    "normal": "753446b115f763f161da8032db0b086151bc95da4dce6873aa1710c6a126a1dc",
+    "commercial": "753446b115f763f161da8032db0b086151bc95da4dce6873aa1710c6a126a1dc",
+    "strip": "cb7456a6390555deb694d0295faa0dc1f0097edbc4d0515d3990c19301fdfee4",
+    "restore": "58d9775e8febe914aeb35a1bef26a29172503d19453aaa19a4f5d1a8b55b86b4"
+  },
   "tests/fixtures/genres/invoice/invoice-licenses.docx": {
     "normal": "86e6119aa3088db2079106548091bc0bb984d752761bf0756b00f7af871332be",
-    "commercial": "1519e98cc830b8bce4ae1305e62a42ae8636e20ab93fcae5133eb94d2259bf76",
-    "strip": "7e1e1ddbaa370aff1a2aff1a5c15d4ee665ac6b78f1e74529ce107a9dbca5842",
+    "commercial": "8089c5f2e2a9add760727d793dc49ac533e765b18fcd74e249e95d7aff83599c",
+    "strip": "6a6d78fc402d082dcbe8913296b79759d7d8cbd587517755fad29ef6e2c4ffbc",
     "restore": "48e831f3c0f46384c4c62e180d0920c0bec49f0dc9816e92c538de8638e2f60f"
   },
   "tests/fixtures/genres/invoice/invoice-services.docx": {
     "normal": "5c666cead265a959a5dc8bdea541b6c1bde2008f402b289daf5ebeccddcd4177",
-    "commercial": "cde75c9a8db91e4bb37a2dc2a678bb911cb5395150d189c49b334299e73e2508",
-    "strip": "a9354bb696970327513c5db6eea39bf33545a2fc5c25d5adc6ff353159c381d5",
+    "commercial": "41f352c158b40b362c93212e0af0ceec14962bd7da4a02add986c586e7b68cbf",
+    "strip": "d9c5be3a6dbcf68da872f46027df0bfcbb3331c50791b112d2b25a37e8c9f777",
     "restore": "b7976ba1eca5241b4f32d74b16e276a46dcb92fcf7ade72bde882589fca3d177"
   },
   "tests/fixtures/genres/invoice/upd-ip.docx": {
     "normal": "c631a757589ecaf8c199df2fce2a82fe2b5d80d8c6ca453faa7311aec7eaf3bb",
-    "commercial": "f138930bad71a22afe0304acfd7e15cde95280138b5fe6c9870a7a064422af7b",
-    "strip": "ec8088c8e88cbfd757c267721182423f1873fecce6096e92831ad482bbe1f5d6",
+    "commercial": "4a9f86242176f1c49481f10fcb3e565590b667655edb7e448f544c599dd32781",
+    "strip": "4e291ae686fcf589f6d014bcfc1d7f230529596d6aacecf503fa88174f8de4f7",
     "restore": "e9a2c27f2bef7f1ef1b31462ba7e92cf1c76a441a1c63d0a0fe9b9bf737d9fca"
   },
   "tests/fixtures/genres/letter/letter-en.docx": {
@@ -73,14 +109,14 @@
   },
   "tests/fixtures/genres/letter/letter-guarantee.docx": {
     "normal": "fa3540945c62f09bc25adfe7720fc455d56fc39c07191fca88cc55279732483b",
-    "commercial": "a301c678621c0d6627ded0adcd19df14699495841c0e94ca1c354ce30323dae5",
-    "strip": "637002233846e7bdca60f2545c8ab56f38700b9ff5937da689272294a3a26e3a",
+    "commercial": "a0fc915f1a98af29960f30f7123fda72fc675b530a831454f667b60c968bf695",
+    "strip": "f63ccfff6df6862c2d3b1535832a47a3a7747432c05fe908d342c2b00a2d67fa",
     "restore": "c5a83f730880a8bd8d262ec87cbb08ae2c7390cb539a50d32e33f3c498f02c91"
   },
   "tests/fixtures/genres/letter/letter-reply.docx": {
     "normal": "4f3c1f475b29609474c4a509747d5d5b86a43f435a13899e6b5a8be256050282",
-    "commercial": "80658cf78b6be3836584479f1197fbf5d43d0dbfb3b5946066f2aa8a9de7f18e",
-    "strip": "7c21498e2e3160370e0d0f8a0a6b17cc909f115242359f5c8c0201e1a138e3ab",
+    "commercial": "22a9d6658372d3dbe8ae7d314be3b4fb3b37abb37e458b92a97fed782e974d79",
+    "strip": "c781bff5cba04daef0330398cf4ab1c53910c0a3441f19d36e246fe71e3a9add",
     "restore": "c95d56516059e4266beb5a70ef8a109a3be57688a4b2c691c809d0fdfa8d1e9d"
   },
   "tests/fixtures/genres/letter/letter-schedule.docx": {
@@ -107,6 +143,24 @@
     "strip": "1bb152eec305f8dd0f0da134a7ce516c2873d6a1101f5c9b08eed77a2aeae6ac",
     "restore": "cfb885653bbdf7cbc9f13bb7fa70699f76f915246862ca08124764c4859c4829"
   },
+  "tests/fixtures/genres/medical/med-certificate.docx": {
+    "normal": "1d478f5edd5ebe4c95839e5099ef5fd2cde577b8e94ac4fc5fff1514c5ab6c0a",
+    "commercial": "1d478f5edd5ebe4c95839e5099ef5fd2cde577b8e94ac4fc5fff1514c5ab6c0a",
+    "strip": "b2cbf6dbc0417e426e4284437e5e61086c97df607083154705bc97add5cbe1e3",
+    "restore": "a21129a9a8b316f98ccff08626091c5478743a5b5cd4cd97c3fc2787a7dd31bd"
+  },
+  "tests/fixtures/genres/medical/med-discharge.docx": {
+    "normal": "5767545a5fea5fb6eb29280a3160be632ff7174f3ae6bd586cd33b88357ccc06",
+    "commercial": "5767545a5fea5fb6eb29280a3160be632ff7174f3ae6bd586cd33b88357ccc06",
+    "strip": "d8d816b22489084aefd551efe90dc5379dc4b77e8295abd1cdb26ee19788b9b7",
+    "restore": "da799e1b5a6806d55132b1dce8b9866d55c0ecde8cd99a3372484a33c5e58f36"
+  },
+  "tests/fixtures/genres/medical/med-driver.docx": {
+    "normal": "d15ae3be8559915f8dbffc422ac154912d5f47063f58b7d357611252e521e2bb",
+    "commercial": "d15ae3be8559915f8dbffc422ac154912d5f47063f58b7d357611252e521e2bb",
+    "strip": "582f45ca7ada6ba4a40aa4fabf5716a8f95bd5c61f1706ad964b1c7ef9f96dbb",
+    "restore": "1b5f2c22048f36172ac19d04b893c16be0319f98bf0f3eb8a20a618924f8291a"
+  },
   "tests/fixtures/genres/proposal/kp-lunopark.docx": {
     "normal": "b52693dac85d5b6e2bbf39c600b22831f37279525c283d6bf6f1d1c3df0d93f2",
     "commercial": "906ea38086773ab00f28e01177768018c7d99ff54f8cd92d8da23248aaf7193c",
@@ -125,22 +179,40 @@
     "strip": "aff4dbee71e39330dcaa7ec0bb7377ba6e3b6ed4c260e5b05f40ef6a672291df",
     "restore": "b57b33fcee2eb7d2656567f0a3c4c5656ae52e87b54ed95b89e36eed7a0672f0"
   },
+  "tests/fixtures/genres/realty/realty-land.docx": {
+    "normal": "d2e33f1cd770e10eb8dd46b3e5eab638510f247d46b2be6e816ea48cb6090a63",
+    "commercial": "d0412c70466d79a34eafe151fa67e43639aae335be2504d555f428a588c53ccf",
+    "strip": "46ecad0d5f3cd0358c3d7c40c762b29ca6b91562950a75996c21f05e68629166",
+    "restore": "0b31a5bd1e374185b30ff772a83df1959ed225c470fe0b947201a9833d27c6e0"
+  },
+  "tests/fixtures/genres/realty/realty-lease.docx": {
+    "normal": "dcaaf447cc38103c11fe0ac08f99b9c371435b2cc98a87eaa39692c093a8a2d2",
+    "commercial": "dcaaf447cc38103c11fe0ac08f99b9c371435b2cc98a87eaa39692c093a8a2d2",
+    "strip": "33be3ebfe9f8689c7a857a4693e99fb41d1bdc842504c558563ffad42bdb5bff",
+    "restore": "8493f8960333965dafbb8ea6864970bd772607fb1ae093dafde1372eda9a0272"
+  },
+  "tests/fixtures/genres/realty/realty-sale.docx": {
+    "normal": "3d238773d90b09458ac65702c68f2ba4a19802380d2d58c56820b25e31438e8d",
+    "commercial": "3d238773d90b09458ac65702c68f2ba4a19802380d2d58c56820b25e31438e8d",
+    "strip": "dad71a56f31a64ae35fea66815aea954baef1f9ecc1aabb2a7f881a550e65295",
+    "restore": "28e47d3a6eeba6c77da738fce4b19191d7f0c0bee52cf11b40e06cc80a0907e9"
+  },
   "tests/fixtures/genres/reconciliation/reconciliation-ao.docx": {
     "normal": "8d4cf02d77cdc8600cc272def39836a3ef4d919c1ec0baf57f580c354fac766e",
-    "commercial": "f0e9d2e9142b9563a27067063697ca6acd7b3b4f6348bb2911da40521edbc62c",
-    "strip": "5000f0bbbefb403cbe7cc228dc96353aa9fa67d3e73e0e302f0ab563bbe55a6d",
+    "commercial": "aece3bc05405c4be008300cee1039fe33668329cdd1dfa7c6ecc1ad3d25c67be",
+    "strip": "1bd9c0de01a251499c683c2c3a4a2674128951a8782794e1ec3080780117b15b",
     "restore": "9f11c6a4c1fab4b9d5b8721b3556e128746fab675a0252e83e84c38224cf4ab1"
   },
   "tests/fixtures/genres/reconciliation/reconciliation-ip.docx": {
     "normal": "13d5ef27b03e10393063b09f24bbd61c0f9cc9dc9c529fca3e2386f375f1a6cc",
-    "commercial": "b300616b44b94536e2c3854e43fdecaa1b5218fecb512da72fa979bd2f23f233",
-    "strip": "eb6ffabae6c78315d7cac7db3d7d69abd3204c69df1e14e60b1d6634a3283772",
+    "commercial": "d98f5db7a6aa0c785bed84fd3ca60b08830d03de16c0d40bdd257737368ef9e5",
+    "strip": "3640241c9780d2b324b10dffe19fd35be64d45a1e73877a38a96814c20a98f0d",
     "restore": "3e2a90bd3f2130d950d6912d182364f73d2f71daea994dec0859552dc1356334"
   },
   "tests/fixtures/genres/reconciliation/reconciliation-ooo.docx": {
     "normal": "faaf4679a6a38392156bc43b3bba381e687d1282cb1dd054c50ba92131bfe019",
-    "commercial": "83e667cf05a4c153ea83e83b4893f67bdc69488ae867afa9df8a2fdea313d5e7",
-    "strip": "3ced9b74365b97baac9c31d65a47de2f034b6c0232074aac714b4ac51284d0ce",
+    "commercial": "33f2790c4f6a7ec4f7d2e1a0083fc7118ad86a24657a049df30a412c5e8af0d2",
+    "strip": "148334d764a23e0bcf8975363420252ced55749106f473227bb1ec04287eb76e",
     "restore": "5b2e0665a0fcec1404a8b5205d3920368414ff3dc1992b194d0bc3e09622bba5"
   },
   "tests/fixtures/genres/resume/resume-accountant.docx": {
@@ -167,6 +239,24 @@
     "strip": "fc1e4a3a3b7ade4e4a78658ad6f4fee3224039a4957fd8caabc16724be6432c5",
     "restore": "85e5cbb8a82088cf0d8c5623f3b37ea99f517d8bfebdf50726a08769e6313b35"
   },
+  "tests/fixtures/genres/vehicle/vehicle-epts.docx": {
+    "normal": "6a9da28dc26754fdf6898ddd5d2288b1b439885bceb25d8e82c2d12bf47923e1",
+    "commercial": "6a9da28dc26754fdf6898ddd5d2288b1b439885bceb25d8e82c2d12bf47923e1",
+    "strip": "4aa336489910e9530f86621f05edb850c87aefdd6998dfe0bac4bd7390d24997",
+    "restore": "a4517b35098d15b12e83b980c6d8d7bfa9c68cfbe193b0259b6bdefceabf20b1"
+  },
+  "tests/fixtures/genres/vehicle/vehicle-lease.docx": {
+    "normal": "4e18679d2a566c7d63dfdbf9acc0141c091b2010a62d15ecc83bae57083f02a4",
+    "commercial": "0fc873a9ffedc1a5bbab38cabbcddf53d11c5b4974a4679345198e909a0b80cd",
+    "strip": "b63763904f70eb0c9a2eb6c0e021e5c4e5f59309c5c72d8820959075dae8f1de",
+    "restore": "3367b55e0a51f33283c98bfe1ef9f7d2f8cd709cbbcf366c648974abfdb80c25"
+  },
+  "tests/fixtures/genres/vehicle/vehicle-sale.docx": {
+    "normal": "65fb042247b1dcf2eded4fd02c824079f3f85ae18375e7b3d182edbd5aabeb5b",
+    "commercial": "65fb042247b1dcf2eded4fd02c824079f3f85ae18375e7b3d182edbd5aabeb5b",
+    "strip": "5211cbd2a3c8dd0210871f9b3f1561b87fbd0800a58f91911bb198fcfed51bd7",
+    "restore": "6b2dbe64bcf1a2ebfb8b8cbe6f561879e0ff2f9620ac802e46297e51a431793f"
+  },
   "tests/fixtures/heldout/chat/08-chat.docx": {
     "normal": "73f645889b1c129e9d2ce3a8bc85f05131b47105748b50b6f1d36b14dd9f917d",
     "commercial": "73f645889b1c129e9d2ce3a8bc85f05131b47105748b50b6f1d36b14dd9f917d",
@@ -180,10 +270,10 @@
     "restore": "d28321b8272eef40be134158e3e277d6fe50ea8ead4f19ab5d07f1ac5f3aa2b9"
   },
   "tests/fixtures/heldout/contract/01-dogovor-uslug.docx": {
-    "normal": "3024270c570614ce3553d5801f8ca19763037523501f136519d73f73548312f5",
-    "commercial": "3024270c570614ce3553d5801f8ca19763037523501f136519d73f73548312f5",
-    "strip": "6aaed61931fa888ff01a13189090c903a824a5bf9504b1d6a567bf5670a3e472",
-    "restore": "a8e037deb87574393fd0a95236b830c175ce9d0be878d7ad4f3ba5e0b45aa7be"
+    "normal": "7a371cf3a060b6efe771a013b66ef589d6a4b87b53d60d28d62bdd30b50f7d3e",
+    "commercial": "7a371cf3a060b6efe771a013b66ef589d6a4b87b53d60d28d62bdd30b50f7d3e",
+    "strip": "16caaf4fab91907d56fb584d188bd83e135c90d4d630dc4a27ae83fb44bcb3d5",
+    "restore": "bc050c6be11d4676c9e29bbfa15f484b4211260f2050ed6c6e19e2b83b905773"
   },
   "tests/fixtures/heldout/contract/03-doverennost.docx": {
     "normal": "bc1313e01de167db113942f5588af8f7c7937bd004bd4a2157a85782d1275d1f",
@@ -239,16 +329,28 @@
     "strip": "614606b5631e8bad4285aec2c2f69bed312abf459a44440fdf146bd319797061",
     "restore": "b7c52881ad93fa44e302c668c3def1cdb1192f060fb204d3121969782651328d"
   },
+  "tests/fixtures/office/real/review/n6.docx": {
+    "normal": "71f3e8dfe955ff281910894420317d4f0eb7451d8dce8f2116a3c580b326ef8b",
+    "commercial": "71f3e8dfe955ff281910894420317d4f0eb7451d8dce8f2116a3c580b326ef8b",
+    "strip": "ef5af34f535d0844b887d0f84648ca6fa53e71fee4459ba14e516696bd64fc95",
+    "restore": "ee914166fafd7a4fe5bc9f195899967ef51e991fd947610fb7017959d133756b"
+  },
+  "tests/fixtures/office/real/review/n7.docx": {
+    "normal": "11e434b4ecf4139d7c395e9c804be73fc77765c0baaeae0e858739cf1f606ee8",
+    "commercial": "11e434b4ecf4139d7c395e9c804be73fc77765c0baaeae0e858739cf1f606ee8",
+    "strip": "3faa2b89d24322788b6bbd8153ceae0abff52d52ea16cf288346947a783db268",
+    "restore": "2a83c6d0d4bdc9b2364718be38b20aa0a1bae57c06af54cd1d6109a3e51f0ace"
+  },
   "tests/fixtures/sample-contract.docx": {
-    "normal": "dcc488935d69e564cbabd8eaa38bc64c467f61d3ca246f7db57079b454b41441",
-    "commercial": "a9531a32b0325877dc7f3c043e77392e00850bca896724ac900e8a35c7af7809",
-    "strip": "a7b04e0c972e24aa699133a61676960f08c034feaa04190eb2fb0127dbc6c7e5",
-    "restore": "4794589979e5c74151aa6a5a1b43a10ecb6d9326a0c37c531b667972e38e6be9"
+    "normal": "c372f3badc780998d9974309d0f97682db9a64a2055cba867b03ac98b28997c1",
+    "commercial": "d393d0a955c4ff3b9414dd866f9311932d9f55d4e6d05954e35a6506895c9fc5",
+    "strip": "34e6034e3e02ca8068e2bd3d08ee1952e32e18e49612682e2a6b6335584e82d4",
+    "restore": "8e774828442d4584e2107ac2d39fd78d395b492d0de18f4f0a1170a8daa691fc"
   },
   "scripts/make-sample.mjs#buildSampleDocx": {
-    "normal": "dcc488935d69e564cbabd8eaa38bc64c467f61d3ca246f7db57079b454b41441",
-    "commercial": "a9531a32b0325877dc7f3c043e77392e00850bca896724ac900e8a35c7af7809",
-    "strip": "a7b04e0c972e24aa699133a61676960f08c034feaa04190eb2fb0127dbc6c7e5",
-    "restore": "4794589979e5c74151aa6a5a1b43a10ecb6d9326a0c37c531b667972e38e6be9"
+    "normal": "c372f3badc780998d9974309d0f97682db9a64a2055cba867b03ac98b28997c1",
+    "commercial": "d393d0a955c4ff3b9414dd866f9311932d9f55d4e6d05954e35a6506895c9fc5",
+    "strip": "34e6034e3e02ca8068e2bd3d08ee1952e32e18e49612682e2a6b6335584e82d4",
+    "restore": "8e774828442d4584e2107ac2d39fd78d395b492d0de18f4f0a1170a8daa691fc"
   }
 }

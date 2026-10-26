@@ -169,12 +169,16 @@ export function createHost(env) {
     const settings = migrateSettings({ ...(msg.settings || {}), ...(msg.settingsOverride || {}) }).settings;
     const sha256 = u.begin.sha256 || (await sha256Hex(bytes));
 
-    // §3.6: тот же файл в этой сессии браузера → прежние решения
+    // §3.6: тот же файл в этой сессии браузера → прежние решения. Под другим именем — новый анализ (в имени могут быть данные:
+    // «Кравченко_Ольга_Петровна.docx», ревью WP12-B), решения прежней сессии переносятся по ключу (категория + значение)
+    let prior = null;
     for (const s of sessions.values()) {
-      if (s.sha256 === sha256) {
+      if (s.sha256 !== sha256) continue;
+      if (s.name === u.begin.name) {
         post(entitiesMessage(requestId, s, true));
         return;
       }
+      prior = s;
     }
     // Точка ветвления (версия 0.3): PDF — по сигнатуре %PDF- или по имени .pdf; иначе — адаптер формата по сигнатуре и имени
     // (DocumentAdapter, WP12-A). Не распознан: файл без имени — Word, как до 0.5 (разбор ответит NOT_DOCX), иначе NOT_SUPPORTED
@@ -192,6 +196,7 @@ export function createHost(env) {
       adapter = await loadFormat(entry);
       doc = adapter.parse(bytes, name);
       // встроенные книги Excel (данные диаграмм, OLE) — тем же анализом и общей картой меток (core/embedded.js, ревью WP12-B)
+      // и диаграммы Word (word/charts) — разметкой диаграммы из того же модуля Excel
       await attachEmbeddedBooks(doc, loadFormat);
       progress('parse', 100);
     }
@@ -202,6 +207,13 @@ export function createHost(env) {
     const analysis = await analyze(doc, settings, { nerProvider: providerFor(settings), allocator, onProgress: progress });
     analysis.warnings.push(...dictWarnings, ...formatWarnings(adapter, doc, analysis.groups));
     const docId = `d${++docSeq}`;
+    if (prior) {
+      const prev = new Map(prior.groups.map((g) => [`${g.category}\u0000${g.normalized}`, g]));
+      analysis.groups = analysis.groups.map((g) => {
+        const p = prev.get(`${g.category}\u0000${g.normalized}`);
+        return p ? { ...g, enabled: p.enabled, replacement: p.replacement } : g;
+      });
+    }
     const session = {
       docId,
       kind,
@@ -219,7 +231,7 @@ export function createHost(env) {
       lastMapping: null,
     };
     sessions.set(docId, session);
-    post(entitiesMessage(requestId, session, false));
+    post(entitiesMessage(requestId, session, !!prior));
   }
 
   async function onAddEntity(msg, post, progress) {

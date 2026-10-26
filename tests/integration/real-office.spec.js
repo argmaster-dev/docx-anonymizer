@@ -26,7 +26,10 @@ async function anon(file, apply = {}) {
 
 describe('файлы настоящих инструментов (ревью WP12-B)', () => {
   it('набор: каждый файл каталога описан в secrets.json, у каждого есть секреты', () => {
-    const files = readdirSync(DIR).filter((f) => !/\.(py|json)$/.test(f) || f === 'pandas-export.json');
+    const files = readdirSync(DIR, { withFileTypes: true })
+      .filter((e) => e.isFile())
+      .map((e) => e.name)
+      .filter((f) => !/\.(py|json)$/.test(f) || f === 'pandas-export.json');
     expect(files.sort()).toEqual(FILES);
     for (const f of FILES) expect(SECRETS[f].length, f).toBeGreaterThan(2);
     // исходники и правда содержат каждый секрет (иначе проверка ниже ничего не доказывает)
@@ -131,7 +134,7 @@ describe('файлы настоящих инструментов: структу
     expect(def).toMatch(/refreshOnLoad="1"/);
     expect(def).not.toMatch(/minValue|maxValue|containsNumber="1" containsInteger/);
     expect(def).toMatch(/refreshedBy="\[ФИО_\d+\]"/);
-    expect(p['xl/externalLinks/_rels/externalLink1.xml.rels']).toContain('Target="external-link-1.xlsx"');
+    expect(p['xl/externalLinks/_rels/externalLink1.xml.rels']).toContain('Target="external-1.xlsx"');
     expect(p['xl/connections.xml']).toMatch(/UID=\*\*\*;PWD=\*\*\*/);
     expect(p['xl/usernames.xml']).toMatch(/name="\[ФИО_\d+\]"/);
     expect(p['xl/workbook.xml']).toMatch(/customWorkbookView name="\[ФИО_\d+\] - личное представление"/);
@@ -177,4 +180,78 @@ describe.skipIf(!LO_ENABLED)('файлы настоящих инструмент
       expect(out.has(f.replace(/\.\w+$/, '.anon.pdf')), `${f}: результат`).toBe(true);
     }
   }, 300000);
+});
+
+// Файлы повторного ревью WP12-B (tests/fixtures/office/real/review, генераторы рядом): кэш сводной LibreOffice, книга с макросами,
+// внешняя ссылка на аудио, CSV с формулами, JSON в строке JSON, диаграмма Word с книгой данных, ключи JSON с ФИО. Известное
+// (бэклог): ФИО в %-кодированной гиперссылке — `_backlog`.
+describe('файлы повторного ревью WP12-B', () => {
+  const RDIR = join(DIR, 'review');
+  const R = JSON.parse(readFileSync(join(RDIR, 'secrets.json'), 'utf8'));
+  const RFILES = Object.keys(R.files).sort();
+  const rbytes = (f) => new Uint8Array(readFileSync(join(RDIR, f)));
+
+  it('каждый секрет есть в исходнике', () => {
+    for (const f of RFILES) {
+      const found = new Set(deepLeaks(rbytes(f), R.files[f]).map((x) => x.replace(/ @ .*$/, '')));
+      expect(
+        R.files[f].filter((v) => !found.has(v)),
+        f,
+      ).toEqual([]);
+    }
+  });
+
+  it.each(RFILES)('%s: ни одного исходного значения ни в одной части (кроме бэклога), и с «Удалять встроенные объекты»', async (file) => {
+    for (const apply of [{}, { stripEmbedded: true }]) {
+      const { result } = await runOffice(rbytes(file), file, { apply });
+      const allowed = new Set(R._backlog[file] || []);
+      expect(
+        deepLeaks(result.bytes, R.files[file]).filter((x) => !allowed.has(x)),
+        JSON.stringify(apply),
+      ).toEqual([]);
+    }
+  });
+
+  it('кэш сводной: числа ячеек — те же метки, что на листе; имя сводной и подписи — метками', async () => {
+    const { result } = await runOffice(rbytes('n1piv.xlsx'), 'n1piv.xlsx');
+    const p = unzipText(result.bytes);
+    const sheet = unescapeXml(Object.entries(p).find(([n]) => /worksheets\/sheet1\.xml$/.test(n))[1] + (p['xl/sharedStrings.xml'] || ''));
+    const cache = p['xl/pivotCache/pivotCacheDefinition1.xml'];
+    for (const t of cache.match(/\[(?:ИНН|ТЕЛ)_\d+\]/g)) expect(sheet, t).toContain(t);
+    expect(p['xl/pivotTables/pivotTable1.xml']).toMatch(/name="Сводная \[ФИО_\d+\]"/);
+  });
+
+  it('макросы: предупреждение MACROS_NOT_PROCESSED; внешняя ссылка на аудио — нейтральное имя', async () => {
+    const x = await runOffice(rbytes('n2.xlsm'), 'n2.xlsm');
+    expect(x.doc.warnings.map((w) => w.code)).toContain('MACROS_NOT_PROCESSED');
+    const p = await runOffice(rbytes('n3.pptx'), 'n3.pptx');
+    expect(unzipText(p.result.bytes)['ppt/slides/_rels/slide1.xml.rels']).toMatch(/Target="external-\d+\.mp3" TargetMode="External"/);
+  });
+
+  it('JSON: строка с JSON внутри обезличена и осталась строкой; восстановление — числа числами, ключи с суффиксом — исходными', async () => {
+    const r5 = await runOffice(rbytes('n5.json'), 'n5.json');
+    const j = JSON.parse(new TextDecoder().decode(r5.result.bytes));
+    expect(typeof j.clients[0].meta).toBe('string');
+    expect(JSON.parse(j.clients[0].meta).tel).toMatch(/^\[ТЕЛ_\d+\]$/);
+    const back5 = JSON.parse(new TextDecoder().decode(restoreDocument(r5.result.bytes, r5.result.mapping, { adapter: r5.adapter, name: 'n5.json' }).bytes));
+    // числа-идентификаторы — снова числа (в т.ч. внутри строки с JSON); варианты ФИО получают значение метки (как везде)
+    expect(back5.clients[0].phones[1]).toBe(89037778899);
+    expect(back5.clients[1].inn).toBe(770198765434);
+    expect(JSON.parse(back5.clients[0].meta).tel).toBe(79267771122);
+    expect(back5.clients[0].inn).toBe('027409876579');
+    const r8 = await runOffice(rbytes('n8.json'), 'n8.json');
+    const anon8 = JSON.parse(new TextDecoder().decode(r8.result.bytes));
+    expect(Object.keys(anon8).some((k) => / \(2\)$/.test(k))).toBe(true);
+    const back8 = JSON.parse(new TextDecoder().decode(restoreDocument(r8.result.bytes, r8.result.mapping, { adapter: r8.adapter, name: 'n8.json' }).bytes));
+    const src8 = JSON.parse(new TextDecoder().decode(rbytes('n8.json')));
+    for (const k of Object.keys(src8).filter((x) => !/^\[/.test(x))) expect(back8[k], k).toEqual(src8[k]);
+  });
+
+  it('Word: диаграмма и её книга данных обезличены той же картой, предупреждение о встроенных объектах снято', async () => {
+    const r = await runOffice(rbytes('n6.docx'), 'n6.docx');
+    expect(r.doc.warnings.map((w) => w.code)).not.toContain('EMBEDDED_NOT_PROCESSED');
+    const chart = unzipText(r.result.bytes)['word/charts/chart1.xml'];
+    const g = r.analysis.groups.find((x) => /Ястребова/.test(x.value));
+    expect(chart).toContain(g.placeholder);
+  });
 });

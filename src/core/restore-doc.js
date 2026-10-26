@@ -49,8 +49,14 @@ export function restoreDocx(bytes, mapping, { decline = false } = {}) {
 export function restoreDocument(bytes, mapping, { adapter, name, decline = false }) {
   const doc = /** @type {any} */ (adapter.parse)(bytes, name);
   let mime;
+  // пометки формата из карты (JSON: какие метки были числами, какие ключи получили суффикс) — по всем документам карты
+  const restore = { numbers: [], keys: [] };
+  for (const d of /** @type {any} */ (mapping).documents || []) {
+    restore.numbers.push(...(d.restore?.numbers || []));
+    restore.keys.push(...(d.restore?.keys || []));
+  }
   const r = restoreModel(doc, mapping, decline, (d, edits) => {
-    const out = adapter.serialize(d, edits, { keepMetadata: true, stripEmbedded: false });
+    const out = adapter.serialize(d, edits, /** @type {any} */ ({ keepMetadata: true, stripEmbedded: false, restore }));
     mime = /** @type {any} */ (out).mime || adapter.mime;
     return out;
   });

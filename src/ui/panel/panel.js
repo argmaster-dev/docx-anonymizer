@@ -29,6 +29,7 @@ export const WARN_KEYS = Object.freeze({
   XLSX_SHEET_RENAMED: 'warnXlsxSheetRenamed',
   XLSX_EXTERNAL_LINKS: 'warnXlsxExternalLinks',
   XLSX_CONNECTIONS: 'warnXlsxConnections',
+  MACROS_NOT_PROCESSED: 'warnMacros',
   JSON_NUMBER_AS_STRING: 'warnJsonNumber',
   JSON_INVALID: 'warnJsonInvalid',
 });

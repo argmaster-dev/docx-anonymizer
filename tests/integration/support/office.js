@@ -15,6 +15,7 @@ import {
   inflateEntry,
 } from '../../../src/core/index.js';
 import { SOFFICE } from './pipeline.js';
+import { attachEmbeddedBooks } from '../../../src/core/embedded.js';
 
 export const OFFICE_DIR = join(process.cwd(), 'tests/fixtures/office');
 
@@ -40,6 +41,8 @@ export async function runOffice(bytes, name, { settings = defaultSettings(), app
   if (!getDetectors().size) registerBuiltinDetectors();
   const adapter = await adapterFor(bytes, name);
   const doc = adapter.parse(bytes, name);
+  // как хост: встроенные книги и диаграммы Word (core/embedded.js)
+  await attachEmbeddedBooks(doc, loadAdapter);
   const analysis = await analyze(doc, settings);
   const result = applyDecisions(doc, analysis.groups, { createdAt: '2026-10-26T00:00:00Z', ...apply });
   return { adapter, doc, analysis, result };

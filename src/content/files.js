@@ -128,3 +128,33 @@ export function makeResultName(name, suffix = '.anon', opts = {}) {
   const m = SAME_EXT_RE.exec(n);
   return `${(m ? n.slice(0, m.index) : n) || 'document'}${suffix}${m ? m[0] : '.docx'}`;
 }
+
+/**
+ * Нейтральное имя вместо исходного (fail-closed, ревью WP12-B): «Кравченко_Ольга.docx» → «document.docx» — если имя результата от
+ * хоста недоступно, в чат не уходит исходное имя (в нём могут быть данные).
+ * @param {string} name
+ */
+export function neutralName(name) {
+  const m = /\.[^./\\]+$/.exec(String(name || ''));
+  return `document${m ? m[0] : '.docx'}`;
+}
+
+/**
+ * Имя результата без повтора в одной отправке: «a.anon.docx», затем «a (2).anon.docx» (суффикс и расширение — на месте).
+ * @param {string} name
+ * @param {Set<string>} used  имена, уже выданные в этой отправке (дополняется)
+ * @param {string} [suffix]
+ */
+export function uniqueResultName(name, used, suffix = '.anon') {
+  const ext = /\.[^./\\]+$/.exec(name)?.[0] || '';
+  let base = name.slice(0, name.length - ext.length);
+  let sfx = '';
+  if (suffix && base.toLowerCase().endsWith(suffix.toLowerCase())) {
+    sfx = base.slice(base.length - suffix.length);
+    base = base.slice(0, base.length - suffix.length);
+  }
+  let out = name;
+  for (let k = 2; used.has(out.toLowerCase()); k++) out = `${base} (${k})${sfx}${ext}`;
+  used.add(out.toLowerCase());
+  return out;
+}

@@ -19,7 +19,7 @@ export const HELP_DICT = {
       'Откройте меню расширения на сайте чата и включите «Перехват загрузки». Если сайта нет в списке, нажмите «Добавить …» и подтвердите запрос Chrome на доступ к сайту; для сайтов из списка по умолчанию нажмите «Разрешить доступ». По умолчанию перехват выключен, а доступа к сайтам у расширения нет.',
     how_2: 'Приложите файл в чате: кнопкой, перетаскиванием или вставкой. Расширение остановит файл и покажет панель: что найдено и где.',
     how_3:
-      'Снимите лишние галочки и нажмите «Анонимизировать и загрузить» — в чат уйдёт файл того же формата (имя.anon.docx, имя.anon.xlsx, имя.anon.csv…), а для PDF — имя.anon.md.',
+      'Снимите лишние галочки и нажмите «Анонимизировать и загрузить» — в чат уйдёт файл того же формата (имя.anon.docx, имя.anon.xlsx, имя.anon.csv…), а для PDF — имя.anon.md. Имя файла тоже проверяется: «Иванов_Иван_Иванович.docx» уйдёт как «[ФИО_1].anon.docx» с той же меткой, что в тексте; имя файла при восстановлении не возвращается.',
     how_4:
       'Ответ ИИ вставьте текстом или загрузите файлом от ИИ (.docx, .xlsx, .pptx, .csv, .json, .md, .txt) на странице «Восстановить текст»: расширение подставит настоящие значения из карты замен — ключа восстановления — и отдаст файл «имя.restored.*» с прежним форматированием; в файле заменяются только метки точно как в карте или в квадратных скобках. Ключ хранится только у вас, в памяти браузера до его перезапуска; сохранить его в файл можно на экране «готово» панели: «Ещё» → «Сохранить ключ восстановления». ФИО ставятся в нужный падеж по контексту, склонённые подстановки выделены зелёным — проверьте их.',
     policy_h: 'Что маскируется',
@@ -61,7 +61,7 @@ export const HELP_DICT = {
     how_2:
       'Attach a file in the chat: with the button, by drag and drop or by pasting. The extension holds the file and shows a panel with what was found and where.',
     how_3:
-      'Clear the checkmarks you do not need and press "Anonymize and upload" — the chat receives a file of the same format (name.anon.docx, name.anon.xlsx, name.anon.csv…), or name.anon.md for a PDF.',
+      'Clear the checkmarks you do not need and press "Anonymize and upload" — the chat receives a file of the same format (name.anon.docx, name.anon.xlsx, name.anon.csv…), or name.anon.md for a PDF. The file name is checked too: “Ivanov_Ivan.docx” is sent as “[PERSON_1].anon.docx” with the same label as in the text; the file name is not restored.',
     how_4:
       'Paste the AI answer as text or load the file the AI produced (.docx, .xlsx, .pptx, .csv, .json, .md, .txt) on the "Restore text" page: the extension puts the real values back from the replacement map (the recovery key) and gives you a "name.restored.*" file with the original formatting; in a file only markers written exactly as in the map or in square brackets are replaced. The key stays only with you, in browser memory until the browser restarts; save it to a file on the panel\'s "done" screen: "More" → "Save the recovery key". Russian names are put in the right case by context; declined values are highlighted in green — check them.',
     policy_h: 'What is masked',

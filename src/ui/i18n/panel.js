@@ -22,6 +22,8 @@ export const panel = {
     warnXlsxFormulaLiteral:
       'Данные в формулах ({n}): в формулах ячеек они не заменяются — проверьте формулы вручную; в именах книги и списках проверки данных заменены метками',
     warnXlsxExternalLinks: 'Связи с внешними книгами ({n}): путь к файлу заменён, данные из них — обезличены в кэше',
+    warnMacros:
+      'В файле есть макросы (VBA): их код и строки не обезличиваются и уйдут как есть. Если там могут быть данные — сохраните файл без макросов (.xlsx, .pptx, .docx)',
     warnXlsxConnections: 'Подключения к данным ({n}): найденное заменено, логин и пароль в строке подключения убраны — для обновления введите их заново',
     warnXlsxSheetRenamed: 'Листы с данными в названии ({n}) будут переименованы, ссылки на них в формулах — тоже',
     warnJsonNumber: 'Числа-идентификаторы в JSON ({n}) станут строками с метками',
@@ -97,6 +99,8 @@ export const panel = {
     warnXlsxFormulaLiteral:
       'Data in formulas ({n}): in cell formulas it is not replaced — check the formulas manually; in workbook names and validation lists it is replaced with placeholders',
     warnXlsxExternalLinks: 'Links to external workbooks ({n}): the file path was replaced, their cached data is anonymized',
+    warnMacros:
+      'The file contains macros (VBA): their code and strings are not anonymized and will be sent as is. If they may contain data, save the file without macros (.xlsx, .pptx, .docx)',
     warnXlsxConnections: 'Data connections ({n}): findings replaced, login and password removed from the connection string — enter them again to refresh',
     warnXlsxSheetRenamed: 'Sheets with data in their names ({n}) will be renamed, and so will the references to them in formulas',
     warnJsonNumber: 'Identifier numbers in the JSON ({n}) will become strings with placeholders',

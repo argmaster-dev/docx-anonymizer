@@ -103,6 +103,12 @@ export function applyDecisions(doc, groups, options = {}) {
     createdAt: options.createdAt,
     toolVersion: options.toolVersion,
   });
+  // пометки формата для восстановления (JSON: метки, бывшие числами, ключи с суффиксом « (2)») — в запись документа карты
+  const restore = /** @type {any} */ (out).restore;
+  if (restore) {
+    if (options.document) /** @type {any} */ (options.document).restore = restore;
+    else /** @type {any} */ (mapping).documents.push({ name: /** @type {any} */ (doc).name || 'document', restore });
+  }
 
   return {
     bytes,

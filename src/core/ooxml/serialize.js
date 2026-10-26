@@ -77,6 +77,16 @@ export function serializePackage(doc, edits, options, desc) {
     arr.push(e);
   }
 
+  // 1а. Внешние цели связей, кроме гиперссылок (аудио, видео, рисунки, шаблоны, внешние книги): путь к файлу на чужом компьютере
+  // (file:///C:/Users/<логин>/…/<ФИО>.mp3) — нейтральное имя всегда, с прежним расширением (ревью WP12-B)
+  let external = 0;
+  for (const s of doc.streams) {
+    if (s.attrKind !== 'rel-external' || embeddedOf.has(s.id)) continue;
+    byStream.delete(s.id);
+    const ext = /\.[A-Za-z0-9]{1,5}$/.exec(s.text.replace(/[?#].*$/, ''))?.[0] || '';
+    pushRaw(s.part, { from: /** @type {number} */ (s.valueStart), to: /** @type {number} */ (s.valueEnd), text: `external-${++external}${ext}` });
+  }
+
   // 2. Метаданные: очистка всех meta-потоков (правки сущностей в них тогда не нужны)
   if (!keepMetadata) {
     for (const s of doc.streams) {
