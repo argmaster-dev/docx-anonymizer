@@ -389,6 +389,159 @@ describe('Excel: диаграммы и сводные на удаляемое (�
   }, 120000);
 });
 
+describe('Excel: обходы кэша — вложенные имена, INDIRECT, OFFSET, целые столбцы (повторное ревью WP12-D)', () => {
+  it('ни одного значения удалённого листа, скрытой строки и скрытого столбца ни в одной части zip; LibreOffice открывает', async () => {
+    const { buildXlsx } = await import('../../scripts/office-writer.mjs');
+    const { readZip, inflateEntry, writeZip } = await import('../../src/core/ooxml/zip.js');
+    // книга пробы ревьюера (rv-wp12d/r2/probe/excel3.mjs): имя Имя2 → Источник → 'Скрытый лист'!…, INDIRECT/OFFSET, SUM(B:B),
+    // ссылка на скрытый столбец, VLOOKUP по скрытому листу, ряды диаграммы по столбцу/имени/вложенному имени/скрытому столбцу,
+    // сводные по имени и по видимому листу со скрытой строкой, общая формула с владельцем в скрытой строке
+    const base = buildXlsx({
+      sheets: [
+        {
+          name: 'Данные',
+          hiddenRows: [3],
+          rows: [
+            ['Заголовок', 'Сумма', 'Флаг', 'Итог', 'Скрытый'],
+            ['ВИД_А2', 11, null, { f: 'SUM(B:B)', v: 777798 }, null],
+            ['ЛИТЕР_СТРОКИ', 777787, null, { f: 'INDIRECT("\'Скрытый лист\'!A1")', v: 'ТАЙНА_ЛИСТА_А1', str: true }, null],
+            ['ВИД_А4', 1, null, { f: 'INDIRECT("\'Скрытый лист\'!A1")', v: 'ТАЙНА_ЛИСТА_А1', str: true }, null],
+            ['ВИД_А5', 2, null, { f: 'SUM(Имя2)', v: 999111 }, null],
+            ['ВИД_А6', 3, null, { f: 'OFFSET(A1,2,1)', v: 777787 }, null],
+            ['ВИД_А7', 4, null, { f: 'E2&""', v: 'СКРЫТ_СТОЛБЕЦ_Е2', str: true }, null],
+            ['ВИД_А8', 5, null, { f: 'VLOOKUP("ТАЙНА_ЛИСТА_А1",\'Скрытый лист\'!A:B,2,0)', v: 999111 }, null],
+          ],
+        },
+        {
+          name: 'Скрытый лист',
+          hidden: true,
+          rows: [
+            ['ТАЙНА_ЛИСТА_А1', 999111],
+            ['ТАЙНА_ЛИСТА_А2', 999222],
+          ],
+        },
+      ],
+      definedNames: [
+        { name: 'Источник', ref: "'Скрытый лист'!$A$1:$B$2" },
+        { name: 'Имя2', ref: 'Источник' },
+      ],
+    });
+    const dec = new TextDecoder();
+    const files = Object.fromEntries(readZip(base).map((e) => [e.name, dec.decode(inflateEntry(e))]));
+    let s1 = files['xl/worksheets/sheet1.xml'];
+    // скрытый столбец E и его значение
+    s1 = s1.replace(/<cols>/, '<cols><col min="5" max="5" width="9" hidden="1" customWidth="1"/>');
+    if (!/<cols>/.test(s1)) s1 = s1.replace('<sheetData>', '<cols><col min="5" max="5" width="9" hidden="1" customWidth="1"/></cols><sheetData>');
+    s1 = s1.replace(/(<row r="2"[^>]*>[\s\S]*?)(<\/row>)/, '$1<c r="E2" t="inlineStr"><is><t>СКРЫТ_СТОЛБЕЦ_Е2</t></is></c>$2');
+    // общая формула: владелец в скрытой строке 3 с литералом
+    s1 = s1
+      .replace(/(<row r="3"[^>]*>)/, '$1')
+      .replace(/(<c r="B3"[^>]*>(?:<v>[^<]*<\/v>)?<\/c>)/, '$1<c r="C3"><f t="shared" ref="C3:C5" si="0">IF(A3="ЛИТЕРАЛ_ФОРМУЛЫ_СКРЫТОЙ",1,0)</f><v>0</v></c>');
+    s1 = s1.replace(/(<c r="B4"[^>]*>(?:<v>[^<]*<\/v>)?<\/c>)/, '$1<c r="C4"><f t="shared" si="0"/><v>0</v></c>');
+    s1 = s1.replace(/(<c r="B5"[^>]*>(?:<v>[^<]*<\/v>)?<\/c>)/, '$1<c r="C5"><f t="shared" si="0"/><v>0</v></c>');
+    files['xl/worksheets/sheet1.xml'] = s1;
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="' + R + '"';
+    const rels = (list) =>
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${list.map(([id, type, target]) => `<Relationship Id="${id}" Type="${R}/${type}" Target="${target}"/>`).join('')}</Relationships>`;
+    const pt = (vals) => `<c:ptCount val="${vals.length}"/>${vals.map((v, i) => `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`).join('')}`;
+    const ser = (i, val, nums) =>
+      `<c:ser><c:idx val="${i}"/><c:order val="${i}"/><c:val><c:numRef><c:f>${val}</c:f><c:numCache><c:formatCode>General</c:formatCode>${pt(nums)}</c:numCache></c:numRef></c:val></c:ser>`;
+    const sers = (i, val, strs) =>
+      `<c:ser><c:idx val="${i}"/><c:order val="${i}"/><c:cat><c:strRef><c:f>${val}</c:f><c:strCache>${pt(strs)}</c:strCache></c:strRef></c:cat><c:val><c:numLit><c:ptCount val="1"/><c:pt idx="0"><c:v>1</c:v></c:pt></c:numLit></c:val></c:ser>`;
+    files['xl/charts/chart1.xml'] =
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="${R}"><c:chart><c:plotArea><c:layout/><c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>` +
+      ser(0, 'Данные!$B:$B', [11, 777787, 1, 2]) +
+      ser(1, '[0]!Источник', [999111, 999222]) +
+      ser(2, 'Имя2', [999111, 999222]) +
+      sers(3, 'Данные!$E$2:$E$3', ['СКРЫТ_СТОЛБЕЦ_Е2', '']) +
+      '<c:axId val="1"/><c:axId val="2"/></c:barChart><c:catAx><c:axId val="1"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:crossAx val="2"/></c:catAx><c:valAx><c:axId val="2"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:crossAx val="1"/></c:valAx></c:plotArea></c:chart></c:chartSpace>';
+    files['xl/drawings/drawing1.xml'] =
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="${R}" xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><xdr:twoCellAnchor><xdr:from><xdr:col>6</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>1</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>12</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>15</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="Диаграмма 1"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`;
+    files['xl/drawings/_rels/drawing1.xml.rels'] = rels([['rId1', 'chart', '../charts/chart1.xml']]);
+    const pivotDef = (n, src, items, nums) =>
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><pivotCacheDefinition ${NS} r:id="rId1" refreshOnLoad="1" recordCount="${items.length}"><cacheSource type="worksheet">${src}</cacheSource><cacheFields count="2"><cacheField name="Ф" numFmtId="0"><sharedItems count="${items.length}">${items.map((s) => `<s v="${s}"/>`).join('')}</sharedItems></cacheField><cacheField name="С" numFmtId="0"><sharedItems containsSemiMixedTypes="0" containsString="0" containsNumber="1" minValue="${Math.min(...nums)}" maxValue="${Math.max(...nums)}"/></cacheField></cacheFields></pivotCacheDefinition>`;
+    const pivotRec = (nums) =>
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><pivotCacheRecords ${NS} count="${nums.length}">${nums.map((n, i) => `<r><x v="${i}"/><n v="${n}"/></r>`).join('')}</pivotCacheRecords>`;
+    const pivotTbl = (n, cacheId, loc) =>
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><pivotTableDefinition ${NS} name="Сводная${n}" cacheId="${cacheId}" dataCaption="Значения" createdVersion="6" updatedVersion="6" minRefreshableVersion="3"><location ref="${loc}" firstHeaderRow="1" firstDataRow="1" firstDataCol="1"/><pivotFields count="2"><pivotField axis="axisRow" showAll="0"><items count="3"><item x="0"/><item x="1"/><item t="default"/></items></pivotField><pivotField dataField="1" showAll="0"/></pivotFields><rowFields count="1"><field x="0"/></rowFields><rowItems count="3"><i><x/></i><i><x v="1"/></i><i t="grand"><x/></i></rowItems><colItems count="1"><i/></colItems><dataFields count="1"><dataField name="Сумма" fld="1" baseField="0" baseItem="0"/></dataFields></pivotTableDefinition>`;
+    files['xl/pivotCache/pivotCacheDefinition1.xml'] = pivotDef(
+      1,
+      '<worksheetSource name="Источник"/>',
+      ['ТАЙНА_ЛИСТА_А1', 'ТАЙНА_ЛИСТА_А2'],
+      [999111, 999222],
+    );
+    files['xl/pivotCache/pivotCacheRecords1.xml'] = pivotRec([999111, 999222]);
+    files['xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels'] = rels([['rId1', 'pivotCacheRecords', 'pivotCacheRecords1.xml']]);
+    files['xl/pivotCache/pivotCacheDefinition2.xml'] = pivotDef(
+      2,
+      '<worksheetSource ref="A2:B4" sheet="Данные"/>',
+      ['ВИД_А2', 'ЛИТЕР_СТРОКИ', 'ВИД_А4'],
+      [11, 777787, 1],
+    );
+    files['xl/pivotCache/pivotCacheRecords2.xml'] = pivotRec([11, 777787, 1]);
+    files['xl/pivotCache/_rels/pivotCacheDefinition2.xml.rels'] = rels([['rId1', 'pivotCacheRecords', 'pivotCacheRecords2.xml']]);
+    files['xl/pivotTables/pivotTable1.xml'] = pivotTbl(1, 1, 'G20:H23');
+    files['xl/pivotTables/_rels/pivotTable1.xml.rels'] = rels([['rId1', 'pivotCacheDefinition', '../pivotCache/pivotCacheDefinition1.xml']]);
+    files['xl/pivotTables/pivotTable2.xml'] = pivotTbl(2, 2, 'J20:K23');
+    files['xl/pivotTables/_rels/pivotTable2.xml.rels'] = rels([['rId1', 'pivotCacheDefinition', '../pivotCache/pivotCacheDefinition2.xml']]);
+    const old = files['xl/worksheets/_rels/sheet1.xml.rels'];
+    const extra = [
+      ['rId81', 'drawing', '../drawings/drawing1.xml'],
+      ['rId82', 'pivotTable', '../pivotTables/pivotTable1.xml'],
+      ['rId83', 'pivotTable', '../pivotTables/pivotTable2.xml'],
+    ];
+    files['xl/worksheets/_rels/sheet1.xml.rels'] = old
+      ? old.replace('</Relationships>', extra.map(([i, t, g]) => `<Relationship Id="${i}" Type="${R}/${t}" Target="${g}"/>`).join('') + '</Relationships>')
+      : rels(extra);
+    files['xl/worksheets/sheet1.xml'] = files['xl/worksheets/sheet1.xml'].replace('</worksheet>', '<drawing r:id="rId81"/></worksheet>');
+    files['xl/_rels/workbook.xml.rels'] = files['xl/_rels/workbook.xml.rels'].replace(
+      '</Relationships>',
+      `<Relationship Id="rId90" Type="${R}/pivotCacheDefinition" Target="pivotCache/pivotCacheDefinition1.xml"/><Relationship Id="rId91" Type="${R}/pivotCacheDefinition" Target="pivotCache/pivotCacheDefinition2.xml"/></Relationships>`,
+    );
+    files['xl/workbook.xml'] = files['xl/workbook.xml'].replace(
+      /(<calcPr[^>]*\/>)/,
+      '$1<pivotCaches><pivotCache cacheId="1" r:id="rId90"/><pivotCache cacheId="2" r:id="rId91"/></pivotCaches>',
+    );
+    const ov = (part, type) => `<Override PartName="/${part}" ContentType="application/vnd.openxmlformats-officedocument.${type}+xml"/>`;
+    files['[Content_Types].xml'] = files['[Content_Types].xml'].replace(
+      '</Types>',
+      ov('xl/charts/chart1.xml', 'drawingml.chart') +
+        ov('xl/drawings/drawing1.xml', 'drawing') +
+        [1, 2]
+          .map(
+            (n) =>
+              ov(`xl/pivotCache/pivotCacheDefinition${n}.xml`, 'spreadsheetml.pivotCacheDefinition') +
+              ov(`xl/pivotCache/pivotCacheRecords${n}.xml`, 'spreadsheetml.pivotCacheRecords') +
+              ov(`xl/pivotTables/pivotTable${n}.xml`, 'spreadsheetml.pivotTable'),
+          )
+          .join('') +
+        '</Types>',
+    );
+    const enc = new TextEncoder();
+    const bytes = writeZip(Object.entries(files).map(([name, d]) => ({ name, data: enc.encode(d) })));
+    const r = (await runOffice(bytes, 'обход.xlsx', { apply: { hidden: { hiddenSheets: true } } })).result;
+    assertValid(r.bytes, 'обход');
+    // литерал формулы владельца общей формулы в скрытой строке остаётся (ограничение §9.9): его текст — не в списке
+    // «ТАЙНА_ЛИСТА_А1» есть и в литерале видимой формулы VLOOKUP — литералы формул ячеек не меняются (предупреждение
+    // XLSX_FORMULA_LITERAL), поэтому вне <f> — отдельной проверкой ниже
+    const SECRETS = ['ТАЙНА_ЛИСТА_А2', '777787', '777798', '999111', '999222', 'СКРЫТ_СТОЛБЕЦ', 'ЛИТЕР_СТРОКИ'];
+    expect(deepLeaks(bytes, SECRETS).length).toBeGreaterThan(0); // исходник их содержит
+    expect(deepLeaks(r.bytes, SECRETS)).toEqual([]);
+    const p = unzipText(r.bytes);
+    const out1 = p['xl/worksheets/sheet1.xml'];
+    for (const [n, x] of Object.entries(p)) expect(x.replace(/<f\b[^>]*>[^<]*<\/f>/g, ''), n).not.toContain('ТАЙНА_ЛИСТА_А1');
+    expect(out1).toMatch(/<c r="D5" t="e"><f>SUM\(Имя2\)<\/f><v>#REF!<\/v><\/c>/); // вложенное имя на удалённый лист
+    expect(out1).toMatch(/<c r="D4"[^>]*><f>INDIRECT\([^<]*<\/f><\/c>/); // INDIRECT — кэш снят
+    expect(out1).toMatch(/<c r="D6"><f>OFFSET\(A1,2,1\)<\/f><\/c>/); // OFFSET — кэш снят
+    expect(p['xl/charts/chart1.xml'].match(/<c:ptCount val="0"\/>/g)).toHaveLength(4); // все четыре ряда
+    if (LO_ENABLED) {
+      const out = libreOfficeConvert([{ name: 'bypass.xlsx', bytes: r.bytes }], 'pdf', 'hidden-bypass');
+      expect(out.has('bypass.pdf')).toBe(true);
+    }
+  }, 120000);
+});
+
 describe('PowerPoint: переключатели (К7)', () => {
   const name = 'deck-hidden.pptx';
 

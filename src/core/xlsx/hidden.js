@@ -174,7 +174,14 @@ export function applyXlsxHidden(doc, S, ctx, push) {
     }
     if (cells || removed.length) {
       changed = true;
-      const verdictOf = fixFormulaCaches(scans, new Set(removed.map((s) => s.name.toLowerCase())), cleared, definedNameAreas(xmlOf(wb)), ctx, push);
+      const verdictOf = fixFormulaCaches(
+        scans,
+        new Set(removed.map((s) => s.name.toLowerCase())),
+        cleared,
+        definedNameAreas(xmlOf(wb), new Set(removed.map((s) => s.name.toLowerCase()))),
+        ctx,
+        push,
+      );
       // ряды диаграмм и сводные таблицы на удалённое — без значений удалённого (ревью WP12-D)
       fixChartCaches(doc, names, verdictOf, ctx);
       removePivots(doc, S, verdictOf, xmlOf, ctx, remove);
@@ -357,17 +364,55 @@ export function scanCells(xml) {
   }
 }
 
-/** Имена книги → прямоугольники их ссылок (для формул, которые ссылаются на удалённое через имя). */
-function definedNameAreas(xml) {
-  const out = new Map();
+/**
+ * Функции, результат которых не выводится из записанных ссылок (адрес строкой, смещение, диапазон из INDEX): при любом удалении или
+ * очистке кэш таких формул снимается — fail-closed (ревью WP12-D: INDIRECT("'Скрытый лист'!A1"), OFFSET(A1,2,1) на скрытую строку).
+ */
+const DYNAMIC_RE = /(?<![\p{L}\p{N}_.])(?:INDIRECT|OFFSET)\s*\(|\)\s*:\s*(?:\$?[A-Za-z]|INDEX\s*\()|:\s*INDEX\s*\(/iu;
+
+/** Регулярка имени книги в коде формулы (без учёта регистра, не часть другого имени или вызова функции). */
+const nameRe = (nm) => new RegExp(`(?<![\\p{L}\\p{N}_.])${nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_.(])`, 'iu');
+
+/**
+ * Имена книги → что за ними стоит: прямоугольники ссылок, `ref` — имя зависит от удалённого листа или уже #REF!, `dyn` — внутри
+ * INDIRECT/OFFSET/вычисляемый диапазон. Имена раскрываются до неподвижной точки (Имя2 → Источник → 'Скрытый лист'!…); цикл — `dyn`.
+ * @param {string} xml  книга
+ * @param {Set<string>} removedNames  удаляемые листы (нижний регистр)
+ * @returns {Map<string, {areas: any[], ref: boolean, dyn: boolean}>}
+ */
+function definedNameAreas(xml, removedNames) {
+  const raw = new Map();
   let dn = null;
   tokenize(xml, (t) => {
     if (t.type === 'open' && t.name === 'definedName') dn = { name: getAttr(xml, t.attrStart, t.attrEnd, 'name')?.raw || '', start: t.end };
     else if (t.type === 'close' && t.name === 'definedName' && dn) {
-      if (dn.name && !/^_xlnm\./i.test(dn.name)) out.set(unescapeXml(dn.name), formulaRefs(unescapeXml(xml.slice(dn.start, t.start)), ''));
+      if (dn.name && !/^_xlnm\./i.test(dn.name)) raw.set(unescapeXml(dn.name), unescapeXml(xml.slice(dn.start, t.start)));
       dn = null;
     }
   });
+  const out = new Map();
+  const resolve = (nm, seen) => {
+    if (out.has(nm)) return out.get(nm);
+    if (seen.has(nm)) return { areas: [], ref: false, dyn: true };
+    seen.add(nm);
+    const text = raw.get(nm);
+    const { code } = scanFormula(text);
+    const areas = formulaRefs(text, '');
+    let ref = /#REF!/i.test(code) || refersRemoved(code, removedNames) || areas.some((a) => removedNames.has(a.sheet.toLowerCase()));
+    let dyn = DYNAMIC_RE.test(code);
+    for (const other of raw.keys()) {
+      if (other === nm || !nameRe(other).test(code)) continue;
+      const r = resolve(other, seen);
+      areas.push(...r.areas);
+      ref ||= r.ref;
+      dyn ||= r.dyn;
+    }
+    seen.delete(nm);
+    const res = { areas, ref, dyn };
+    out.set(nm, res);
+    return res;
+  };
+  for (const nm of raw.keys()) resolve(nm, new Set());
   return out;
 }
 
@@ -384,7 +429,7 @@ function fixFormulaCaches(scans, removedNames, cleared, nameAreas, ctx, push) {
     const key = a.sheet.toLowerCase();
     const c = cleared.get(key);
     if (c) {
-      for (let r = a.r1; r <= Math.min(a.r2, a.r1 + 100000); r++) if (c.rows.has(r)) return true;
+      for (const r of c.rows) if (r >= a.r1 && r <= a.r2) return true;
       if (c.cols.some(([x, y]) => a.c1 <= y && a.c2 >= x)) return true;
     }
     for (const rc of dropped.get(key) || []) {
@@ -405,9 +450,12 @@ function fixFormulaCaches(scans, removedNames, cleared, nameAreas, ctx, push) {
         if (range) areas = spreadShared(areas, range);
       }
       const { code } = scanFormula(c.f.text);
-      areas = [...areas, ...namedAreas(code, nameAreas)];
-      const ref = areas.some((a) => removedNames.has(a.sheet.toLowerCase())) || refersRemoved(code, removedNames);
-      const item = { sheet, xml, areas, verdict: ref ? 'ref' : null, cells: [c] };
+      const n = namedInfo(code, nameAreas);
+      areas = [...areas, ...n.areas];
+      const ref = n.ref || areas.some((a) => removedNames.has(a.sheet.toLowerCase())) || refersRemoved(code, removedNames);
+      // INDIRECT/OFFSET/вычисляемый диапазон — кэш снимается при любом удалении (fail-closed)
+      const dyn = n.dyn || DYNAMIC_RE.test(code);
+      const item = { sheet, xml, areas, verdict: ref ? 'ref' : dyn ? 'clear' : null, cells: [c] };
       items.push(item);
       if (c.f.shared != null) owners.set(c.f.shared, item);
     }
@@ -445,18 +493,21 @@ function fixFormulaCaches(scans, removedNames, cleared, nameAreas, ctx, push) {
   // то же решение для ссылок вне ячеек (ряды диаграмм, источник сводной): 'ref' — удалённый лист, 'clear' — очищенные ячейки
   return (text, sheetName = '') => {
     const { code } = scanFormula(text);
-    const areas = [...formulaRefs(text, sheetName), ...namedAreas(code, nameAreas)];
-    if (areas.some((a) => removedNames.has(a.sheet.toLowerCase())) || refersRemoved(code, removedNames)) return 'ref';
-    return areas.some(hitsCleared) ? 'clear' : null;
+    const n = namedInfo(code, nameAreas);
+    const areas = [...formulaRefs(text, sheetName), ...n.areas];
+    if (n.ref || /#REF!/i.test(code) || areas.some((a) => removedNames.has(a.sheet.toLowerCase())) || refersRemoved(code, removedNames)) return 'ref';
+    return n.dyn || DYNAMIC_RE.test(code) || areas.some(hitsCleared) ? 'clear' : null;
   };
 }
 
-/** Прямоугольники имён книги, которые встречаются в коде формулы. */
-function namedAreas(code, nameAreas) {
-  const out = [];
-  for (const [nm, list] of nameAreas) {
-    const re = new RegExp(`(?<![\\p{L}\\p{N}_.])${nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_.(])`, 'iu');
-    if (re.test(code)) out.push(...list);
+/** Имена книги в коде формулы: их прямоугольники (раскрытые), зависят ли они от удалённого (`ref`) и динамические ли (`dyn`). */
+function namedInfo(code, nameAreas) {
+  const out = { areas: [], ref: false, dyn: false };
+  for (const [nm, info] of nameAreas) {
+    if (!nameRe(nm).test(code)) continue;
+    out.areas.push(...info.areas);
+    out.ref ||= info.ref;
+    out.dyn ||= info.dyn;
   }
   return out;
 }

@@ -729,8 +729,8 @@ export class Panel {
               role: 'menuitem',
               text: t('btnSaveKeyProtected'),
               'data-testid': 'btn-save-key-password',
+              // ключ ещё не сохранён (страница расширения может быть закрыта без сохранения) — подсказка при закрытии остаётся
               onClick: () => {
-                this.mappingSaved = true;
                 this.closeMenu();
                 this.o.handlers.onSaveKeyProtected?.(d);
               },
