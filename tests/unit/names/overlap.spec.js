@@ -1,4 +1,4 @@
-// FR-20/21: фикстура overlap.json — 20 случаев пересечений (детекторы WP2 + подставные кандидаты); с 0.5 (WP12-C) — ещё 8 с
+// FR-20/21: фикстура overlap.json — 20 случаев пересечений (детекторы WP2 + подставные кандидаты); с 0.5 (WP12-C) — ещё 10 с
 // детекторами идентификаторов (`identifiers: true`): новые категории против прежних.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -17,7 +17,7 @@ function nthIndex(text, sub, nth = 0) {
 }
 
 describe('overlap.json (FR-20)', () => {
-  it('28 случаев (20 до 0.5 + 8 категорий 0.5)', () => expect(fx.cases).toHaveLength(28));
+  it('30 случаев (20 до 0.5 + 10 категорий 0.5)', () => expect(fx.cases).toHaveLength(30));
 
   it.each(fx.cases.map((c) => [c.name, c]))('%s', async (_n, c) => {
     registerNames({

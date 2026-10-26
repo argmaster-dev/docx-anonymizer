@@ -49,12 +49,20 @@ export function resolveOverlaps(entities, catalog) {
       (e) => e.source !== 'ner' || !all.some((k) => k.source !== 'ner' && k.start <= e.start && e.end <= k.end && k.end - k.start > e.end - e.start),
     );
     const ranked = [...list].sort((a, b) => compareStrength(a, b, catalog.byId));
+    // оставленные не пересекаются и лежат по началу: пересечение с [start, end) — только у предшественника по началу
+    // (двоичный поиск вместо перебора; поток с тысячами находок — 0.5, WP12-C)
     const kept = [];
     for (const e of ranked) {
-      if (kept.some((k) => e.start < k.end && k.start < e.end)) continue;
-      kept.push(e);
+      let lo = 0;
+      let hi = kept.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (kept[mid].start < e.end) lo = mid + 1;
+        else hi = mid;
+      }
+      if (lo > 0 && kept[lo - 1].end > e.start) continue;
+      kept.splice(lo, 0, e);
     }
-    kept.sort((a, b) => a.start - b.start);
     out.push(...kept);
   }
   return out;

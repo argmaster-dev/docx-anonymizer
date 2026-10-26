@@ -1,6 +1,6 @@
 // Документные идентификаторы: PASSPORT (и его части, 0.5), BIRTHDATE, CONTRACT, AMOUNT.
 import { passport, birthdate } from '../../validators.js';
-import { NB, NA, labelState, labelsOf, scan } from './labels.js';
+import { NB, NA, intervals, labelState, labelsOf, scan } from './labels.js';
 import { docContext } from './papers.js';
 
 const NBSP = '\\u00a0';
@@ -22,9 +22,11 @@ const PASSPORT_FOREIGN_RF_RE = new RegExp(`${NB}\\d{2}[ ${NBSP}]?\\d{7}${NA}`, '
 // иностранный: буквы/цифры 6–12 с хотя бы одной цифрой
 const PASSPORT_ALNUM_RE = new RegExp(`(?<![\\p{L}\\p{N}])(?=[A-Z0-9]*\\d)[A-Z0-9]{6,12}(?![\\p{L}\\p{N}])`, 'gu');
 const ISSUED_RE = new RegExp(`^[,;.)\\s]*(?:кем[ ${NBSP}]+выдан|выдан[аы]?|issued[ ${NBSP}]+by)[ ${NBSP}:]*`, 'iu');
-const DATE_IN_TEXT_RE = new RegExp(`\\d{1,2}[./]\\d{1,2}[./]\\d{2,4}|\\d{1,2}[ ${NBSP}]+(?:${MONTH})[ ${NBSP}]+\\d{4}`, 'iu');
+// «12.03.2006», «12 марта 2006», «“12” марта 2006» (день в кавычках — так пишут в бланках)
+const DATE_IN_TEXT_RE = new RegExp(`\\d{1,2}[./]\\d{1,2}[./]\\d{2,4}|[«"“]?\\d{1,2}[»"”]?[ ${NBSP}]+(?:${MONTH})[ ${NBSP}]+\\d{4}`, 'iu');
 const DATE_FIRST_RE = new RegExp(`^(?:${DATE_IN_TEXT_RE.source})(?:[ ${NBSP}]*(?:г\\.|года))?[ ${NBSP},]*`, 'iu');
-const DEPT_RE = new RegExp(`${NB}\\d{3}[- ]\\d{3}${NA}`, 'gu');
+// «770-001», «770 001», «770–001» и с неразрывным дефисом (U+2011)
+const DEPT_RE = new RegExp(`${NB}\\d{3}[- \\u2010-\\u2013]\\d{3}${NA}`, 'gu');
 /** Конец органа выдачи: «, код подразделения», «, дата выдачи». */
 const ISSUER_END_RE = /[,;]?[ \t\u00a0]*(?:код[ \t\u00a0]+подр|к\/п|дата[ \t\u00a0]+выдачи)/iu;
 const passportDoc = (text, start, ctx) => {
@@ -46,8 +48,13 @@ function passportParts(text, ctx) {
   const has = (id) => labelsOf(id, text, ctx).length > 0;
   const cell = !!(ctx?.stream?.rowHeader || ctx?.stream?.columnHeader);
   if (!cell && !['PASSPORT', 'PASSPORT_ISSUER', 'PASSPORT_DATE', 'PASSPORT_DEPT'].some(has)) return parts;
-  const free = (a, b) => !parts.some((t) => a < t.end && t.start < b);
-  const add = (cat, start, end) => free(start, end) && end > start && parts.push({ cat, start, end });
+  const taken = intervals();
+  const free = (a, b) => taken.free(a, b);
+  const add = (cat, start, end) => {
+    if (end <= start || !free(start, end)) return;
+    taken.add(start, end);
+    parts.push({ cat, start, end });
+  };
   const nums = [];
   const own = (c) => labelState(text, c.start, ctx, 'PASSPORT').mine && passportDoc(text, c.start, ctx);
   for (const re of [PASSPORT_RU_RE, PASSPORT_FOREIGN_RF_RE, PASSPORT_ALNUM_RE]) {
@@ -92,8 +99,13 @@ function passportParts(text, ctx) {
     if (passportDoc(text, at, ctx)) issuer(end + /^[ \u00a0:–—-]*/u.exec(text.slice(end))[0].length);
   const s0 = text.search(/\S/u);
   if (s0 >= 0 && labelState(text, s0, ctx, 'PASSPORT_ISSUER').mine && passportDoc(text, s0, ctx)) issuer(s0);
-  for (const c of scan(text, DATE_RE))
-    if (labelState(text, c.start, ctx, 'PASSPORT_DATE').mine === 'strict' && passportDoc(text, c.start, ctx)) add('PASSPORT_DATE', c.start, c.end);
+  // «Дата выдачи: …» в тексте — только если ближе всех назван паспорт (иначе это дата справки, доверенности…); в ячейке
+  // под меткой строки «Дата выдачи» паспорт назван в соседних строках анкеты — достаточно, что другой документ не назван
+  for (const c of scan(text, DATE_RE)) {
+    if (labelState(text, c.start, ctx, 'PASSPORT_DATE').mine !== 'strict') continue;
+    const d = docContext(text, c.start, ctx);
+    if (d === 'PASSPORT' || (!d && cell && c.start === s0)) add('PASSPORT_DATE', c.start, c.end);
+  }
   for (const c of scan(text, DEPT_RE)) if (labelState(text, c.start, ctx, 'PASSPORT_DEPT').mine) add('PASSPORT_DEPT', c.start, c.end);
   return parts;
 }
@@ -196,6 +208,6 @@ const AMOUNT_LABEL_RE = new RegExp(
   'iu',
 );
 function amountLabel(text, start) {
-  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-  return AMOUNT_LABEL_RE.test(text.slice(Math.max(lineStart, start - 40), start));
+  const raw = text.slice(Math.max(0, start - 40), start);
+  return AMOUNT_LABEL_RE.test(raw.slice(raw.lastIndexOf('\n') + 1));
 }

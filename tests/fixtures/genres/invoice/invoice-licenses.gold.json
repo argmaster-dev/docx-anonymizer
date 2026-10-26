@@ -107,6 +107,11 @@
       "category": "COMPANY"
     },
     {
+      "value": "Счёт на оплату",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
       "value": "к оплате",
       "category": "COMPANY"
     }

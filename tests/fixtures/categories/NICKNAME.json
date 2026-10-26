@@ -91,6 +91,33 @@
           "level": "validated"
         }
       ]
+    },
+    {
+      "text": "https://t.me/ivanov_ivan/123?single",
+      "expect": [
+        {
+          "text": "https://t.me/ivanov_ivan/123?single",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "Сайт: https://www.facebook.com/profile.php?id=100012345678.",
+      "expect": [
+        {
+          "text": "https://www.facebook.com/profile.php?id=100012345678",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "https://vk.com/id12345?w=wall12345_67",
+      "expect": [
+        {
+          "text": "https://vk.com/id12345?w=wall12345_67",
+          "level": "validated"
+        }
+      ]
     }
   ],
   "negative": [
@@ -123,6 +150,12 @@
     },
     {
       "text": "мой ник не скажу"
+    },
+    {
+      "text": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    },
+    {
+      "text": "Подробнее: https://vk.com/wall-12345_678"
     }
   ]
 }

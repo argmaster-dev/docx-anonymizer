@@ -6,13 +6,18 @@
 //     без метки — только форматы с жёсткой структурой (уровень `validated`): VIN, госномер кириллицей, IP, MAC, кадастр,
 //     запись ЕГРН, арбитражное дело, УИД, исполнительное производство, серия свидетельства ЗАГС;
 //   - «метка → значение»: метка в тексте (или метка строки/заголовок столбца таблицы), за ней код с цифрой (`labeled`)
-//     или, для HEALTH и SPECIAL, текст до конца фразы после «:».
+//     или, для HEALTH и SPECIAL, текст до конца фразы, следующей метки или поля после «:».
 // Чистые функции; значения документа никуда не пишутся (NFR-14).
 import { ipv4, ipv6, oms, passport, roman, vin } from '../../validators.js';
-import { NB, NA, EXTRA_RX, foreignHit, labelHits, labelsOf, labelWindows, scan } from './labels.js';
+import { isCategoryEnabled } from '../../categories.js';
+import { getDetectors } from '../../contracts/detector.js';
+import { NB, NA, EXTRA_RX, foreignHit, intervals, labelHits, labelStarts, labelsOf, labelWindows, lowerBound, scan } from './labels.js';
+import { trimUrl } from './contact.js';
 
 const SP = '[ \\t\\u00a0]';
-/** Между серией и номером: «№», «N», «No.» или один пробел. */
+/** Дефис в номере: обычный, неразрывный (`w:noBreakHyphen` → U+2011), «‐», «‒», короткое тире и мягкий перенос. */
+const DASH = '[-\\u2010-\\u2013\\u00ad]';
+/** Между серией и номером: «№», «N», «No.», «номер» или один пробел. */
 const NO = `(?:${SP}*(?:№|N|No\\.?|номер)${SP}*|${SP}?)`;
 const CYR = 'А-ЯЁ';
 const cand = (start, end, confidence, validator) => (validator ? { start, end, confidence, validator } : { start, end, confidence });
@@ -86,6 +91,7 @@ export function docSeriesTail(text, start, ctx) {
  * @property {boolean} [doc]       тип документа личности: метка засчитывается, только если ближе всех назван этот документ
  * @property {boolean} [only]      только с меткой (формат, который сам по себе не отличить)
  * @property {boolean} [hard]      формат не спутать ни с чем: чужая метка рядом («серия VII-МЮ») не мешает
+ * @property {(v: string) => string} [trim]  обрезка хвоста значения (ссылка — как `detectUrl`)
  */
 
 /**
@@ -102,21 +108,25 @@ function detector(id, fmts, v, more) {
     // только по метке, а меток в потоке нет (и это не ячейка таблицы) — искать нечего
     if (!bareFmt && !more && !ctx?.stream?.rowHeader && !ctx?.stream?.columnHeader && !labelsOf(id, text, ctx).length) return [];
     const out = [];
-    const free = (a, b) => !out.some((c) => a < c.end && c.start < b);
+    const taken = intervals();
+    const push = (c) => {
+      taken.add(c.start, c.end);
+      out.push(c);
+    };
     for (const f of fmts) {
       for (const c of scan(text, f.re)) {
-        const val = c.text.replace(/[.\s]+$/u, '');
+        const val = f.trim ? f.trim(c.text) : c.text.replace(/[.\s]+$/u, '');
         const end = c.start + val.length;
-        if (!free(c.start, end) || (f.chk && !f.chk(val))) continue;
+        if (!taken.free(c.start, end) || (f.chk && !f.chk(val))) continue;
         const hits = labelHits(text, c.start, ctx, f.doc ? 64 : undefined);
         const doc = f.doc ? docContext(text, c.start, ctx) : null;
         const mine = hits.has(id) && (!f.doc || doc === id);
         const bare = !f.only && !!f.bare?.(val, text, c.start, ctx);
-        if (mine) out.push(cand(c.start, end, bare ? 'validated' : 'labeled', v));
-        else if (bare && (f.hard || !foreignHit(hits, id))) out.push(cand(c.start, end, 'validated', v));
+        if (mine) push(cand(c.start, end, bare ? 'validated' : 'labeled', v));
+        else if (bare && (f.hard || !foreignHit(hits, id))) push(cand(c.start, end, 'validated', v));
       }
     }
-    if (more) for (const c of more(text, ctx)) if (free(c.start, c.end)) out.push(c);
+    if (more) for (const c of more(text, ctx)) if (taken.free(c.start, c.end)) push(c);
     return out.sort((a, b) => a.start - b.start);
   };
 }
@@ -129,7 +139,7 @@ const MARK = '(?:№|#|N[oо]\\.|Nr\\.|N[oо]?(?![\\p{L}]))';
 /** До трёх слов между меткой и номером («Счёт на оплату № 245», «доверенность от 01.02.2026 № 15»). */
 const FILL = rx(`(?:${SP}+(?:[\\p{L}«»"'().-]+|${DATE_SRC}(?:${SP}?г\\.)?)){0,3}?(?=${SP}*${MARK})`, 'iuy');
 const GAP = rx(`${SP}*(?:[:–—-]${SP}*)?(?:${MARK}${SP}*:?${SP}*)?`, 'iuy');
-const TOK = rx('[\\p{L}\\p{N}]+(?:[-/._:№][\\p{L}\\p{N}]+)*', 'uy');
+const TOK = rx('[\\p{L}\\p{N}]+(?:[-/._:№\\u2010-\\u2013\\u00ad][\\p{L}\\p{N}]+)*', 'uy');
 /** Слово-номер в самой метке: «номер заказа», «код клиента», «ИКЗ» — знак «№» после неё не обязателен. */
 const NUMBERISH = /номер|number|код|\bno\b|\bid\b|икз|кусп|уид|енп|№|#/iu;
 
@@ -148,10 +158,10 @@ function valueStarts(id, text, ctx) {
     const g = GAP.exec(text)[0];
     out.push([p + g.length, text.slice(at, end), /[№#:]|N[oо]|Nr/iu.test(g), at]);
   }
-  // ячейка таблицы под меткой строки или столбца («Диагноз | J45.0 …», «Номер клиента | 100234»)
+  // ячейка таблицы под меткой строки или столбца («Диагноз | J45.0 …», «Номер клиента | 100234»); ячейка, которая сама
+  // начинается с метки, — заголовок («Диагноз | Код МКБ-10», «Диагноз | Госномер»)
   const s0 = text.search(/\S/u);
-  // (ячейка, которая сама начинается с метки, — заголовок: «Диагноз | Код МКБ-10»)
-  if (s0 >= 0 && !out.some((x) => x[3] === s0) && (ctx?.stream?.rowHeader || ctx?.stream?.columnHeader) && labelHits(text, s0, ctx).has(id))
+  if (s0 >= 0 && labelStarts(text, ctx)[0] !== s0 && (ctx?.stream?.rowHeader || ctx?.stream?.columnHeader) && labelHits(text, s0, ctx).has(id))
     out.push([s0, null, true, s0]);
   return out;
 }
@@ -179,37 +189,95 @@ const tokens =
         v = v.replace(/[.:]+$/u, '');
       }
       if (o.ok && !o.ok(v)) continue;
-      if (!out.some((c) => c.start === p)) out.push(cand(p, p + v.length, 'labeled'));
+      if (!out.length || out[out.length - 1].start !== p) out.push(cand(p, p + v.length, 'labeled'));
     }
     return out;
   };
 
 const ICD = `[A-Z${CYR}]\\d{2}(?:\\.\\d{1,2})?`;
-const TXT_STOP = /\n|;|[.!?](?=[ \t\u00a0]+[\p{Lu}«"])|[.!?]$/u;
+const ICD_START = rx(`^${ICD}(?![\\p{L}\\p{N}])`, 'u');
+/**
+ * Конец значения HEALTH/SPECIAL: строка, табуляция, «;», конец предложения, новое поле «Слово:» / «Два слова:», подчёркивания
+ * бланка («Подпись ______»), «, <оборот>:» («русский, проживает по адресу: …»).
+ */
+const TXT_STOP =
+  /\n|\t|;|[.!?](?=[ \u00a0]+[\p{Lu}«"])|[.!?]$|[ \u00a0]+\p{Lu}[\p{L}.-]*(?:[ \u00a0]+[\p{L}.-]+)?:(?=[ \u00a0]|$)|(?:[ \u00a0]+\p{Lu}\p{Ll}+)?[ \u00a0]*_{2,}|,[ \u00a0]+[^,;:\n]{1,40}:(?=[ \u00a0]|$)/u;
+/** Метка поля: перед ней начало строки или «, ; . ( : •» и тире (без поиска по всему потоку — окно 40 символов). */
+const fieldStart = (text, at) => {
+  let i = at - 1;
+  while (i >= 0 && at - i <= 40 && /[ \t\u00a0]/u.test(text[i])) i--;
+  return i < 0 || /[\n,;.(:\t•·—–-]/u.test(text[i]);
+};
+let inner = { text: null, stream: null, list: [] };
 
 /**
- * Текст после метки до конца фразы, строки или следующей такой же метки («Национальность: …, вероисповедание: …»):
- * HEALTH и SPECIAL. Нужен разделитель «:», «—» или табуляция (или ячейка под меткой); диагноз — ещё и сразу код МКБ-10.
+ * Находки других категорий (правила идентификаторов и адреса) в потоке: значение HEALTH/SPECIAL обрезается до первой
+ * из них, иначе длинный `labeled`-кандидат целиком проиграл бы ИНН или телефону внутри и ушёл открытым (FR-20). Считается
+ * только для потоков, где нашлась метка здоровья или особой категории (кэш на поток).
+ */
+function innerStarts(text, ctx) {
+  if (inner.text === text && inner.stream === ctx?.stream) return inner.list;
+  const list = [];
+  for (const [cat, ds] of getDetectors()) {
+    if (cat === 'HEALTH' || cat === 'SPECIAL') continue;
+    const c = ctx?.catalog?.byId.get(cat);
+    if (!c || !isCategoryEnabled(c, ctx.settings || {})) continue;
+    for (const d of ds) {
+      try {
+        for (const x of d.fn(text, { ...ctx, category: c }) || [])
+          if ((x.confidence === 'validated' || x.confidence === 'labeled') && c.allowedLevels.includes(x.confidence)) list.push(x.start);
+      } catch {
+        /* сбой чужого детектора здесь не важен: его покажет сам анализ (DETECTOR_FAILED) */
+      }
+    }
+  }
+  inner = { text, stream: ctx?.stream, list: list.sort((a, b) => a - b) };
+  return inner.list;
+}
+
+/**
+ * Текст после метки до конца фразы, строки, следующей метки любой категории или первой вложенной находки:
+ * HEALTH и SPECIAL. Нужен разделитель «:», «—» или табуляция (или ячейка под меткой); код МКБ («МКБ-10», «Код МКБ») —
+ * только сам код в начале значения; диагноз без разделителя — если сразу код МКБ-10.
  */
 const freeText = (id) => (text, ctx) => {
-  const next = [...labelsOf('HEALTH', text, ctx), ...labelsOf('SPECIAL', text, ctx)].map(([at]) => at);
+  const starts = valueStarts(id, text, ctx);
+  if (!starts.length) return [];
+  const labels = labelStarts(text, ctx);
+  const nested = innerStarts(text, ctx);
   const out = [];
-  for (const [p0, lab, , at] of valueStarts(id, text, ctx)) {
+  for (const [p0, lab, , at] of starts) {
     let p = p0;
     if (lab !== null) {
-      // особые категории — только метка поля (начало строки, после «,», «;», «:»): не «национальность и вероисповедание — …»
-      if (id === 'SPECIAL' && !/(?:^|[\n,;.(:\t•·—–-])[ \t\u00a0]*$/u.test(text.slice(0, at))) continue;
-      const sep = text.slice(0, p).match(/[ \t\u00a0:–—-]*$/u)[0];
-      if (!/[:–—\t-]/u.test(sep) && !(id === 'HEALTH' && rx(`^${ICD}(?![\\p{L}\\p{N}])`, 'u').test(text.slice(p)))) continue;
+      // особые категории — только метка поля (с заглавной или после «, ; : …»): не «национальность и вероисповедание — …»
+      if (id === 'SPECIAL' && !/^\p{Lu}/u.test(lab) && !fieldStart(text, at)) continue;
+      const sep = text.slice(Math.max(at, p - 40), p).match(/[ \t\u00a0:–—-]*$/u)[0];
+      const icd = ICD_START.test(text.slice(p, p + 8));
+      if (/мкб|icd/iu.test(lab) && !icd) continue; // «МКБ-10 — международная классификация»
+      if (!/[:–—\t-]/u.test(sep) && !(id === 'HEALTH' && icd)) continue;
     }
     while (/[ \t\u00a0]/u.test(text[p] || '')) p++;
     let end = Math.min(text.length, p + 300);
     const stop = TXT_STOP.exec(text.slice(p, end));
     if (stop) end = p + stop.index;
-    const nl = next.find((x) => x > p && x < end);
-    if (nl !== undefined) end = nl;
+    const k = lowerBound(labels, p + 1);
+    if (k < labels.length && labels[k] < end) end = labels[k];
+    const n = lowerBound(nested, p + 1);
+    if (n < nested.length && nested[n] < end) end = nested[n];
     while (end > p && /[\s,.;:–—-]/u.test(text[end - 1])) end--;
-    if (end - p >= 2 && /[\p{L}\p{N}]/u.test(text.slice(p, end))) out.push(cand(p, end, 'labeled'));
+    if (end - p < 2 || !/[\p{L}\p{N}]/u.test(text.slice(p, end))) continue;
+    out.push(cand(p, end, 'labeled'));
+    // запасные части — части через запятую и слова: если значение целиком проиграет находке документного детектора
+    // (ФИО правил уровня validated), останутся закрытыми остальные части, а не всё значение (FR-20 выбрасывает проигравшего
+    // целиком); без конфликта целое сильнее частей (раньше начинается или длиннее) и они отпадают
+    const value = text.slice(p, end);
+    if (!/[\s,]/u.test(value)) continue;
+    for (const re of [/[^,;]+/gu, /[\p{L}\p{N}][\p{L}\p{N}.-]*/gu])
+      for (const m of value.matchAll(re)) {
+        const lead = m[0].length - m[0].trimStart().length;
+        const t = m[0].trim();
+        if (t && t.length < value.length) out.push(cand(p + m.index + lead, p + m.index + lead + t.length, 'labeled'));
+      }
   }
   return out;
 };
@@ -218,23 +286,62 @@ const freeText = (id) => (text, ctx) => {
 
 const f = (src, o = {}) => ({ re: rx(`${NB}(?:${src})${NA}`), ...o });
 const PL = '[АВЕКМНОРСТУХABEKMHOPCTYX]';
-/** Номер версии, пункта, раздела или кода перед «IP»: «версия 1.2.10.4», «п. 4.1.2.3», «ОКПД2 62.01.11.000». */
+/**
+ * Номер версии, пункта, раздела, рисунка, таблицы или кода перед «IP»: «версия 1.2.10.4», «Версия ПО: 10.4.12.200», «п. 4.1.2.3»,
+ * «Таблица 3.12.4.1», «Firefox 115.0.2.1», «ОКПД2 — 26.20.11.110»; между словом и числом — до двух слов и «:», тире.
+ */
 const NOT_IP_CTX =
-  /(?:верси\p{L}*|ver\.?|v|п\.|пункт\p{L}*|раздел\p{L}*|разд\.|глав\p{L}*|ст\.|стать\p{L}*|гост|оквэд|окпд\d?|кбк|oid|version|release|build)[ \t\u00a0]*$/iu;
+  /(?<![\p{L}])(?:верси\p{L}*|ver\.?|v|п|пп|пункт\p{L}*|подпункт\p{L}*|раздел\p{L}*|разд|глав\p{L}*|ст|стать\p{L}*|табл\p{L}*|рис\p{L}*|прил\p{L}*|гост|оквэд\d*|окпд\d*|кбк|oid|version|release|build|сборк\p{L}*|по|firefox|chrome|chromium|safari|edge|opera|windows|android|ios|macos|linux|office|java|python|node(?:\.?js)?|firmware|прошивк\p{L}*|драйвер\p{L}*)\.?(?:[ \t\u00a0]+[\p{L}\d.]+){0,2}?[ \t\u00a0:–—-]*$/iu;
+/** Заголовок столбца с кодами и версиями: «Код ОКПД2», «Версия», «№ п/п». */
+const NOT_IP_COL = /окпд|оквэд|вэд|верси|version|код|артикул|номер|№|пункт|раздел/iu;
 const NICK_CTX = /telegram|телеграм|(?<![\p{L}])(?:тг|tg|вк|vk|инст|ник)(?![\p{L}])|instagram|инстаграм|вконтакте|twitter|tiktok|тикток|discord|t\.me/iu;
+/** Перед VIN без метки — артикул, серийный номер, партия: это не VIN. */
+const NOT_VIN_CTX =
+  /(?<![\p{L}])(?:арт\p{L}*|s\/n|sn|серийн\p{L}*|зав\p{L}*|партия|партии|lot|sku|код\p{L}*)\.?(?:[ \t\u00a0]+[\p{L}.№]+){0,2}?[ \t\u00a0:№#–—-]*$/iu;
+/** WMI заводов, чьи VIN часто без проверочной цифры (Россия, Европа, Азия): без метки — ещё и по ним. */
+const WMI =
+  /^(?:XTA|XTT|XTH|X96|X7L|X9F|XW8|XWE|XUF|X4X|Z94|Z8T|Z8N|ZFA|ZAR|WVW|WV1|WV2|WBA|WBS|WDB|WDD|WAU|WF0|WP0|VF1|VF3|VF7|VSS|TMB|YV1|SAL|SJN|JTD|JTM|JMB|JN1|KMH|KNA|LVS|LGX)/;
+const VIN_MAP = { А: 'A', В: 'B', Е: 'E', К: 'K', М: 'M', Н: 'H', Р: 'P', С: 'C', Т: 'T', У: 'Y', Х: 'X', О: 'O' };
+/** VIN по метке: кириллические двойники латиницы, строчные, пробелы между группами → 17 знаков без I/O/Q. */
+const vinNorm = (v) =>
+  v
+    .toUpperCase()
+    .replace(/[АВЕКМНРСТУХО]/gu, (ch) => VIN_MAP[ch])
+    .replace(/[\s\u00a0]/gu, '');
+const vinOk = (v) => {
+  const s = vinNorm(v);
+  return /^[A-HJ-NPR-Z0-9]{17}$/.test(s) && /\d/.test(s) && /[A-Z]/.test(s);
+};
 
 const plateBare = (v) => {
   const s = v.replace(/[\s\u00a0]*RUS$/u, '');
   return !/[A-Z]/.test(s) && !/(?<!\d)000(?!\d)/.test(s) && !/\D00$/.test(s);
 };
-const vinBare = (v) =>
-  /\d/.test(v) && /[A-Z]/.test(v) && (vin(v) || (/[A-Z]/.test(v.slice(0, 3)) && /^\d{4}$/.test(v.slice(-4)) && v.replace(/\D/g, '').length >= 6));
-const ipBare = (v, text, start) =>
-  !NOT_IP_CTX.test(text.slice(Math.max(0, start - 20), start)) && (v.includes(':') || v.split(/[./]/).some((x) => x.length > 1));
+const vinBare = (v, text, start) => /\d/.test(v) && /[A-Z]/.test(v) && (vin(v) || WMI.test(v)) && !NOT_VIN_CTX.test(text.slice(Math.max(0, start - 40), start));
+const ipBare = (v, text, start, ctx) =>
+  !NOT_IP_CTX.test(text.slice(Math.max(0, start - 40), start)) &&
+  !NOT_IP_COL.test(ctx?.stream?.columnHeader || '') &&
+  (v.includes(':') || (ipv4(v.split('/')[0]) && v.split(/[./]/).some((x) => x.length > 1)));
 const handleCtx = (v, text, start) => {
-  const ls = text.lastIndexOf('\n', start - 1) + 1;
-  const le = text.indexOf('\n', start);
-  return NICK_CTX.test(text.slice(Math.max(ls, start - 60), Math.min(le < 0 ? text.length : le, start + v.length + 40)));
+  const w = text.slice(Math.max(0, start - 60), Math.min(text.length, start + v.length + 40));
+  const at = start - Math.max(0, start - 60);
+  const ls = w.lastIndexOf('\n', at - 1) + 1;
+  const le = w.indexOf('\n', at);
+  return NICK_CTX.test(w.slice(ls, le < 0 ? w.length : le));
+};
+/** Пути площадок, которые не профиль: публикации, видео, поиск («youtube.com/watch», «vk.com/wall-…»); YouTube — только «@ник». */
+const NOT_PROFILE =
+  /^(?:watch|wall|video|photo|album|audio|feed|share|search|explore|reels?|p|s|joinchat|hashtag|groups|events|pages|login|signup|help|about|settings|music|clips?|stories|shorts|playlist|results|channel|c|user|tv)$/i;
+const nickLink = (v) => {
+  const m = /^(?:https?:\/\/)?(?:www\.|m\.)?([^/]+)\/(@?[\w.]+)/i.exec(v);
+  if (!m) return false;
+  if (/youtube/i.test(m[1]) && !m[2].startsWith('@')) return false;
+  return !NOT_PROFILE.test(m[2]);
+};
+/** Без ведущих нулей — без метки; по метке («IP 192.168.001.010») октеты с нулями тоже. */
+const ipv4Loose = (v) => {
+  const p = v.split('/')[0].split('.');
+  return p.length === 4 && p.every((x) => /^\d{1,3}$/.test(x) && +x <= 255);
 };
 
 /** Потоковые детекторы категорий 0.5 (кроме частей паспорта — `docs.js`). */
@@ -249,10 +356,10 @@ export const PAPER_DETECTORS = {
     'CIVIL_CERT',
     [
       {
-        re: rx(`(?<![\\p{L}\\p{N}])([IVXІХ]{1,6})${SP}?[-–]${SP}?[${CYR}]{2}${NO}\\d{6}${NA}`),
+        re: rx(`(?<![\\p{L}\\p{N}])([IVXІХ]{1,6})${SP}?${DASH}${SP}?[${CYR}]{2}${NO}\\d{6}${NA}`),
         doc: true,
         hard: true,
-        bare: (v) => roman(v.split(/[\s\u00a0]*[-–]/u)[0]),
+        bare: (v) => roman(v.split(/[\s\u00a0]*[-\u2010-\u2013\u00ad]/u)[0]),
       },
     ],
     'roman',
@@ -260,12 +367,26 @@ export const PAPER_DETECTORS = {
   ),
   OMS: detector('OMS', [f(`\\d{4}(?:${SP}?\\d{4}){3}`, { doc: true, chk: oms })], 'oms'),
   VEHICLE_DOC: detector('VEHICLE_DOC', [f(`\\d{2}${SP}?(?:\\d{2}|[${CYR}A-Z]{2})${NO}\\d{6}`, { doc: true }), f('\\d{15}', { doc: true })]),
-  VIN: detector('VIN', [{ re: rx('(?<![\\p{L}\\p{N}])[A-HJ-NPR-Z0-9]{17}(?![\\p{L}\\p{N}])'), bare: vinBare }], 'vin'),
-  // госномер: «А123ВС77», «А 123 ВС 777 RUS»; без метки — только кириллицей; прицеп, мотоцикл, такси — по метке
+  // VIN без метки — верная проверочная цифра или известный WMI; по метке — и кириллица, строчные, пробелы между группами
+  VIN: detector(
+    'VIN',
+    [
+      { re: rx('(?<![\\p{L}\\p{N}])[A-HJ-NPR-Z0-9]{17}(?![\\p{L}\\p{N}])'), bare: vinBare },
+      {
+        re: rx(`(?<![\\p{L}\\p{N}])(?:[A-HJ-NPR-Z0-9АВЕКМНРСТУХ]{2,14}${SP}){0,3}[A-HJ-NPR-Z0-9АВЕКМНРСТУХ]{2,17}(?![\\p{L}\\p{N}])`, 'giu'),
+        only: true,
+        chk: vinOk,
+      },
+    ],
+    'vin',
+  ),
+  // госномер: «А123ВС77», «А 123 ВС 777 RUS»; без метки — только кириллицей и прописными; строчные, латинские двойники,
+  // прицеп, мотоцикл, такси — по метке
   PLATE: detector(
     'PLATE',
     [
       f(`${PL}${SP}?\\d{3}${SP}?${PL}{2}${SP}?\\d{2,3}(?:${SP}?RUS)?(?![-/])`, { bare: plateBare }),
+      { re: rx(`${NB}(?:${PL}${SP}?\\d{3}${SP}?${PL}{2}${SP}?\\d{2,3}(?:${SP}?RUS)?)${NA}(?![-/])`, 'giu'), only: true },
       f(`${PL}{2}${SP}?\\d{3,4}${SP}?\\d{2,3}|\\d{4}${SP}?${PL}{2}${SP}?\\d{2,3}`, { only: true }),
     ],
     'plate',
@@ -273,7 +394,7 @@ export const PAPER_DETECTORS = {
   IP: detector(
     'IP',
     [
-      { re: rx('(?<![\\p{L}\\p{N}.:])\\d{1,3}(?:\\.\\d{1,3}){3}(?:\\/\\d{1,2})?(?![\\p{L}\\p{N}]|\\.\\d)'), chk: (v) => ipv4(v.split('/')[0]), bare: ipBare },
+      { re: rx('(?<![\\p{L}\\p{N}.:])\\d{1,3}(?:\\.\\d{1,3}){3}(?:\\/\\d{1,2})?(?![\\p{L}\\p{N}]|\\.\\d)'), chk: ipv4Loose, bare: ipBare },
       { re: rx('(?<![\\p{L}\\p{N}:])[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?![\\p{L}\\p{N}:])'), chk: ipv6, bare: ipBare },
     ],
     'ip',
@@ -289,14 +410,17 @@ export const PAPER_DETECTORS = {
     ],
     'mac',
   ),
-  // ник: ссылка на профиль — всегда; «@ник» — по метке или рядом с названием мессенджера (не e-mail: перед «@» нет имени)
+  // ник: ссылка на профиль целиком с путём и параметрами (как URL) — всегда; публикации, видео и поиск — не ник, это URL;
+  // «@ник» — по метке или рядом с названием мессенджера (не e-mail: перед «@» нет имени)
   NICKNAME: detector(
     'NICKNAME',
     [
       {
         re: rx(
-          '(?<![\\p{L}\\p{N}@./-])(?:https?:\\/\\/)?(?:www\\.)?(?:t\\.me|telegram\\.me|vk\\.(?:com|ru)|instagram\\.com|ok\\.ru|facebook\\.com|fb\\.com|twitter\\.com|x\\.com|tiktok\\.com|youtube\\.com)\\/@?[A-Za-z0-9_][A-Za-z0-9_.]{1,63}',
+          '(?<![\\p{L}\\p{N}@./-])(?:https?:\\/\\/)?(?:www\\.|m\\.)?(?:t\\.me|telegram\\.me|vk\\.(?:com|ru)|instagram\\.com|ok\\.ru|facebook\\.com|fb\\.com|twitter\\.com|x\\.com|tiktok\\.com|youtube\\.com)\\/@?[A-Za-z0-9_][A-Za-z0-9_.]{1,63}(?:[/?#][^\\s<>"«»\\u00a0\\uFFFC]*)?',
         ),
+        trim: trimUrl,
+        chk: nickLink,
         hard: true,
         bare: () => true,
       },
@@ -315,25 +439,30 @@ export const PAPER_DETECTORS = {
   ),
   EGRN_RECORD: detector(
     'EGRN_RECORD',
-    [f('\\d{2}:\\d{2}:\\d{6,7}:\\d{1,6}-\\d{2}\\/\\d{3}\\/\\d{4}-\\d{1,6}', { hard: true, bare: () => true })],
+    [f(`\\d{2}:\\d{2}:\\d{6,7}:\\d{1,6}${DASH}\\d{2}\\/\\d{3}\\/\\d{4}${DASH}\\d{1,6}`, { hard: true, bare: () => true })],
     'cadastral',
     tokens('EGRN_RECORD', { ok: (v) => (v.match(/[/:]/g) || []).length >= 2 && v.replace(/\D/g, '').length >= 8 }),
   ),
   ENFORCEMENT: detector(
     'ENFORCEMENT',
-    [f('\\d{1,7}\\/\\d{2}\\/\\d{5}-(?:ИП|СД)', { hard: true, bare: () => true })],
+    [f(`\\d{1,7}\\/\\d{2}\\/\\d{5}${DASH}(?:ИП|СД)`, { hard: true, bare: () => true })],
     'enforcement',
     tokens('ENFORCEMENT', { ok: (v) => v.replace(/\D/g, '').length >= 6 }),
   ),
-  // дело: арбитраж «А40-12345/2026» и УИД «77RS0001-02-2026-001234-56» — без метки; «2-1545/2026», КУСП, уголовное — по метке
+  // дело: арбитраж «А40-12345/2026» (год из четырёх цифр, без продолжения «-ПД») и УИД — без метки; двузначный год,
+  // «2-1545/2026», «02-…», «33-…», КУСП, уголовное — по метке
   COURT_CASE: detector(
     'COURT_CASE',
     [
-      f('[АA]\\d{2}-\\d{1,7}\\/(?:\\d{4}|\\d{2})', { hard: true, bare: () => true }),
-      f('\\d{2}[A-Z]{2}\\d{4}-\\d{2}-\\d{4}-\\d{6}-\\d{2}', { hard: true, bare: () => true }),
+      f(`[АA]\\d{2}${DASH}\\d{1,7}\\/(?:\\d{4}|\\d{2})(?!${DASH}[\\p{L}\\p{N}])`, { hard: true, bare: (v) => /\/\d{4}$/.test(v) }),
+      f(`\\d{2}[A-Z]{2}\\d{4}${DASH}\\d{2}${DASH}\\d{4}${DASH}\\d{6}${DASH}\\d{2}`, { hard: true, bare: () => true }),
     ],
     'courtCase',
-    tokens('COURT_CASE', { fmt: rx(`(?:\\d{1,2}[а-яa-z]?|[${CYR}A-Z])-\\d{1,7}\\/\\d{2,4}(?:\\/\\d{1,4})?(?![\\p{L}\\p{N}])`, 'uy') }),
+    tokens('COURT_CASE', {
+      fmt: rx(`(?:\\d{1,2}[а-яa-z]?|[${CYR}A-Z])${DASH}\\d{1,7}\\/\\d{2,4}(?:\\/\\d{1,4})?(?![\\p{L}\\p{N}])`, 'uy'),
+      // «дело № 5 в описи» — не номер дела: нужен дефис, «/» или не меньше четырёх цифр (КУСП, уголовное дело)
+      ok: (v) => /[-/\u2010-\u2013]/u.test(v) || v.replace(/\D/g, '').length >= 4,
+    }),
   ),
   POA: tokens('POA', { fmt: rx(`\\d{2}${SP}?[${CYR}]{2}${SP}?\\d{7}(?!\\d)`, 'uy') }),
   NOTARY_REG: tokens('NOTARY_REG'),

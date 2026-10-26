@@ -34,7 +34,7 @@
       "expect": [
         {
           "text": "XTA210990Y1234567",
-          "level": "validated"
+          "level": "labeled"
         }
       ]
     },
@@ -91,6 +91,33 @@
           "level": "validated"
         }
       ]
+    },
+    {
+      "text": "VIN: ХТА21099071234567",
+      "expect": [
+        {
+          "text": "ХТА21099071234567",
+          "level": "labeled"
+        }
+      ]
+    },
+    {
+      "text": "VIN XTA 21099 071234567",
+      "expect": [
+        {
+          "text": "XTA 21099 071234567",
+          "level": "labeled"
+        }
+      ]
+    },
+    {
+      "text": "VIN: хта21099071234567",
+      "expect": [
+        {
+          "text": "хта21099071234567",
+          "level": "labeled"
+        }
+      ]
     }
   ],
   "negative": [
@@ -123,6 +150,15 @@
     },
     {
       "text": "код QWERTYUIOPASDFGHJ"
+    },
+    {
+      "text": "Артикул ABC1234567890DEFG, арт. KZT20261026123456"
+    },
+    {
+      "text": "Серийный номер SN2026XYZ12345678"
+    },
+    {
+      "text": "Партия LOT2026AB1234567 годна до 2027"
     }
   ]
 }

@@ -106,7 +106,7 @@ describe('метка ячейки таблицы и заголовок стол�
   const run = (id, text, extra) => IDENTIFIER_DETECTORS[id](text, { stream: { ...stream, ...extra }, language: 'ru', catalog, settings: {} });
   it('особые категории и здоровье — значение всей ячейки под меткой строки или столбца', () => {
     expect(run('SPECIAL', 'православие', { rowHeader: 'Вероисповедание' }).map((c) => [c.start, c.end])).toEqual([[0, 11]]);
-    expect(run('HEALTH', 'J45.0 Бронхиальная астма', { columnHeader: 'Диагноз' }).map((c) => [c.start, c.end])).toEqual([[0, 24]]);
+    expect(run('HEALTH', 'J45.0 Бронхиальная астма', { columnHeader: 'Диагноз' })[0]).toMatchObject({ start: 0, end: 24 }); // целиком (за ним — запасные части)
     expect(run('SPECIAL', 'православие', { rowHeader: 'Город' })).toEqual([]);
     expect(run('SPECIAL', 'православие', {})).toEqual([]);
   });
@@ -116,6 +116,43 @@ describe('метка ячейки таблицы и заголовок стол�
     expect(run('PASSPORT_DEPT', '770-001', { rowHeader: 'Код подразделения' }).length).toBe(1);
     expect(run('PASSPORT_DATE', '12.03.2005', { rowHeader: 'Дата выдачи' }).length).toBe(1);
     expect(run('PASSPORT_ISSUER', 'ГУ МВД России по Энской области', { rowHeader: 'Кем выдан' }).length).toBe(1);
+  });
+});
+
+describe('ревью WP12-C: таблицы и контекст', () => {
+  const run = (id, text, extra) => IDENTIFIER_DETECTORS[id](text, { stream: { ...stream, ...extra }, language: 'ru', catalog, settings: {} });
+  it('IP без метки не берётся под заголовком столбца с кодами и версиями; под «IP-адрес» — берётся', () => {
+    expect(run('IP', '26.20.11.110', { columnHeader: 'Код ОКПД2' })).toEqual([]);
+    expect(run('IP', '10.4.12.200', { columnHeader: 'Версия' })).toEqual([]);
+    expect(run('IP', '10.4.12.200', { columnHeader: 'IP-адрес' }).length).toBe(1);
+  });
+  it('строка заголовка таблицы: ячейка слева — не метка («Ф.И.О. | Диагноз | Госномер»)', () => {
+    expect(run('HEALTH', 'Госномер', { rowHeader: 'Диагноз', headerRow: true })).toEqual([]);
+    expect(run('HEALTH', 'Примечание', { rowHeader: 'Диагноз', headerRow: true })).toEqual([]);
+    expect(run('HEALTH', 'Госномер', { rowHeader: 'Диагноз' })).toEqual([]); // ячейка — сама метка
+    expect(run('HEALTH', 'J45.0 Бронхиальная астма', { rowHeader: 'Диагноз' })[0]).toMatchObject({ start: 0, end: 24 });
+  });
+  it('таблица PDF целиком: заголовки на месте, значения под ними замаскированы, коды ОКПД2 — нет', async () => {
+    const { fromText, analyze, defaultSettings, registerBuiltinDetectors, clearDetectors, applyDecisions } = await import('../../src/core/index.js');
+    clearDetectors();
+    registerBuiltinDetectors();
+    const rows = [
+      ['Ф.И.О.', 'Диагноз', 'Госномер', 'VIN', 'Код ОКПД2'],
+      ['Иванов Иван Иванович', 'J45.0 Бронхиальная астма', 'А123ВС77', 'XTA21099071234567', '26.20.11.110'],
+    ];
+    const blocks = [];
+    rows.forEach((row, r) => row.forEach((t, c) => blocks.push({ kind: 'cell', text: t, page: 1, table: { index: 0, row: r, col: c, cols: row.length } })));
+    const doc = fromText(blocks, { name: 'a.pdf', size: 1 });
+    const a = await analyze(doc, defaultSettings());
+    const out = new TextDecoder().decode(applyDecisions(doc, a.groups, { placeholderLanguage: 'ru', textFormat: 'md' }).bytes);
+    expect(out).toContain('| Ф.И.О. | Диагноз | Госномер | VIN | Код ОКПД2 |');
+    for (const v of ['Иванов', 'J45.0', 'А123ВС77', 'XTA21099071234567']) expect(out).not.toContain(v);
+    expect(out).toContain('26.20.11.110');
+    // вернуть реестр помощника detect(): только детекторы идентификаторов
+    const { registerDetector, registerDocumentDetector } = await import('../../src/core/contracts/detector.js');
+    const { register } = await import('../../src/core/detect/identifiers/index.js');
+    clearDetectors();
+    register({ registerDetector, registerDocumentDetector });
   });
 });
 

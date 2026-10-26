@@ -91,6 +91,15 @@
           "level": "validated"
         }
       ]
+    },
+    {
+      "text": "госномер а123вс777",
+      "expect": [
+        {
+          "text": "а123вс777",
+          "level": "labeled"
+        }
+      ]
     }
   ],
   "negative": [

@@ -32,7 +32,7 @@ const BARE_RE = new RegExp(
 );
 
 /** Срезает хвостовую пунктуацию и непарные скобки. */
-function trimUrl(s) {
+export function trimUrl(s) {
   for (;;) {
     const last = s[s.length - 1];
     if (!last) return s;

@@ -33,12 +33,20 @@ function defaultCategories() {
 }
 
 /**
- * Дополняет объект категорий встроенными категориями, которых в нём нет (миграция 3 → 4, версия 0.5): `pii`/`ids` — `true`,
- * `commercial` — `defaultOn` (действует при включённом переключателе группы). Заданные значения не трогает.
+ * Дополняет объект категорий категориями 0.5, которых в нём нет (миграция 3 → 4): `pii`/`ids` — `true`, `commercial` —
+ * `defaultOn` (действует при включённом переключателе группы). Заданные значения и отсутствующие ключи 0.4 не трогает.
  */
 function addMissingCategories(categories) {
-  return { ...defaultCategories(), ...categories };
+  const defaults = defaultCategories();
+  return { ...Object.fromEntries(CATEGORIES_05.map((id) => [id, defaults[id]])), ...categories };
 }
+
+/** Категории, добавленные в 0.5 (схема 4): миграция 3 → 4 дописывает только их — частичный профиль не получает ключи 0.4. */
+export const CATEGORIES_05 = Object.freeze([
+  ...['PASSPORT_DEPT', 'PASSPORT_ISSUER', 'PASSPORT_DATE', 'INTL_PASSPORT', 'DRIVER_LICENSE', 'MILITARY_ID', 'RESIDENCE_PERMIT', 'MIGRATION_CARD'],
+  ...['CIVIL_CERT', 'OMS', 'VEHICLE_DOC', 'VIN', 'PLATE', 'NICKNAME', 'IP', 'MAC', 'HEALTH', 'SPECIAL', 'EGRN_RECORD', 'CADASTRAL', 'ENFORCEMENT'],
+  ...['COURT_CASE', 'POA', 'NOTARY_REG', 'TENDER', 'ORDER_NO', 'INVOICE_NO', 'CLIENT_NO', 'IP_REG'],
+]);
 
 /** Включает категории `pii`/`ids` в объекте категорий (миграция 2 → 3 и импорт старых конфигураций). */
 function forceAlwaysOn(categories) {

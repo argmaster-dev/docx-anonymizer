@@ -60,9 +60,13 @@ export function columnHeaders(doc) {
  * Заголовки столбца и строки для абзацев ячеек: `column` — текст ячейки первой строки того же столбца (для ячеек ниже неё),
  * `row` — текст ближайшей непустой ячейки слева в той же строке («Дата рождения | 17.11.1993», WP11-E).
  * @param {import('../docx/model.js').DocModel} doc
- * @returns {{column: Map<string, string>, row: Map<string, string>}}
+ * `head` (0.5, WP12-C) — абзацы строк заголовка таблиц из трёх и более столбцов: ячейка слева для них не метка
+ * («Ф.И.О. | Диагноз | Госномер» — «Госномер» не значение диагноза); у анкеты в два столбца первая строка — «метка | значение».
+ * @returns {{column: Map<string, string>, row: Map<string, string>, head: Set<string>}}
  */
 export function tableHeaders(doc) {
+  /** @type {Set<string>} */
+  const headOut = new Set();
   /** @type {Map<string, string>} */
   const out = new Map();
   /** @type {Map<string, string>} */
@@ -85,8 +89,16 @@ export function tableHeaders(doc) {
     const headRows = (t) => Math.max((top.get(t) ?? 0) + 1, firstData.get(t) ?? (top.get(t) ?? 0) + 1);
     /** @type {Map<string, {row: number, text: string}[]>} */
     const head = new Map();
+    /** @type {Map<string, Set<string>>} */
+    const colsOf = new Map();
+    for (const c of cells) {
+      let set = colsOf.get(tableOf(c));
+      if (!set) colsOf.set(tableOf(c), (set = new Set()));
+      set.add(c.key);
+    }
     for (const c of cells) {
       if (c.row >= headRows(tableOf(c))) continue;
+      if (/** @type {Set<string>} */ (colsOf.get(tableOf(c))).size >= 3) headOut.add(c.pid);
       let h = head.get(c.key);
       if (!h) head.set(c.key, (h = []));
       h.push({ row: c.row, text: c.text });
@@ -127,7 +139,7 @@ export function tableHeaders(doc) {
     const cells = [];
     for (const b of doc.blocks) if (b.table && b.pid) cells.push({ pid: b.pid, key: `${b.table.index}:${b.table.col}`, row: b.table.row, text: b.text });
     assign(cells);
-    return { column: out, row: rowOut };
+    return { column: out, row: rowOut, head: headOut };
   }
   const byPart = new Map();
   for (const p of doc?.paragraphs || []) {
@@ -160,5 +172,5 @@ export function tableHeaders(doc) {
     }
     assign(cells);
   }
-  return { column: out, row: rowOut };
+  return { column: out, row: rowOut, head: headOut };
 }

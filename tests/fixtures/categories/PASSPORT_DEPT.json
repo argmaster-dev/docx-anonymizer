@@ -91,6 +91,24 @@
           "level": "labeled"
         }
       ]
+    },
+    {
+      "text": "Код подразделения: 770–001",
+      "expect": [
+        {
+          "text": "770–001",
+          "level": "labeled"
+        }
+      ]
+    },
+    {
+      "text": "код подразделения 770‑001",
+      "expect": [
+        {
+          "text": "770‑001",
+          "level": "labeled"
+        }
+      ]
     }
   ],
   "negative": [

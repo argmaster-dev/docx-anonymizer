@@ -45,7 +45,7 @@ const EXTRA_LABELS = {
   IBAN: { ru: [], en: ['iban no.', 'iban number'] },
   SWIFT: { ru: ['свифт'], en: ['swift/bic', 'bic/swift', 'swift bic'] },
   SNILS: { ru: ['страховое свидетельство', 'снилс №'], en: [] },
-  PASSPORT: { ru: ['паспорт №', 'серия и номер', 'серии', 'паспорт гражданина рф'], en: ['passport number', 'passport #'] },
+  PASSPORT: { ru: ['паспорт №', 'серия и номер', 'серии', 'паспорт гражданина рф', 'паспортные данные'], en: ['passport number', 'passport #'] },
   SSN: { ru: [], en: ['ssn #', 'social security no.'] },
   TAXID: {
     ru: ['vat no.'],
@@ -197,10 +197,14 @@ function compiled(catalog) {
  * @param {number} [size]
  */
 export function labelWindows(text, start, ctx, size = LABEL_WINDOW) {
-  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-  const w = text.slice(Math.max(lineStart, start - size), start);
+  // окно — не дальше `size` символов назад, начало строки ищется только в нём: длинный абзац обрабатывается линейно (0.5)
+  const from = Math.max(0, start - size);
+  const raw = text.slice(from, start);
+  const nl = raw.lastIndexOf('\n');
+  const w = nl >= 0 ? raw.slice(nl + 1) : raw;
   const windows = [w];
-  if (/^[\s:—–-]*$/u.test(text.slice(lineStart, start))) {
+  // строка заголовка таблицы («Ф.И.О. | Диагноз | Госномер») — не «метка | значение» (0.5, `headerRow` из detect/tables.js)
+  if ((nl >= 0 || from === 0) && /^[\s:—–-]*$/u.test(w) && !ctx?.stream?.headerRow) {
     const row = ctx?.stream?.rowHeader;
     const col = ctx?.stream?.columnHeader;
     if (row) windows.push(`${String(row).trim().slice(-size)} ${w}`);
@@ -233,7 +237,8 @@ export function labelHits(text, start, ctx = {}, size = LABEL_WINDOW) {
     let cands = list;
     if (i === 0) {
       const set = new Set();
-      for (const p of labelStarts(text, ctx)) if (p >= from && p < start) for (const c of catsAt(text, p, ctx)) set.add(c);
+      const starts = labelStarts(text, ctx);
+      for (let k = lowerBound(starts, from); k < starts.length && starts[k] < start; k++) for (const c of catsAt(text, starts[k], ctx)) set.add(c);
       cands = list.filter((c) => set.has(c));
     } else if (!list.any.test(x)) cands = [];
     for (const c of cands) {
@@ -282,6 +287,38 @@ export function labelStarts(text, ctx) {
     for (let x; (x = re.exec(low)); re.lastIndex = x.index + 1) m.starts.push(x.index);
   }
   return m.starts;
+}
+
+/** Первый индекс отсортированного массива со значением ≥ x (двоичный поиск). */
+export function lowerBound(arr, x) {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid] < x) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/**
+ * Набор непересекающихся отрезков [a, b) с проверкой «свободно ли» за O(log n): у отсортированных по началу
+ * непересекающихся отрезков концы тоже отсортированы, поэтому пересечь [a, b) может только последний, начавшийся до b.
+ */
+export function intervals() {
+  const starts = [];
+  const ends = [];
+  return {
+    free(a, b) {
+      const i = lowerBound(starts, b);
+      return i === 0 || ends[i - 1] <= a;
+    },
+    add(a, b) {
+      const i = lowerBound(starts, a);
+      starts.splice(i, 0, a);
+      ends.splice(i, 0, b);
+    },
+  };
 }
 
 /** Категории, чья метка начинается в позиции `p` потока (кэш на поток). */
@@ -400,8 +437,8 @@ const HEADER_FILLER_RE = /(?<![\p{L}])(?:код|кода|номер|номера
 export function goodsCodeContext(text, start, end, ctx = {}) {
   const len = text.slice(start, end).replace(/\D/g, '').length;
   const fits = (g) => !g.lengths || g.lengths.has(len);
-  const lineStart = text.lastIndexOf('\n', start - 1) + 1;
-  const left = text.slice(Math.max(lineStart, start - LABEL_WINDOW), start);
+  const raw = text.slice(Math.max(0, start - LABEL_WINDOW), start);
+  const left = raw.slice(raw.lastIndexOf('\n') + 1);
   if (GOODS_KEYWORDS.some((g) => fits(g) && g.before.test(left))) return true;
   const header = ctx?.stream?.columnHeader;
   if (!header) return false;

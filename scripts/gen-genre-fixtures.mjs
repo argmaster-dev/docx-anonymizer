@@ -267,6 +267,12 @@ function finish(d, body, meta) {
 
 /** Номер документа по метке (счёт, заказ — коммерческие категории 0.5, WP12-C): то же значение ГПСЧ, что и до 0.5, плюс запись в gold. */
 const num = (d, category, lo, hi) => d.add(category, String(d.rng.range(lo, hi)));
+/** Отрицательный пример, который модельные стабы genres.spec.js не размечают (`rules: true`, как в жанрах 0.5). */
+const negRules = (d, value) => {
+  d.neg(value);
+  d.negatives.find((n) => n.value === value).rules = true;
+  return value;
+};
 
 /** Сумма с разрядами через пробел («45 000»), без Intl — одинаково на любой сборке Node. */
 const money = (d, lo, hi, step = 1000) => String(d.rng.range(lo / step, hi / step) * step).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
@@ -568,8 +574,9 @@ function invoice(name, { vat = true } = {}) {
       [cell(`ИНН ${req.inn}   КПП ${req.kpp}`), cell(`Сч. № ${req.rs}`)],
       [cell(`Получатель: ${co(d, seller)}`), cell('')],
     ]),
-    // номер счёта в заголовке — сущность коммерческого режима (0.5, INVOICE_NO): заголовок больше не отрицательный пример
-    title(`Счёт на оплату № ${num(d, 'INVOICE_NO', 100, 999)} от 15 октября 2026 г.`),
+    // номер счёта в заголовке — сущность коммерческого режима (0.5, INVOICE_NO); отрицательный пример — слова заголовка без
+    // номера: проверка ложной организации настоящей модели (`rules: true` — стаб ORG его не размечает, ревью WP12-C)
+    title(`${negRules(d, 'Счёт на оплату')} № ${num(d, 'INVOICE_NO', 100, 999)} от 15 октября 2026 г.`),
     p(r(`Поставщик (Исполнитель): ${co(d, seller)}, ИНН ${req.inn}, КПП ${req.kpp}, ${address(d, city)}, тел. ${phone(d, city)}`)),
     p(r(`Покупатель (Заказчик): ${co(d, buyer)}, ИНН ${binn}, КПП ${bkpp}, ${address(d, city2)}`)),
     p(r(`Основание: договор № ${d.rng.range(10, 99)}/ПС-2026 от 01.09.2026`)),

@@ -128,6 +128,9 @@ describe('settings', () => {
     expect(settings.profiles[0].values).toEqual({});
     expect(settings.profiles[1].values.categories).toMatchObject({ PASSPORT_ISSUER: true, HEALTH: true, POA: true, ORDER_NO: true });
     expect(settings.profiles[2].values.categories).toMatchObject({ CONTRACT: true, OMS: true, NOTARY_REG: true, IP_REG: true });
+    // частичный профиль получает только категории 0.5, ключи 0.4 не дописываются (ревью WP12-C)
+    expect(settings.profiles[2].values.categories.INN).toBeUndefined();
+    expect(settings.profiles[2].values.categories.COMPANY).toBeUndefined();
     for (const id of BUILTIN_CATEGORIES.map((c) => c.id)) expect(typeof settings.categories[id], id).toBe('boolean');
     // повторно — без изменений
     expect(migrateSettings(settings).changed).toBe(false);

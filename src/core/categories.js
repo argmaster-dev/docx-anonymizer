@@ -280,6 +280,10 @@ const BUILTIN = [
     normalize: 'text',
     labels: L(['дата рождения', 'д.р.', 'родился', 'родилась', 'г.р.'], ['date of birth', 'dob', 'born on']),
   },
+  // только по явной метке строки, ячейки или заголовку столбца: без метки не ищутся (ограничение README);
+  // перед PERSON и ADDRESS — при равном уровне имя или адрес внутри диагноза не выбрасывают диагноз целиком (ревью WP12-C)
+  N('HEALTH', 'pii', L('Сведения о здоровье', 'Health data'), L('ЗДОРОВЬЕ', 'HEALTH'), '#16a085', LB, 'lower'),
+  N('SPECIAL', 'pii', L('Особые категории ПДн', 'Special category data'), L('ОСОБЫЕ_ПДН', 'SPECIAL_PD'), '#117a65', LB, 'lower'),
   {
     id: 'PERSON',
     group: 'pii',
@@ -316,9 +320,6 @@ const BUILTIN = [
     normalize: 'lower',
     labels: L(['адрес', 'юридический адрес', 'место нахождения', 'зарегистрирован по адресу'], ['address', 'registered office', 'located at']),
   },
-  // только по явной метке строки, ячейки или заголовку столбца: без метки не ищутся (ограничение README)
-  N('HEALTH', 'pii', L('Сведения о здоровье', 'Health data'), L('ЗДОРОВЬЕ', 'HEALTH'), '#16a085', LB, 'lower'),
-  N('SPECIAL', 'pii', L('Особые категории ПДн', 'Special category data'), L('ОСОБЫЕ_ПДН', 'SPECIAL_PD'), '#117a65', LB, 'lower'),
   {
     id: 'CONTRACT',
     group: 'commercial',
