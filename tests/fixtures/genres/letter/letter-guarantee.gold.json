@@ -54,30 +54,35 @@
     },
     {
       "key": "e11",
+      "category": "INVOICE_NO",
+      "value": "441"
+    },
+    {
+      "key": "e12",
       "category": "COMPANY",
       "value": "Волжский Расчётный Банк",
       "opf": true
     },
     {
-      "key": "e12",
+      "key": "e13",
       "category": "COMPANY",
       "value": "Агентство недвижимости Тихий Двор",
       "opf": false
     },
     {
-      "key": "e13",
+      "key": "e14",
       "category": "PERSON",
       "value": "Комаров Р.А.",
       "surname": "Комаров"
     },
     {
-      "key": "e14",
+      "key": "e15",
       "category": "PERSON",
       "value": "Полякова В.К.",
       "surname": "Полякова"
     },
     {
-      "key": "e15",
+      "key": "e16",
       "category": "PERSON",
       "value": "Полякова Вера Константиновна",
       "surname": "Полякова",

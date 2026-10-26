@@ -25,6 +25,26 @@
 
 const L = (ru, en) => ({ ru, en });
 
+/**
+ * Категория версии 0.5 (WP12-C, `docs/concept-0.5.md` п. 5, `docs/contracts.md` §8.7) в одну строку: метки детекторам —
+ * в `detect/identifiers/labels.js` (`EXTRA_RX`), здесь — по одной-две для справки. `levels` — строго: без метки (`validated`)
+ * только форматы с жёсткой структурой, остальное — `labeled`.
+ */
+const N = (id, group, label, prefix, color, allowedLevels, normalize = 'alnumUpper', validator = null, defaultOn = true) => ({
+  id,
+  group,
+  label,
+  placeholderPrefix: prefix,
+  color,
+  defaultOn,
+  allowedLevels,
+  validator,
+  normalize,
+  labels: L([], []),
+});
+const LB = ['labeled'];
+const VL = ['validated', 'labeled'];
+
 /** @type {Omit<CategoryDef, 'priority'|'builtin'>[]} */
 const BUILTIN = [
   {
@@ -38,8 +58,22 @@ const BUILTIN = [
     validator: 'passport',
     normalize: 'alnumUpper',
     numeric: true,
-    labels: L(['паспорт', 'серия', 'выдан', 'код подразделения'], ['passport', 'passport no.', 'issued by']),
+    labels: L(['паспорт', 'серия'], ['passport', 'passport no.']),
   },
+  // части паспорта (0.5, К6): у каждой своя метка — восстановление подставляет в каждое место своё значение
+  N('PASSPORT_DEPT', 'pii', L('Паспорт: код подразделения', 'Passport: department code'), L('ПАСП_КОД', 'PASSPORT_CODE'), '#cd6155', LB, 'alnum'),
+  N('PASSPORT_ISSUER', 'pii', L('Паспорт: кем выдан', 'Passport: issued by'), L('ПАСП_ВЫДАН', 'PASSPORT_ISSUER'), '#d98880', LB, 'lower'),
+  N('PASSPORT_DATE', 'pii', L('Паспорт: дата выдачи', 'Passport: date of issue'), L('ПАСП_ДАТА', 'PASSPORT_DATE'), '#e6b0aa', LB, 'text'),
+  N('INTL_PASSPORT', 'pii', L('Загранпаспорт', 'International passport'), L('ЗАГРАН', 'INTL_PASSPORT'), '#a93226', LB, 'alnumUpper', 'passport'),
+  N('DRIVER_LICENSE', 'pii', L('Водительское удостоверение', "Driver's license"), L('ВУ', 'DRIVER_LICENSE'), '#922b21', LB),
+  N('MILITARY_ID', 'pii', L('Военный билет', 'Military ID'), L('ВОЕН_БИЛЕТ', 'MILITARY_ID'), '#7b241c', LB),
+  N('RESIDENCE_PERMIT', 'pii', L('ВНЖ / разрешение на работу', 'Residence / work permit'), L('ВНЖ', 'RESIDENCE_PERMIT'), '#b03a2e', LB),
+  N('MIGRATION_CARD', 'pii', L('Миграционная карта', 'Migration card'), L('МИГР_КАРТА', 'MIGRATION_CARD'), '#943126', LB),
+  N('CIVIL_CERT', 'pii', L('Свидетельство ЗАГС', 'Civil status certificate'), L('ЗАГС', 'CIVIL_CERT'), '#78281f', VL, 'alnumUpper', 'civilCert'),
+  N('OMS', 'pii', L('Полис ОМС', 'Health insurance policy'), L('ПОЛИС_ОМС', 'OMS_POLICY'), '#cb4335', LB, 'alnum', 'oms'),
+  N('VEHICLE_DOC', 'pii', L('СТС / ПТС', 'Vehicle registration'), L('СТС_ПТС', 'VEHICLE_DOC'), '#6e2c00', LB),
+  N('VIN', 'pii', L('VIN', 'VIN'), L('VIN', 'VIN'), '#873600', VL, 'alnumUpper', 'vin'),
+  N('PLATE', 'pii', L('Госномер', 'License plate'), L('ГОСНОМЕР', 'PLATE'), '#a04000', VL, 'alnumUpper', 'plate'),
   {
     id: 'SNILS',
     group: 'pii',
@@ -186,6 +220,13 @@ const BUILTIN = [
     numeric: true,
     labels: L(['ein', 'tax id', 'vat', 'utr', 'tin'], ['ein', 'tax id', 'vat', 'utr', 'tin']),
   },
+  // идентификаторы 0.5: недвижимость, суды, нотариат
+  N('EGRN_RECORD', 'ids', L('Запись ЕГРН', 'Land registry record'), L('ЕГРН', 'EGRN'), '#5b2c6f', VL, 'alnumUpper', 'cadastral'),
+  N('CADASTRAL', 'ids', L('Кадастровый номер', 'Cadastral number'), L('КАДАСТР', 'CADASTRAL'), '#6c3483', VL, 'alnumUpper', 'cadastral'),
+  N('ENFORCEMENT', 'ids', L('Исполнительное производство', 'Enforcement proceedings'), L('ИСП_ПРОИЗВ', 'ENFORCEMENT'), '#7d3c98', VL),
+  N('COURT_CASE', 'ids', L('Номер дела', 'Case number'), L('ДЕЛО', 'CASE'), '#8e44ad', VL),
+  N('POA', 'ids', L('Доверенность', 'Power of attorney'), L('ДОВЕРЕННОСТЬ', 'POA'), '#a569bd', LB),
+  N('NOTARY_REG', 'ids', L('Реестр нотариуса', 'Notarial register No.'), L('НОТ_РЕЕСТР', 'NOTARY_REG'), '#bb8fce', LB),
   {
     id: 'EMAIL',
     group: 'pii',
@@ -198,6 +239,8 @@ const BUILTIN = [
     normalize: 'lower',
     labels: L([], []),
   },
+  // сеть и мессенджеры (0.5): ник перед URL — «t.me/ник» и «vk.com/ник» становятся ником, а не ссылкой (FR-20, приоритет)
+  N('NICKNAME', 'pii', L('Ник в мессенджере', 'Messenger handle'), L('НИК', 'HANDLE'), '#566573', VL, 'lower', 'handle'),
   {
     id: 'URL',
     group: 'ids',
@@ -210,6 +253,8 @@ const BUILTIN = [
     normalize: 'lower',
     labels: L([], []),
   },
+  N('IP', 'pii', L('IP-адрес', 'IP address'), L('IP', 'IP'), '#5d6d7e', VL, 'lower', 'ip'),
+  N('MAC', 'pii', L('MAC-адрес', 'MAC address'), L('MAC', 'MAC'), '#85929e', VL, 'alnumUpper', 'mac'),
   {
     id: 'PHONE',
     group: 'pii',
@@ -235,6 +280,10 @@ const BUILTIN = [
     normalize: 'text',
     labels: L(['дата рождения', 'д.р.', 'родился', 'родилась', 'г.р.'], ['date of birth', 'dob', 'born on']),
   },
+  // только по явной метке строки, ячейки или заголовку столбца: без метки не ищутся (ограничение README);
+  // перед PERSON и ADDRESS — при равном уровне имя или адрес внутри диагноза не выбрасывают диагноз целиком (ревью WP12-C)
+  N('HEALTH', 'pii', L('Сведения о здоровье', 'Health data'), L('ЗДОРОВЬЕ', 'HEALTH'), '#16a085', LB, 'lower'),
+  N('SPECIAL', 'pii', L('Особые категории ПДн', 'Special category data'), L('ОСОБЫЕ_ПДН', 'SPECIAL_PD'), '#117a65', LB, 'lower'),
   {
     id: 'PERSON',
     group: 'pii',
@@ -283,6 +332,11 @@ const BUILTIN = [
     normalize: 'alnumUpper',
     labels: L(['договор №', 'контракт №', 'соглашение №'], ['agreement no.', 'contract no.']),
   },
+  N('TENDER', 'commercial', L('Номер закупки', 'Tender No.'), L('ЗАКУПКА', 'TENDER'), '#7b7d7d', LB),
+  N('ORDER_NO', 'commercial', L('Номер заказа', 'Order No.'), L('ЗАКАЗ', 'ORDER'), '#909497', LB),
+  N('INVOICE_NO', 'commercial', L('Номер счёта на оплату', 'Invoice No.'), L('НОМ_СЧЕТА', 'INVOICE'), '#a6acaf', LB),
+  N('CLIENT_NO', 'commercial', L('Номер клиента', 'Customer No.'), L('КЛИЕНТ', 'CUSTOMER'), '#bdc3c7', LB),
+  N('IP_REG', 'commercial', L('Патент, товарный знак, программа для ЭВМ', 'Patent, trademark, software registration'), L('РИД', 'IP_REG'), '#626567', LB),
   {
     id: 'AMOUNT',
     group: 'commercial',

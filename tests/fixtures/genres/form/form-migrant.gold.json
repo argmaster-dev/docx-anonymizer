@@ -1,0 +1,116 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "PERSON",
+      "value": "Воронина Светлана Дмитриевна",
+      "surname": "Воронина"
+    },
+    {
+      "key": "e2",
+      "category": "BIRTHDATE",
+      "value": "03.04.1998"
+    },
+    {
+      "key": "e3",
+      "category": "PASSPORT",
+      "value": "6621 879861"
+    },
+    {
+      "key": "e4",
+      "category": "PASSPORT_ISSUER",
+      "value": "Отделом УФМС России по Заречному району г. Энска"
+    },
+    {
+      "key": "e5",
+      "category": "PASSPORT_DATE",
+      "value": "02.04.2013"
+    },
+    {
+      "key": "e6",
+      "category": "PASSPORT_DEPT",
+      "value": "664-079"
+    },
+    {
+      "key": "e7",
+      "category": "SNILS",
+      "value": "177-465-419 09"
+    },
+    {
+      "key": "e8",
+      "category": "INN",
+      "value": "660754038635"
+    },
+    {
+      "key": "e9",
+      "category": "OMS",
+      "value": "4495589182570230"
+    },
+    {
+      "key": "e10",
+      "category": "ADDRESS",
+      "value": "620010, г. Екатеринбург, ул. Мира, д. 32, кв. 317"
+    },
+    {
+      "key": "e11",
+      "category": "PHONE",
+      "value": "+7 (999) 004-79-49"
+    },
+    {
+      "key": "e12",
+      "category": "EMAIL",
+      "value": "s.voronina@mail.example"
+    },
+    {
+      "key": "e13",
+      "category": "RESIDENCE_PERMIT",
+      "value": "82 № 1880477"
+    },
+    {
+      "key": "e14",
+      "category": "RESIDENCE_PERMIT",
+      "value": "66 № 2624481759"
+    },
+    {
+      "key": "e15",
+      "category": "MIGRATION_CARD",
+      "value": "4583 1492374"
+    },
+    {
+      "key": "e16",
+      "category": "SPECIAL",
+      "value": "ислам"
+    },
+    {
+      "key": "e17",
+      "category": "PERSON",
+      "value": "Воронина С.Д.",
+      "surname": "Воронина"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "15.10.2026",
+      "category": "BIRTHDATE",
+      "rules": true
+    },
+    {
+      "value": "12 лет",
+      "category": "PASSPORT",
+      "rules": true
+    },
+    {
+      "value": "АНКЕТА ИНОСТРАННОГО РАБОТНИКА",
+      "category": "COMPANY"
+    },
+    {
+      "value": "Личные данные",
+      "category": "COMPANY"
+    },
+    {
+      "value": "Семейное положение",
+      "category": "COMPANY",
+      "rules": true
+    }
+  ]
+}

@@ -3,7 +3,7 @@
 import { ALWAYS_ON_IDS, BUILTIN_CATEGORIES } from './categories.js';
 
 export const SETTINGS_KEY = 'settings';
-export const SETTINGS_SCHEMA_VERSION = 3;
+export const SETTINGS_SCHEMA_VERSION = 4;
 
 export const DEFAULT_ALLOWLIST = Object.freeze([
   'https://chatgpt.com',
@@ -31,6 +31,22 @@ const PROFILE_FIELDS = [
 function defaultCategories() {
   return Object.fromEntries(BUILTIN_CATEGORIES.map((c) => [c.id, ALWAYS_ON_IDS.includes(c.id) || c.defaultOn]));
 }
+
+/**
+ * Дополняет объект категорий категориями 0.5, которых в нём нет (миграция 3 → 4): `pii`/`ids` — `true`, `commercial` —
+ * `defaultOn` (действует при включённом переключателе группы). Заданные значения и отсутствующие ключи 0.4 не трогает.
+ */
+function addMissingCategories(categories) {
+  const defaults = defaultCategories();
+  return { ...Object.fromEntries(CATEGORIES_05.map((id) => [id, defaults[id]])), ...categories };
+}
+
+/** Категории, добавленные в 0.5 (схема 4): миграция 3 → 4 дописывает только их — частичный профиль не получает ключи 0.4. */
+export const CATEGORIES_05 = Object.freeze([
+  ...['PASSPORT_DEPT', 'PASSPORT_ISSUER', 'PASSPORT_DATE', 'INTL_PASSPORT', 'DRIVER_LICENSE', 'MILITARY_ID', 'RESIDENCE_PERMIT', 'MIGRATION_CARD'],
+  ...['CIVIL_CERT', 'OMS', 'VEHICLE_DOC', 'VIN', 'PLATE', 'NICKNAME', 'IP', 'MAC', 'HEALTH', 'SPECIAL', 'EGRN_RECORD', 'CADASTRAL', 'ENFORCEMENT'],
+  ...['COURT_CASE', 'POA', 'NOTARY_REG', 'TENDER', 'ORDER_NO', 'INVOICE_NO', 'CLIENT_NO', 'IP_REG'],
+]);
 
 /** Включает категории `pii`/`ids` в объекте категорий (миграция 2 → 3 и импорт старых конфигураций). */
 function forceAlwaysOn(categories) {
@@ -196,6 +212,22 @@ export const MIGRATIONS = {
       out.profiles = s.profiles.map((p) =>
         isPlainObject(p) && isPlainObject(p.values) && isPlainObject(p.values.categories)
           ? { ...p, values: { ...p.values, categories: forceAlwaysOn(p.values.categories) } }
+          : p,
+      );
+    }
+    return out;
+  },
+  // 3 → 4 (0.5, WP12-C): новые встроенные категории (части паспорта, документы, транспорт, сеть, суды, недвижимость,
+  // коммерческие номера) — в настройках и в сохранённых профилях по правилам групп; `pii`/`ids` всё равно всегда включены
+  // (`isCategoryEnabled`), а у `commercial` значение по умолчанию начинает действовать при включённом переключателе группы.
+  // Частичный объект без `categories` (патч импорта) — только версия.
+  3: (s) => {
+    const out = { ...s, schemaVersion: 4 };
+    if (isPlainObject(s.categories)) out.categories = addMissingCategories(s.categories);
+    if (Array.isArray(s.profiles)) {
+      out.profiles = s.profiles.map((p) =>
+        isPlainObject(p) && isPlainObject(p.values) && isPlainObject(p.values.categories)
+          ? { ...p, values: { ...p.values, categories: addMissingCategories(p.values.categories) } }
           : p,
       );
     }

@@ -12,6 +12,8 @@ import { join, resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 import { buildGenreDocs, buildGenrePdf, GENRES, GENRES_DIR } from '../../scripts/gen-genre-fixtures.mjs';
 import { OFFICE_GENRES } from '../../scripts/gen-office-fixtures.mjs';
+import { GENRES_05 } from '../../scripts/gen-genre-fixtures-05.mjs';
+import { BUILTIN_IDS } from '../../src/core/categories.js';
 import { layoutSnapshot } from '../../scripts/gen-pdf-fixtures.mjs';
 import {
   listCorpus,
@@ -31,6 +33,8 @@ import { registerBuiltinDetectors, clearDetectors, analyze, applyDecisions, find
 // Гейты К6/К7 с моделью: пороги концепции 0.4; под NER_MODEL_DIR проверка жёсткая по умолчанию (пакет 1.1.0, версия 0.4.0).
 // GENRES_MODEL_GATES=0 — только печать чисел: для прогона другой модели (1.0.0, пробные run_id), которая гейтов не обязана проходить.
 const ENFORCE_MODEL_GATES = process.env.GENRES_MODEL_GATES !== '0';
+// гейты К6/К7 пакета 1.1.0 — на жанрах 0.4; жанры 0.5 (WP12-C) с моделью печатаются, их гейты — у модели 1.2.0 (WP12-E, К9)
+const GENRES_04 = GENRES.filter((g) => !GENRES_05.includes(g));
 const K6_PERSON_PRECISION = 0.9;
 const K6_PERSON_RECALL = 0.85;
 const K7_COMPANY_PRECISION = 0.8;
@@ -236,6 +240,29 @@ describe('коммерческий режим без модели', () => {
   });
 });
 
+// К9 (версия 0.5, WP12-C): жанры 0.5 — анкета, суд, недвижимость, автомобиль, медицина; новые категории — полнота ≥ 0,95
+// (без модели — правилами), ложных нет; люди (К9: P ≥ 0,90, R ≥ 0,85) — жёсткий гейт с моделью у WP12-E
+describe('К9 (0.5): новые категории на жанрах 0.5', () => {
+  const IDS_04 = ['PASSPORT', 'SNILS', 'INN', 'OGRN', 'ACCOUNT', 'CARD', 'IBAN', 'SWIFT', 'BIK', 'KPP', 'SSN', 'TAXID', 'EMAIL', 'URL', 'PHONE'];
+  IDS_04.push('BIRTHDATE', 'PERSON', 'COMPANY', 'ADDRESS', 'CONTRACT', 'AMOUNT');
+  const NEW = BUILTIN_IDS.filter((id) => !IDS_04.includes(id));
+  it('каждая новая категория встречается в gold жанров 0.5', () => {
+    const seen = new Set(corpus.filter((d) => GENRES_05.includes(d.genre)).flatMap((d) => d.gold.entities.map((e) => e.category)));
+    const missing = NEW.filter((id) => !seen.has(id));
+    expect(missing).toEqual([]);
+  });
+  it('полнота новых категорий ≥ 0,95 в каждом жанре 0.5 и обоих режимах; ложных находок новых категорий нет', () => {
+    const bad = [];
+    for (const mode of ['normal', 'commercial'])
+      for (const g of GENRES_05)
+        for (const id of NEW) {
+          const m = catMetrics(result.summary, mode, g, id);
+          if (m.recall < 0.95 || m.fp) bad.push(`${mode} ${g} ${id}: R ${m.recall.toFixed(2)}, ложных ${m.fp}`);
+        }
+    expect(bad).toEqual([]);
+  });
+});
+
 describe('К10 на корпусе: фильтры модельных ORG (стаб-провайдер размечает ORG каждый отрицательный пример и организацию)', () => {
   /** Стаб NER: ORG на каждое вхождение (целым словом) значений из списка. */
   const stubOrg = (values) => ({
@@ -265,7 +292,8 @@ describe('К10 на корпусе: фильтры модельных ORG (ст�
     let opfAll = 0;
     for (const it of corpus) {
       const doc = await loadDoc(it.path);
-      const negatives = it.gold.negatives.filter((n) => !n.mode);
+      // `rules: true` (жанры 0.5) — отрицательные примеры для правил-идентификаторов; модельными стабами не размечаются
+      const negatives = it.gold.negatives.filter((n) => !n.mode && !n.rules);
       const orgs = it.gold.entities.filter((e) => e.category === 'COMPANY' && e.opf).map((e) => e.value);
       // организации без ОПФ со строчными словами в предложении («Северная транспортная компания») — тоже сохраняются
       const bare = it.gold.entities.filter((e) => e.category === 'COMPANY' && !e.opf && /\s\p{Ll}/u.test(e.value)).map((e) => e.value);
@@ -315,7 +343,7 @@ describe('WP11-D на корпусе: фильтры модельных PER и L
     const lost = [];
     for (const it of corpus) {
       const doc = await loadDoc(it.path);
-      const negatives = it.gold.negatives.filter((n) => !n.mode).map((n) => n.value);
+      const negatives = it.gold.negatives.filter((n) => !n.mode && !n.rules).map((n) => n.value);
       const people = it.gold.entities.filter((e) => e.category === 'PERSON' && !(e.meta && it.format === 'pdf')).map((e) => [e.value, 'PER']);
       const places = it.gold.entities.filter((e) => e.category === 'ADDRESS').map((e) => [e.value, 'LOC']);
       for (const label of ['PER', 'LOC']) {
@@ -391,8 +419,11 @@ describe.skipIf(!MODEL_DIR)('с моделью NER (NER_MODEL_DIR): гейты �
 
   it(`отрицательных примеров, ставших сущностью, ≤ ${MODEL_NEGATIVES_MAX} в каждом режиме (WP11-D)`, () => {
     for (const mode of ['normal', 'commercial']) {
-      const hits = withModel.docs.filter((d) => d.mode === mode).flatMap((d) => d.negHits.map((n) => `${d.name}.${d.format}: «${n.value}»`));
-      console.log(`[genres] ${label} ${mode}: отрицательных примеров стало сущностью ${hits.length}`);
+      const hitsOf = (genres) =>
+        withModel.docs.filter((d) => d.mode === mode && genres.includes(d.genre)).flatMap((d) => d.negHits.map((n) => `${d.name}.${d.format}: «${n.value}»`));
+      const hits = hitsOf(GENRES_04);
+      const hits05 = hitsOf(GENRES_05);
+      console.log(`[genres] ${label} ${mode}: отрицательных примеров стало сущностью ${hits.length} (жанры 0.5 — ${hits05.length}: ${hits05.join('; ')})`);
       expect(hits.length, hits.join('; ')).toBeLessThanOrEqual(MODEL_NEGATIVES_MAX);
     }
   });
@@ -401,6 +432,7 @@ describe.skipIf(!MODEL_DIR)('с моделью NER (NER_MODEL_DIR): гейты �
     const s = withModel.summary;
     const fails = [];
     for (const g of GENRES) {
+      const gate = GENRES_04.includes(g); // жанры 0.5 с моделью — печать; гейты модели 1.2.0 на них — WP12-E (К9)
       const per = catMetrics(s, 'commercial', g, 'PERSON');
       const com = catMetrics(s, 'commercial', g, 'COMPANY');
       const opf = s.commercial[g].opf;
@@ -408,8 +440,8 @@ describe.skipIf(!MODEL_DIR)('с моделью NER (NER_MODEL_DIR): гейты �
       console.log(
         `[genres] ${label} ${g}: PERSON P ${per.precision.toFixed(3)} R ${per.recall.toFixed(3)}; COMPANY P ${com.precision.toFixed(3)} (ложных ${com.fp}); ОПФ R ${opfR.toFixed(3)}`,
       );
-      if (per.precision < K6_PERSON_PRECISION || per.recall < K6_PERSON_RECALL) fails.push(`К6 ${g}`);
-      if (com.precision < K7_COMPANY_PRECISION || opfR < K7_OPF_RECALL) fails.push(`К7 ${g}`);
+      if (gate && (per.precision < K6_PERSON_PRECISION || per.recall < K6_PERSON_RECALL)) fails.push(`К6 ${g}`);
+      if (gate && (com.precision < K7_COMPANY_PRECISION || opfR < K7_OPF_RECALL)) fails.push(`К7 ${g}`);
     }
     for (const d of withModel.docs.filter((x) => x.mode === 'commercial' && x.genre === 'proposal'))
       if ((d.perCat.COMPANY?.fp ?? 0) > K7_PROPOSAL_FALSE_COMPANY) fails.push(`К7 ложные ORG ${d.name}.${d.format}`);

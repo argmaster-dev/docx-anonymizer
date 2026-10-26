@@ -1,4 +1,4 @@
-// Контекстные правила: ключ счёта по БИК в радиусе 500 символов (поток и документ), лейблы, границы, canonical паспорта.
+// Контекстные правила: ключ счёта по БИК в радиусе 500 символов (поток и документ), лейблы, границы, части паспорта (0.5).
 import { describe, it, expect } from 'vitest';
 import { detect } from './helper.js';
 import { detectAccountByBikInDocument, detectInn, detectOgrn } from '../../../src/core/detect/identifiers/numeric.js';
@@ -6,7 +6,7 @@ import { goodsCodeContext } from '../../../src/core/detect/identifiers/labels.js
 import { columnHeaders, docxCells } from '../../../src/core/detect/tables.js';
 import { analyze, parseDocx, fromText, defaultSettings, registerBuiltinDetectors, clearDetectors } from '../../../src/core/index.js';
 import { makeDocx, para, run } from '../../helpers/docx.js';
-import { normalizeValue, buildCatalog } from '../../../src/core/categories.js';
+import { buildCatalog } from '../../../src/core/categories.js';
 
 const BIK = '044525225';
 // счёт с верным ключом к БИК 044525225 (веса 7-1-3 над «последние 3 цифры БИК + счёт»)
@@ -74,15 +74,24 @@ describe('лейблы и границы', () => {
   });
 });
 
-describe('PASSPORT: одна сущность из трёх вхождений', () => {
-  it('canonical номера общий у органа выдачи и кода подразделения', () => {
-    const r = detect('паспорт 45 05 123456, выдан ОВД района Арбат г. Москвы 12.03.2005, код подразделения 770-001').filter((e) => e.category === 'PASSPORT');
-    expect(r).toHaveLength(3);
-    const cat = buildCatalog({}).byId.get('PASSPORT');
-    expect(r[0].canonical).toBeUndefined();
-    expect(r[1].canonical).toBe('4505123456');
-    expect(r[2].canonical).toBe('4505123456');
-    expect(normalizeValue(cat, r[0].text)).toBe(normalizeValue(cat, r[1].canonical));
+// 0.5 (WP12-C, К6): части паспорта — разные категории и разные метки (до 0.5 — одна сущность через canonical)
+describe('PASSPORT: серия и номер, орган выдачи, дата выдачи, код подразделения — четыре категории', () => {
+  it('каждая часть — своя категория, без общего canonical', () => {
+    const r = detect('паспорт 45 05 123456, выдан ОВД района Арбат г. Москвы 12.03.2005, код подразделения 770-001');
+    expect(r.map((e) => [e.category, e.text])).toEqual([
+      ['PASSPORT', '45 05 123456'],
+      ['PASSPORT_ISSUER', 'ОВД района Арбат г. Москвы'],
+      ['PASSPORT_DATE', '12.03.2005'],
+      ['PASSPORT_DEPT', '770-001'],
+    ]);
+    for (const e of r) expect(e.canonical, e.category).toBeUndefined();
+  });
+  it('номер берётся, только если ближе всех назван паспорт («серия» после названия другого документа — не паспорт)', () => {
+    const cats = (t) => detect(t).map((e) => e.category);
+    expect(cats('Водительское удостоверение: серия 77 12 № 345678')).toEqual(['DRIVER_LICENSE']);
+    expect(cats('паспорт 4505 123456, водительское удостоверение 9912 123456')).toEqual(['PASSPORT', 'DRIVER_LICENSE']);
+    expect(cats('паспорт транспортного средства 77 01 123456')).toEqual(['VEHICLE_DOC']);
+    expect(cats('заграничный паспорт 72 0012345')).toEqual(['INTL_PASSPORT']);
   });
 });
 

@@ -1,0 +1,67 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "PERSON",
+      "value": "Лебедева Марина Павловна",
+      "surname": "Лебедева"
+    },
+    {
+      "key": "e2",
+      "category": "BIRTHDATE",
+      "value": "02.11.1987"
+    },
+    {
+      "key": "e3",
+      "category": "OMS",
+      "value": "8269066401292750"
+    },
+    {
+      "key": "e4",
+      "category": "SNILS",
+      "value": "198-093-310 03"
+    },
+    {
+      "key": "e5",
+      "category": "ADDRESS",
+      "value": "630270, г. Новосибирск, ул. Советская, д. 71, кв. 252"
+    },
+    {
+      "key": "e6",
+      "category": "DRIVER_LICENSE",
+      "value": "54 39 247934"
+    },
+    {
+      "key": "e7",
+      "category": "HEALTH",
+      "value": "медицинских противопоказаний к управлению не выявлено"
+    },
+    {
+      "key": "e8",
+      "category": "PERSON",
+      "value": "Морозов Андрей Викторович",
+      "surname": "Морозов"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "кабинет 214",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "МЕДИЦИНСКАЯ СПРАВКА",
+      "category": "COMPANY"
+    },
+    {
+      "value": "Приём 12.03.2026 в 10:30",
+      "category": "HEALTH",
+      "rules": true
+    },
+    {
+      "value": "рост 178 см",
+      "category": "HEALTH",
+      "rules": true
+    }
+  ]
+}

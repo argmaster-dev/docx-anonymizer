@@ -49,39 +49,44 @@
     },
     {
       "key": "e10",
+      "category": "INVOICE_NO",
+      "value": "604"
+    },
+    {
+      "key": "e11",
       "category": "ADDRESS",
       "value": "630706, г. Новосибирск, Красный пр-т, д. 38, офис 300"
     },
     {
-      "key": "e11",
+      "key": "e12",
       "category": "PHONE",
       "value": "+7 (383) 013-54-10"
     },
     {
-      "key": "e12",
+      "key": "e13",
       "category": "COMPANY",
       "value": "Альтаир-М",
       "opf": true
     },
     {
-      "key": "e13",
+      "key": "e14",
       "category": "ADDRESS",
       "value": "420626, г. Казань, ул. Баумана, д. 58, офис 274"
     },
     {
-      "key": "e14",
+      "key": "e15",
       "category": "PERSON",
       "value": "Зайцев П.Н.",
       "surname": "Зайцев"
     },
     {
-      "key": "e15",
+      "key": "e16",
       "category": "PERSON",
       "value": "Лебедева М.П.",
       "surname": "Лебедева"
     },
     {
-      "key": "e16",
+      "key": "e17",
       "category": "PERSON",
       "value": "Лебедева Марина Павловна",
       "surname": "Лебедева",
@@ -102,8 +107,9 @@
       "category": "COMPANY"
     },
     {
-      "value": "Счёт на оплату № 604 от 15 октября 2026 г.",
-      "category": "COMPANY"
+      "value": "Счёт на оплату",
+      "category": "COMPANY",
+      "rules": true
     },
     {
       "value": "к оплате",

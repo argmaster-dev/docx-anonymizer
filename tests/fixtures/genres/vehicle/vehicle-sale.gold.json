@@ -1,0 +1,123 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "VIN",
+      "value": "XTANKM0Z41RWH9277"
+    },
+    {
+      "key": "e2",
+      "category": "PLATE",
+      "value": "А530КК799"
+    },
+    {
+      "key": "e3",
+      "category": "VEHICLE_DOC",
+      "value": "77 КВ 730944"
+    },
+    {
+      "key": "e4",
+      "category": "VEHICLE_DOC",
+      "value": "77 64 598747"
+    },
+    {
+      "key": "e5",
+      "category": "PERSON",
+      "value": "Белов Игорь Сергеевич",
+      "surname": "Белов"
+    },
+    {
+      "key": "e6",
+      "category": "PASSPORT",
+      "value": "7719 111345"
+    },
+    {
+      "key": "e7",
+      "category": "PASSPORT_ISSUER",
+      "value": "УМВД России по Приозёрному району"
+    },
+    {
+      "key": "e8",
+      "category": "PASSPORT_DATE",
+      "value": "22.05.2006"
+    },
+    {
+      "key": "e9",
+      "category": "PASSPORT_DEPT",
+      "value": "772-027"
+    },
+    {
+      "key": "e10",
+      "category": "PHONE",
+      "value": "+7 (999) 008-43-61"
+    },
+    {
+      "key": "e11",
+      "category": "PERSON",
+      "value": "Лебедева Марина Павловна",
+      "surname": "Лебедева"
+    },
+    {
+      "key": "e12",
+      "category": "PASSPORT",
+      "value": "7716 441222"
+    },
+    {
+      "key": "e13",
+      "category": "PASSPORT_ISSUER",
+      "value": "УМВД России по Энской области"
+    },
+    {
+      "key": "e14",
+      "category": "PASSPORT_DATE",
+      "value": "01.04.2020"
+    },
+    {
+      "key": "e15",
+      "category": "PASSPORT_DEPT",
+      "value": "775-055"
+    },
+    {
+      "key": "e16",
+      "category": "DRIVER_LICENSE",
+      "value": "77 17 605403"
+    },
+    {
+      "key": "e17",
+      "category": "PERSON",
+      "value": "Лебедева М.П.",
+      "surname": "Лебедева"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "Лада Веста",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "объём двигателя 1,6 л",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "п. 2.4",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "ДОГОВОР КУПЛИ-ПРОДАЖИ АВТОМОБИЛЯ",
+      "category": "COMPANY"
+    },
+    {
+      "value": "год выпуска 2019",
+      "category": "VIN",
+      "rules": true
+    },
+    {
+      "value": "пробег 45 000 км",
+      "category": "PLATE",
+      "rules": true
+    }
+  ]
+}

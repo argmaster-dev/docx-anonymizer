@@ -41,12 +41,15 @@ export const OPTIONS_DICT = {
     categories_hint: 'Персональные данные и идентификаторы компаний маскируются всегда. Названия организаций, номера договоров и суммы — по желанию.',
     default_off: 'по умолчанию выключена',
     group_pii_h: 'Персональные данные — всегда',
-    group_pii_hint: 'Отключить нельзя. Снять галочку с конкретной находки можно в панели перед отправкой.',
+    group_pii_hint:
+      'Отключить нельзя. Снять галочку с конкретной находки можно в панели перед отправкой. Сведения о здоровье и особые категории (вероисповедание, национальность, политические взгляды, судимость) ищутся только по явной метке строки или столбца.',
     group_ids_h: 'Идентификаторы — всегда',
-    group_ids_hint: 'Реквизиты компаний маскируются, даже если название компании остаётся открытым.',
+    group_ids_hint:
+      'Реквизиты компаний, номера дел и производств, кадастровые номера, записи ЕГРН и доверенности маскируются, даже если название компании остаётся открытым.',
     group_commercial_h: 'Коммерческая информация',
     commercial: 'Маскировать коммерческую информацию',
-    commercial_hint: 'Названия организаций, номера договоров и суммы. По умолчанию выключено: это не персональные данные.',
+    commercial_hint:
+      'Названия организаций, номера договоров, закупок, заказов, счетов и клиентов, патенты и товарные знаки, суммы. По умолчанию выключено: это не персональные данные.',
     commercial_off_hint: 'Группа выключена — категории ниже не ищутся. Компании из списка «Компании для маскирования» маскируются всегда.',
     companies_h: 'Компании для маскирования',
     companies_hint:
@@ -268,12 +271,15 @@ export const OPTIONS_DICT = {
     categories_hint: 'Personal data and company identifiers are always masked. Company names, contract numbers and amounts are optional.',
     default_off: 'off by default',
     group_pii_h: 'Personal data — always',
-    group_pii_hint: 'Cannot be turned off. You can clear the checkmark of a particular finding in the panel before sending.',
+    group_pii_hint:
+      'Cannot be turned off. You can clear the checkmark of a particular finding in the panel before sending. Health data and special categories (religion, ethnicity, political views, criminal record) are found only by an explicit row or column label.',
     group_ids_h: 'Identifiers — always',
-    group_ids_hint: 'Company identifiers are masked even when the company name stays visible.',
+    group_ids_hint:
+      'Company identifiers, case and enforcement numbers, cadastral numbers, land registry records and powers of attorney are masked even when the company name stays visible.',
     group_commercial_h: 'Commercial information',
     commercial: 'Mask commercial information',
-    commercial_hint: 'Company names, contract numbers and amounts. Off by default: this is not personal data.',
+    commercial_hint:
+      'Company names, contract, tender, order, invoice and customer numbers, patents and trademarks, amounts. Off by default: this is not personal data.',
     commercial_off_hint: 'The group is off — the categories below are not searched. Companies from “Companies to mask” are always masked.',
     companies_h: 'Companies to mask',
     companies_hint:

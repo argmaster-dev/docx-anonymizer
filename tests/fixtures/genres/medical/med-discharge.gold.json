@@ -1,0 +1,72 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "PERSON",
+      "value": "Морозов Андрей Викторович",
+      "surname": "Морозов"
+    },
+    {
+      "key": "e2",
+      "category": "BIRTHDATE",
+      "value": "15.05.1996"
+    },
+    {
+      "key": "e3",
+      "category": "OMS",
+      "value": "5058365875187111"
+    },
+    {
+      "key": "e4",
+      "category": "SNILS",
+      "value": "123-455-070 28"
+    },
+    {
+      "key": "e5",
+      "category": "ADDRESS",
+      "value": "603972, г. Нижний Новгород, ул. Минина, д. 66, кв. 251"
+    },
+    {
+      "key": "e6",
+      "category": "HEALTH",
+      "value": "J06.9 Острая инфекция верхних дыхательных путей"
+    },
+    {
+      "key": "e7",
+      "category": "HEALTH",
+      "value": "Боль внизу спины; рекомендовано наблюдение"
+    },
+    {
+      "key": "e8",
+      "category": "HEALTH",
+      "value": "M54.5"
+    },
+    {
+      "key": "e9",
+      "category": "PERSON",
+      "value": "Савельев Максим Петрович",
+      "surname": "Савельев"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "кабинет 214",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "ВЫПИСНОЙ ЭПИКРИЗ",
+      "category": "COMPANY"
+    },
+    {
+      "value": "Приём 12.03.2026 в 10:30",
+      "category": "HEALTH",
+      "rules": true
+    },
+    {
+      "value": "рост 178 см",
+      "category": "HEALTH",
+      "rules": true
+    }
+  ]
+}

@@ -25,11 +25,13 @@ import { pack, tbl, cell, title } from './gen-fixtures.mjs';
 import { unescapeXml } from '../src/core/docx/xml.js';
 import { inn10, inn12, ogrn13, account, r, p, B } from './make-sample.mjs';
 import { documentToHtml, documentXml, htmlPage, htmlToPdf, layoutSnapshot } from './gen-pdf-fixtures.mjs';
+// жанры 0.5 (WP12-C): анкета, суд, недвижимость, автомобиль, медицина — отдельным модулем
+import { GENRES_05, buildGenreDocs05 } from './gen-genre-fixtures-05.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const GENRES_DIR = join(root, 'tests/fixtures/genres');
 export const GENRE_SEED = 20261019;
-export const GENRES = ['proposal', 'letter', 'invoice', 'reconciliation', 'manual', 'deck', 'resume', 'chat'];
+export const GENRES = ['proposal', 'letter', 'invoice', 'reconciliation', 'manual', 'deck', 'resume', 'chat', ...GENRES_05];
 
 /* ---------- ГПСЧ (mulberry32, как scripts/gen-ner-eval.mjs) ---------- */
 
@@ -263,6 +265,15 @@ function finish(d, body, meta) {
   return { genre: d.genre, name: d.name, lang: d.lang, docx, html, pdf: {}, gold: { entities: d.entities, negatives: d.negatives } };
 }
 
+/** Номер документа по метке (счёт, заказ — коммерческие категории 0.5, WP12-C): то же значение ГПСЧ, что и до 0.5, плюс запись в gold. */
+const num = (d, category, lo, hi) => d.add(category, String(d.rng.range(lo, hi)));
+/** Отрицательный пример, который модельные стабы genres.spec.js не размечают (`rules: true`, как в жанрах 0.5). */
+const negRules = (d, value) => {
+  d.neg(value);
+  d.negatives.find((n) => n.value === value).rules = true;
+  return value;
+};
+
 /** Сумма с разрядами через пробел («45 000»), без Intl — одинаково на любой сборке Node. */
 const money = (d, lo, hi, step = 1000) => String(d.rng.range(lo / step, hi / step) * step).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 
@@ -457,7 +468,7 @@ function letterGuarantee() {
     TITLE(d, 'ГАРАНТИЙНОЕ ПИСЬМО'),
     p(
       r(
-        `${co(d, from)} гарантирует оплату поставленного товара по счёту № ${d.rng.range(100, 999)} от 01.10.2026 на сумму ` +
+        `${co(d, from)} гарантирует оплату поставленного товара по счёту № ${num(d, 'INVOICE_NO', 100, 999)} от 01.10.2026 на сумму ` +
           `${money(d, 100000, 900000)} руб., в том числе НДС 20 %, в срок до 30.11.2026.`,
       ),
     ),
@@ -487,7 +498,7 @@ function letterReply() {
     p(r(`Уважаемая ${d.add('PERSON', `${citizen.i} ${citizen.o}`)}!`)),
     p(
       r(
-        `Ваше обращение от 02.10.2026 о сроках доставки рассмотрено. Заказ № ${d.rng.range(100000, 999999)} передан в службу доставки 14.10.2026; ` +
+        `Ваше обращение от 02.10.2026 о сроках доставки рассмотрено. Заказ № ${num(d, 'ORDER_NO', 100000, 999999)} передан в службу доставки 14.10.2026; ` +
           'копию накладной в PDF направляем на адрес электронной почты, указанный в обращении.',
       ),
     ),
@@ -563,7 +574,9 @@ function invoice(name, { vat = true } = {}) {
       [cell(`ИНН ${req.inn}   КПП ${req.kpp}`), cell(`Сч. № ${req.rs}`)],
       [cell(`Получатель: ${co(d, seller)}`), cell('')],
     ]),
-    TITLE(d, `Счёт на оплату № ${d.rng.range(100, 999)} от 15 октября 2026 г.`),
+    // номер счёта в заголовке — сущность коммерческого режима (0.5, INVOICE_NO); отрицательный пример — слова заголовка без
+    // номера: проверка ложной организации настоящей модели (`rules: true` — стаб ORG его не размечает, ревью WP12-C)
+    title(`${negRules(d, 'Счёт на оплату')} № ${num(d, 'INVOICE_NO', 100, 999)} от 15 октября 2026 г.`),
     p(r(`Поставщик (Исполнитель): ${co(d, seller)}, ИНН ${req.inn}, КПП ${req.kpp}, ${address(d, city)}, тел. ${phone(d, city)}`)),
     p(r(`Покупатель (Заказчик): ${co(d, buyer)}, ИНН ${binn}, КПП ${bkpp}, ${address(d, city2)}`)),
     p(r(`Основание: договор № ${d.rng.range(10, 99)}/ПС-2026 от 01.09.2026`)),
@@ -597,7 +610,7 @@ function upd() {
   negs(d, 'УПД', 'ЭДО', 'ТН ВЭД', 'НДС');
   const body = [
     TITLE(d, 'УНИВЕРСАЛЬНЫЙ ПЕРЕДАТОЧНЫЙ ДОКУМЕНТ'),
-    p(r(`Счёт-фактура № ${d.rng.range(100, 999)} от 20.10.2026 · Статус: 1`)),
+    p(r(`Счёт-фактура № ${num(d, 'INVOICE_NO', 100, 999)} от 20.10.2026 · Статус: 1`)),
     p(r(`Продавец: ИП ${per(d, seller)}`)),
     p(r(`Адрес: ${address(d, nsk)}`)),
     p(r(`ИНН продавца: ${req.inn}, ОГРНИП ${req.ogrnip}`)),
@@ -652,9 +665,9 @@ function reconciliation(name, { ip = false } = {}) {
       [
         [cell('Дата'), cell('Документ'), cell('Дебет'), cell('Кредит')],
         [cell(d.neg('Сальдо начальное')), cell(''), cell(`${sum},00`), cell('')],
-        [cell('03.07.2026'), cell(`Продажа (УПД № ${d.rng.range(100, 400)})`), cell('85 400,00'), cell('')],
+        [cell('03.07.2026'), cell(`Продажа (УПД № ${num(d, 'INVOICE_NO', 100, 400)})`), cell('85 400,00'), cell('')],
         [cell('15.07.2026'), cell(`Оплата (п/п № ${d.rng.range(1000, 9999)})`), cell(''), cell(`${sum},00`)],
-        [cell('21.08.2026'), cell(`Продажа (УПД № ${d.rng.range(401, 800)})`), cell('42 700,00'), cell('')],
+        [cell('21.08.2026'), cell(`Продажа (УПД № ${num(d, 'INVOICE_NO', 401, 800)})`), cell('42 700,00'), cell('')],
         [cell(d.neg('Обороты за период')), cell(''), cell('128 100,00'), cell(`${sum},00`)],
         [cell(d.neg('Сальдо конечное')), cell(''), cell('128 100,00'), cell('')],
       ],
@@ -1079,6 +1092,7 @@ export function buildGenreDocs() {
     chatSales(),
     chatTeam(),
     chatSupport(),
+    ...buildGenreDocs05({ newDoc, per, co, address, phone, mobile, email, finish, H, CAPS, TITLE, negs, requisites }),
   ];
 }
 

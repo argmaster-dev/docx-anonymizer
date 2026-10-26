@@ -32,7 +32,7 @@ const BARE_RE = new RegExp(
 );
 
 /** Срезает хвостовую пунктуацию и непарные скобки. */
-function trimUrl(s) {
+export function trimUrl(s) {
   for (;;) {
     const last = s[s.length - 1];
     if (!last) return s;
@@ -61,7 +61,8 @@ export function detectUrl(text) {
 
 /* ---------- PHONE ---------- */
 const SEP = '[ \\u00a0.\\-–()]*';
-const PRE = '(?<![\\p{L}\\p{N}+])(?<!\\d[-./])';
+// «…-н/78-2026-3-1001» (реестровый номер нотариуса, 0.5): цифры после «буква/» — продолжение кода, не телефон
+const PRE = '(?<![\\p{L}\\p{N}+])(?<!\\d[-./])(?<!\\p{L}\\/)';
 const POST = '(?![\\p{L}\\p{N}])(?![-/]\\d)';
 // РФ: +7 / 8 / 7 и 10 цифр с любыми разделителями
 const RU_RE = new RegExp(`${PRE}(?:\\+7|8|7)${SEP}\\(?\\d{3}\\)?${SEP}\\d{3}${SEP}\\d{2}${SEP}\\d{2}${POST}`, 'gu');
@@ -95,7 +96,7 @@ export function detectPhone(text, ctx) {
       if (digits < 7 || digits > 15) continue;
       let end = c.start + main.length;
       if (overlaps(c.start, end)) continue;
-      const { mine, foreign } = labelState(text, c.start, ctx, 'PHONE');
+      const { mine, foreign } = labelState(text, c.start, ctx, 'PHONE', main);
       const valid = phone(main);
       let level = null;
       if (mine) level = valid ? 'validated' : 'labeled';

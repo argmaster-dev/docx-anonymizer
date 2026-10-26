@@ -22,34 +22,39 @@
     },
     {
       "key": "e5",
+      "category": "INVOICE_NO",
+      "value": "380"
+    },
+    {
+      "key": "e6",
       "category": "PERSON",
       "value": "Комаров Роман Алексеевич",
       "surname": "Комаров"
     },
     {
-      "key": "e6",
+      "key": "e7",
       "category": "ADDRESS",
       "value": "630914, г. Новосибирск, ул. Советская, д. 70, офис 245"
     },
     {
-      "key": "e7",
+      "key": "e8",
       "category": "COMPANY",
       "value": "Гранит-Строй",
       "opf": true
     },
     {
-      "key": "e8",
+      "key": "e9",
       "category": "ADDRESS",
       "value": "420585, г. Казань, пр-т Победы, д. 46, офис 435"
     },
     {
-      "key": "e9",
+      "key": "e10",
       "category": "PERSON",
       "value": "Комаров Р.А.",
       "surname": "Комаров"
     },
     {
-      "key": "e10",
+      "key": "e11",
       "category": "PERSON",
       "value": "Лебедева М.П.",
       "surname": "Лебедева"

@@ -1,0 +1,120 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "CADASTRAL",
+      "value": "66:15:8667651:2784"
+    },
+    {
+      "key": "e2",
+      "category": "PERSON",
+      "value": "Орлова Наталья Юрьевна",
+      "surname": "Орлова"
+    },
+    {
+      "key": "e3",
+      "category": "PASSPORT",
+      "value": "6611 364906"
+    },
+    {
+      "key": "e4",
+      "category": "PASSPORT_ISSUER",
+      "value": "УМВД России по Северной области"
+    },
+    {
+      "key": "e5",
+      "category": "PASSPORT_DATE",
+      "value": "12.10.2016"
+    },
+    {
+      "key": "e6",
+      "category": "PASSPORT_DEPT",
+      "value": "665-055"
+    },
+    {
+      "key": "e7",
+      "category": "PERSON",
+      "value": "Поляковой Веры Константиновны",
+      "surname": "Поляковой"
+    },
+    {
+      "key": "e8",
+      "category": "POA",
+      "value": "66 АА 5263552"
+    },
+    {
+      "key": "e9",
+      "category": "NOTARY_REG",
+      "value": "66/141-н/66-2026-8-560"
+    },
+    {
+      "key": "e10",
+      "category": "PERSON",
+      "value": "Белов Игорь Сергеевич",
+      "surname": "Белов"
+    },
+    {
+      "key": "e11",
+      "category": "PASSPORT",
+      "value": "6618 329720"
+    },
+    {
+      "key": "e12",
+      "category": "PASSPORT_DATE",
+      "value": "04.05.2018"
+    },
+    {
+      "key": "e13",
+      "category": "PASSPORT_DEPT",
+      "value": "668-024"
+    },
+    {
+      "key": "e14",
+      "category": "EGRN_RECORD",
+      "value": "66:15:8667651:2784-66/409/2026-14"
+    },
+    {
+      "key": "e15",
+      "category": "PERSON",
+      "value": "Орлова Н.Ю.",
+      "surname": "Орлова"
+    },
+    {
+      "key": "e16",
+      "category": "PERSON",
+      "value": "Белов И.С.",
+      "surname": "Белов"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "п. 3.2",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "ДОГОВОР КУПЛИ-ПРОДАЖИ КВАРТИРЫ",
+      "category": "COMPANY"
+    },
+    {
+      "value": "45,6 кв. м",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "ст. 556 ГК РФ",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "этаж 5 из 9",
+      "category": "CADASTRAL",
+      "rules": true
+    },
+    {
+      "value": "2 комнаты",
+      "category": "CADASTRAL",
+      "rules": true
+    }
+  ]
+}

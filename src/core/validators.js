@@ -1,6 +1,7 @@
 // WP1: валидаторы контрольных сумм и структуры (ТЗ §4.3, §9.1 validators.spec).
 // Имена совпадают с полем `validator` каталога (core/categories.js):
-//   inn, kpp, ogrn, bik, account, luhn, iban, mod97, swift, snils, passport, ssn, taxid, email, url, phone, birthdate, legalForm, address.
+//   inn, kpp, ogrn, bik, account, luhn, iban, mod97, swift, snils, passport, ssn, taxid, email, url, phone, birthdate, legalForm, address;
+//   0.5 (WP12-C, §8.7): oms, vin, ipv4, ipv6, roman — проверки детекторов новых категорий (в список пользовательских не входят).
 // Каждый — (value: string, ctx?: object) => boolean. Принимают значение «как в тексте» (с пробелами и дефисами).
 // Пользовательские категории переиспользуют inn / ogrn / snils / luhn / mod97 (FR-44).
 
@@ -408,6 +409,49 @@ const ADDRESS_COMPONENTS = [
 export function address(value) {
   const s = String(value);
   return ADDRESS_COMPONENTS.filter((re) => re.test(s)).length >= 2;
+}
+
+/* ---------- категории 0.5 (WP12-C) ---------- */
+/**
+ * Единый номер полиса ОМС: 16 цифр, 16-я — контрольная по Mod10 стандарта ISO/HL7 27931 (цифры нечётных позиций справа
+ * числом × 2 + цифры чётных, сумма цифр до кратного 10) — по сумме цифр это ровно алгоритм Луна.
+ */
+export function oms(value) {
+  const s = onlyDigits(value);
+  return isDigits(s, 16) && luhn(s);
+}
+
+const VIN_T = 'A1B2C3D4E5F6G7H8J1K2L3M4N5P7R9S2T3U4V5W6X7Y8Z9';
+const VIN_W = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+/** VIN: 17 знаков без I/O/Q и верная проверочная цифра (9-й знак, ISO 3779 / FMVSS 115; у европейских VIN её может не быть). */
+export function vin(value) {
+  const s = String(value).toUpperCase();
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(s)) return false;
+  let sum = 0;
+  for (let i = 0; i < 17; i++) sum += VIN_W[i] * (/\d/.test(s[i]) ? +s[i] : +VIN_T[VIN_T.indexOf(s[i]) + 1]);
+  const c = sum % 11;
+  return s[8] === (c === 10 ? 'X' : String(c));
+}
+
+/** IPv4: четыре октета 0–255 без ведущих нулей («62.01.11.000» — код ОКПД2, не адрес). */
+export function ipv4(value) {
+  const p = String(value).split('.');
+  return p.length === 4 && p.every((x) => /^(?:0|[1-9]\d{0,2})$/.test(x) && +x <= 255);
+}
+
+/** IPv6: восемь групп по 1–4 hex-цифры или сокращение «::» (не меньше двух групп). */
+export function ipv6(value) {
+  const halves = String(value).split('::');
+  if (halves.length > 2) return false;
+  const g = halves.flatMap((x) => (x ? x.split(':') : []));
+  if (!g.every((x) => /^[0-9a-f]{1,4}$/i.test(x))) return false;
+  return halves.length === 2 ? g.length >= 2 && g.length < 8 : g.length === 8;
+}
+
+/** Римская серия свидетельства ЗАГС и паспорта СССР (I…XXXIX; «І» и «Х» кириллицей — как латиница). */
+export function roman(value) {
+  const s = String(value).replace(/І/g, 'I').replace(/Х/g, 'X');
+  return /^(?=[IVX])X{0,3}(?:IX|IV|V?I{0,3})$/.test(s);
 }
 
 /** @type {Record<string, (value: string, ctx?: object) => boolean>} */

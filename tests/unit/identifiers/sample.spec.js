@@ -57,13 +57,20 @@ describe('образец договора: детекторы идентифик
     }
   });
 
-  it('паспорт: серия/номер, орган выдачи и код подразделения — одна сущность (один плейсхолдер)', () => {
-    const g = analysis.groups.filter((x) => x.category === 'PASSPORT');
-    expect(g.length).toBe(1);
-    const texts = g[0].occurrences.map((o) => o.text);
-    expect(texts).toContain('45 05 123456');
-    expect(texts).toContain('ОВД района Арбат г. Москвы');
-    expect(texts).toContain('770-001');
+  // 0.5 (WP12-C, К6): до 0.5 — одна сущность [ПАСПОРТ_1] на три места; теперь у каждой части своя метка
+  it('паспорт: серия/номер, орган выдачи, дата выдачи и код подразделения — четыре сущности с разными плейсхолдерами', () => {
+    const parts = { PASSPORT: '45 05 123456', PASSPORT_ISSUER: 'ОВД района Арбат г. Москвы', PASSPORT_DATE: '12.03.2005', PASSPORT_DEPT: '770-001' };
+    const placeholders = new Set();
+    for (const [cat, value] of Object.entries(parts)) {
+      const g = analysis.groups.filter((x) => x.category === cat);
+      expect(g.length, cat).toBe(1);
+      expect(
+        g[0].occurrences.map((o) => o.text),
+        cat,
+      ).toEqual([value]);
+      placeholders.add(g[0].placeholder);
+    }
+    expect(placeholders.size).toBe(4);
   });
 
   it('счета с БИК из соседнего абзаца имеют уровень validated', () => {

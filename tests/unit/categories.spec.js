@@ -12,11 +12,28 @@ describe('группы категорий (0.4, концепция п. 1)', () =
     expect(new Set(all).size).toBe(all.length);
     expect([...all].sort()).toEqual([...BUILTIN_IDS].sort());
   });
+  // 0.5 (WP12-C, концепция 0.5 п. 5): части паспорта и новые категории — в тех же трёх группах
   it('состав групп — по решению владельца', () => {
-    expect([...CATEGORY_GROUPS.pii].sort()).toEqual(['ADDRESS', 'BIRTHDATE', 'CARD', 'EMAIL', 'PASSPORT', 'PERSON', 'PHONE', 'SNILS', 'SSN']);
-    expect([...CATEGORY_GROUPS.ids].sort()).toEqual(['ACCOUNT', 'BIK', 'IBAN', 'INN', 'KPP', 'OGRN', 'SWIFT', 'TAXID', 'URL']);
-    expect([...CATEGORY_GROUPS.commercial]).toEqual(['COMPANY', 'CONTRACT', 'AMOUNT']);
-    expect(ALWAYS_ON_IDS).toHaveLength(18);
+    const PII_04 = ['ADDRESS', 'BIRTHDATE', 'CARD', 'EMAIL', 'PASSPORT', 'PERSON', 'PHONE', 'SNILS', 'SSN'];
+    const PII_05 = ['PASSPORT_DEPT', 'PASSPORT_ISSUER', 'PASSPORT_DATE', 'INTL_PASSPORT', 'DRIVER_LICENSE', 'MILITARY_ID', 'RESIDENCE_PERMIT'];
+    PII_05.push('MIGRATION_CARD', 'CIVIL_CERT', 'OMS', 'VEHICLE_DOC', 'VIN', 'PLATE', 'NICKNAME', 'IP', 'MAC', 'HEALTH', 'SPECIAL');
+    expect([...CATEGORY_GROUPS.pii].sort()).toEqual([...PII_04, ...PII_05].sort());
+    const IDS_04 = ['ACCOUNT', 'BIK', 'IBAN', 'INN', 'KPP', 'OGRN', 'SWIFT', 'TAXID', 'URL'];
+    const IDS_05 = ['EGRN_RECORD', 'CADASTRAL', 'ENFORCEMENT', 'COURT_CASE', 'POA', 'NOTARY_REG'];
+    expect([...CATEGORY_GROUPS.ids].sort()).toEqual([...IDS_04, ...IDS_05].sort());
+    expect([...CATEGORY_GROUPS.commercial]).toEqual(['COMPANY', 'CONTRACT', 'TENDER', 'ORDER_NO', 'INVOICE_NO', 'CLIENT_NO', 'IP_REG', 'AMOUNT']);
+    expect(ALWAYS_ON_IDS).toHaveLength(18 + PII_05.length + IDS_05.length);
+  });
+  it('у новых категорий 0.5 — свои префиксы ru/en, подписи и цвета; префиксы не повторяются', () => {
+    for (const lang of ['ru', 'en']) {
+      const prefixes = BUILTIN_CATEGORIES.map((c) => c.placeholderPrefix[lang]);
+      expect(new Set(prefixes).size, lang).toBe(prefixes.length);
+      for (const c of BUILTIN_CATEGORIES) {
+        expect(c.label[lang], c.id).toBeTruthy();
+        expect(c.placeholderPrefix[lang], c.id).toMatch(/^[A-ZА-ЯЁ][A-ZА-ЯЁ0-9_]*$/u);
+      }
+    }
+    for (const c of BUILTIN_CATEGORIES) expect(c.color, c.id).toMatch(/^#[0-9a-f]{6}$/);
   });
   it('pii и ids включены всегда — даже если в настройках false', () => {
     const s = { ...defaultSettings(), categories: Object.fromEntries(BUILTIN_IDS.map((id) => [id, false])) };
@@ -43,6 +60,6 @@ describe('группы категорий (0.4, концепция п. 1)', () =
   it('defaultSettings().categories: pii/ids — true, внутри commercial — по defaultOn', () => {
     const c = defaultSettings().categories;
     for (const id of ALWAYS_ON_IDS) expect(c[id], id).toBe(true);
-    expect(c).toMatchObject({ COMPANY: true, CONTRACT: false, AMOUNT: false });
+    expect(c).toMatchObject({ COMPANY: true, CONTRACT: false, AMOUNT: false, TENDER: true, ORDER_NO: true, INVOICE_NO: true, CLIENT_NO: true, IP_REG: true });
   });
 });

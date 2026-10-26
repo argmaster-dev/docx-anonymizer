@@ -1,0 +1,127 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "PERSON",
+      "value": "Тихонова Елена Игоревна",
+      "surname": "Тихонова"
+    },
+    {
+      "key": "e2",
+      "category": "BIRTHDATE",
+      "value": "15.12.1979"
+    },
+    {
+      "key": "e3",
+      "category": "PASSPORT",
+      "value": "5416 744445"
+    },
+    {
+      "key": "e4",
+      "category": "PASSPORT_ISSUER",
+      "value": "Отделом УФМС России по Лесному району г. Энска"
+    },
+    {
+      "key": "e5",
+      "category": "PASSPORT_DATE",
+      "value": "11.05.2022"
+    },
+    {
+      "key": "e6",
+      "category": "PASSPORT_DEPT",
+      "value": "548-058"
+    },
+    {
+      "key": "e7",
+      "category": "SNILS",
+      "value": "188-277-188 29"
+    },
+    {
+      "key": "e8",
+      "category": "INN",
+      "value": "549974584038"
+    },
+    {
+      "key": "e9",
+      "category": "OMS",
+      "value": "6076529795453764"
+    },
+    {
+      "key": "e10",
+      "category": "ADDRESS",
+      "value": "630548, г. Новосибирск, ул. Советская, д. 25, кв. 447"
+    },
+    {
+      "key": "e11",
+      "category": "PHONE",
+      "value": "+7 (999) 005-53-80"
+    },
+    {
+      "key": "e12",
+      "category": "EMAIL",
+      "value": "e.tikhonova@mail.example"
+    },
+    {
+      "key": "e13",
+      "category": "CIVIL_CERT",
+      "value": "III-ТЦ № 636053"
+    },
+    {
+      "key": "e14",
+      "category": "CIVIL_CERT",
+      "value": "IV-ЕН № 582288"
+    },
+    {
+      "key": "e15",
+      "category": "SPECIAL",
+      "value": "татарка"
+    },
+    {
+      "key": "e16",
+      "category": "PERSON",
+      "value": "Кузнецова Ольга Владимировна",
+      "surname": "Кузнецова"
+    },
+    {
+      "key": "e17",
+      "category": "OMS",
+      "value": "9662673598326068"
+    },
+    {
+      "key": "e18",
+      "category": "SNILS",
+      "value": "118-084-992 75"
+    },
+    {
+      "key": "e19",
+      "category": "PERSON",
+      "value": "Тихонова Е.И.",
+      "surname": "Тихонова"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "15.10.2026",
+      "category": "BIRTHDATE",
+      "rules": true
+    },
+    {
+      "value": "12 лет",
+      "category": "PASSPORT",
+      "rules": true
+    },
+    {
+      "value": "АНКЕТА",
+      "category": "COMPANY"
+    },
+    {
+      "value": "Личные данные",
+      "category": "COMPANY"
+    },
+    {
+      "value": "Семейное положение",
+      "category": "COMPANY",
+      "rules": true
+    }
+  ]
+}

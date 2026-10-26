@@ -1,0 +1,117 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "CADASTRAL",
+      "value": "78:19:8049030:5821"
+    },
+    {
+      "key": "e2",
+      "category": "INN",
+      "value": "7809627045"
+    },
+    {
+      "key": "e3",
+      "category": "OGRN",
+      "value": "1217880226310"
+    },
+    {
+      "key": "e4",
+      "category": "CADASTRAL",
+      "value": "78:18:1183983:9737"
+    },
+    {
+      "key": "e5",
+      "category": "CADASTRAL",
+      "value": "78:18:1183983"
+    },
+    {
+      "key": "e6",
+      "category": "COMPANY",
+      "value": "Ясный Полдень",
+      "opf": true
+    },
+    {
+      "key": "e7",
+      "category": "PERSON",
+      "value": "Соколовой Дарьи Андреевны",
+      "surname": "Соколовой"
+    },
+    {
+      "key": "e8",
+      "category": "PERSON",
+      "value": "Морозов Андрей Викторович",
+      "surname": "Морозов"
+    },
+    {
+      "key": "e9",
+      "category": "PASSPORT",
+      "value": "7823 561208"
+    },
+    {
+      "key": "e10",
+      "category": "PASSPORT_ISSUER",
+      "value": "ГУ МВД России по Северной области"
+    },
+    {
+      "key": "e11",
+      "category": "PASSPORT_DATE",
+      "value": "01.09.2007"
+    },
+    {
+      "key": "e12",
+      "category": "PASSPORT_DEPT",
+      "value": "783-048"
+    },
+    {
+      "key": "e13",
+      "category": "EGRN_RECORD",
+      "value": "78:19:8049030:5821-78/412/2026-3"
+    },
+    {
+      "key": "e14",
+      "category": "PERSON",
+      "value": "Соколова Д.А.",
+      "surname": "Соколова"
+    },
+    {
+      "key": "e15",
+      "category": "PERSON",
+      "value": "Морозов А.В.",
+      "surname": "Морозов"
+    },
+    {
+      "key": "e16",
+      "category": "PERSON",
+      "value": "Соколова Дарья Андреевна",
+      "surname": "Соколова",
+      "meta": true
+    }
+  ],
+  "negatives": [
+    {
+      "value": "п. 3.2",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "ДОГОВОР КУПЛИ-ПРОДАЖИ ЗЕМЕЛЬНОГО УЧАСТКА",
+      "category": "COMPANY"
+    },
+    {
+      "value": "ст. 556 ГК РФ",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "этаж 5 из 9",
+      "category": "CADASTRAL",
+      "rules": true
+    },
+    {
+      "value": "2 комнаты",
+      "category": "CADASTRAL",
+      "rules": true
+    }
+  ]
+}

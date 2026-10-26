@@ -1,5 +1,6 @@
 // WP1: детекторы идентификаторов (INN, KPP, OGRN, BIK, ACCOUNT, CARD, IBAN, SWIFT, SNILS,
-// PASSPORT, SSN, TAXID, EMAIL, PHONE, URL, BIRTHDATE, CONTRACT, AMOUNT) — ТЗ §4.3, контракт — docs/contracts.md §2.
+// PASSPORT, SSN, TAXID, EMAIL, PHONE, URL, BIRTHDATE, CONTRACT, AMOUNT) — ТЗ §4.3, контракт — docs/contracts.md §2;
+// с 0.5 (WP12-C) — части паспорта и категории `papers.js` (документы, транспорт, сеть, суды, недвижимость, §8.7).
 // Потоковые детекторы по одному на категорию; плюс документный детектор счетов: ключ по БИК из соседнего потока.
 import {
   detectInn,
@@ -16,7 +17,8 @@ import {
   detectTaxId,
 } from './numeric.js';
 import { detectEmail, detectUrl, detectPhone } from './contact.js';
-import { detectPassport, detectBirthdate, detectContract, detectAmount } from './docs.js';
+import { detectPassport, detectPassportIssuer, detectPassportDate, detectPassportDept, detectBirthdate, detectContract, detectAmount } from './docs.js';
+import { PAPER_DETECTORS } from './papers.js';
 
 /** Потоковые детекторы по категориям (экспорт — для модульных тестов). */
 export const IDENTIFIER_DETECTORS = Object.freeze({
@@ -38,6 +40,10 @@ export const IDENTIFIER_DETECTORS = Object.freeze({
   BIRTHDATE: detectBirthdate,
   CONTRACT: detectContract,
   AMOUNT: detectAmount,
+  PASSPORT_ISSUER: detectPassportIssuer,
+  PASSPORT_DATE: detectPassportDate,
+  PASSPORT_DEPT: detectPassportDept,
+  ...PAPER_DETECTORS,
 });
 
 /** @param {{registerDetector: Function, registerDocumentDetector: Function}} api */

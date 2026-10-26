@@ -1,6 +1,7 @@
 // WP7, К4: время анализа ~300-страничного синтетического текста со словарным детектором ≤ 130 % от времени без него.
 // 2 400 абзацев × ~65 слов из фиксированного словаря, ~8 % слов с заглавной, ~1 % — пары «Имя Фамилия».
-// Прогрев, затем медиана из 3 прогонов для dictNames: false и true. Детекторы — полный встроенный набор.
+// Прогрев, затем минимум из 5 чередующихся прогонов для dictNames: false и true (устойчиво к нагрузке соседних тестов:
+// разовый всплеск нагрузки попадает в один прогон, а не в отношение; 0.5, WP12-C). Детекторы — полный встроенный набор.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { analyze } from '../../../src/core/detect/runner.js';
 import { clearDetectors, registerBuiltinDetectors } from '../../../src/core/index.js';
@@ -52,22 +53,17 @@ function corpus(paragraphs, seed) {
   return out;
 }
 
-/**
- * Лучшее время каждого варианта по чередующимся прогонам (без, со словарём, без, со…): всплеск нагрузки от параллельных файлов
- * vitest (LibreOffice в тестах форматов 0.5) попадает в оба варианта, а не в один — отношение не дрожит (ревью WP12-B).
- */
-async function bestInterleaved(doc, a, b, rounds = 4) {
+/** Минимум времени из `n` прогонов, режимы чередуются: оба видят одну и ту же нагрузку машины. */
+async function minTimes(doc, a, b, n = 5) {
   let ta = Infinity;
   let tb = Infinity;
-  for (let i = 0; i < rounds; i++) {
-    for (const [settings, set] of [
-      [a, (t) => (ta = Math.min(ta, t))],
-      [b, (t) => (tb = Math.min(tb, t))],
-    ]) {
-      const t0 = performance.now();
-      await analyze(doc, settings);
-      set(performance.now() - t0);
-    }
+  for (let i = 0; i < n; i++) {
+    let t0 = performance.now();
+    await analyze(doc, a);
+    ta = Math.min(ta, performance.now() - t0);
+    t0 = performance.now();
+    await analyze(doc, b);
+    tb = Math.min(tb, performance.now() - t0);
   }
   return [ta, tb];
 }
@@ -85,7 +81,7 @@ describe('К4: производительность словарного дет�
     // прогрев: JIT, декодирование словарей, мемо
     await analyze(doc, off);
     await analyze(doc, on);
-    const [tOff, tOn] = await bestInterleaved(doc, off, on);
+    const [tOff, tOn] = await minTimes(doc, off, on);
     const ratio = tOn / tOff;
     console.log(`К4: без словаря ${tOff.toFixed(0)} мс, со словарём ${tOn.toFixed(0)} мс, отношение ${ratio.toFixed(3)}`);
     expect(ratio).toBeLessThanOrEqual(1.3);

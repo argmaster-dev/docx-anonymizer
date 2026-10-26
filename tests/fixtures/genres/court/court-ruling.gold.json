@@ -1,0 +1,94 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "COURT_CASE",
+      "value": "2-5180/2026"
+    },
+    {
+      "key": "e2",
+      "category": "COURT_CASE",
+      "value": "16RS0044-02-2026-001446-32"
+    },
+    {
+      "key": "e3",
+      "category": "PERSON",
+      "value": "Кузнецова Ольга Владимировна",
+      "surname": "Кузнецова"
+    },
+    {
+      "key": "e4",
+      "category": "PERSON",
+      "value": "Соколовой Дарьи Андреевны",
+      "surname": "Соколовой"
+    },
+    {
+      "key": "e5",
+      "category": "PERSON",
+      "value": "Зайцеву Павлу Николаевичу",
+      "surname": "Зайцеву"
+    },
+    {
+      "key": "e6",
+      "category": "PERSON",
+      "value": "Соколова Дарья Андреевна",
+      "surname": "Соколова"
+    },
+    {
+      "key": "e7",
+      "category": "BIRTHDATE",
+      "value": "26.08.1984"
+    },
+    {
+      "key": "e8",
+      "category": "PASSPORT",
+      "value": "1615 286126"
+    },
+    {
+      "key": "e9",
+      "category": "PASSPORT_ISSUER",
+      "value": "УМВД России по Энской области"
+    },
+    {
+      "key": "e10",
+      "category": "PASSPORT_DATE",
+      "value": "03.05.2020"
+    },
+    {
+      "key": "e11",
+      "category": "PASSPORT_DEPT",
+      "value": "165-058"
+    },
+    {
+      "key": "e12",
+      "category": "COURT_CASE",
+      "value": "62064"
+    },
+    {
+      "key": "e13",
+      "category": "COURT_CASE",
+      "value": "12401450009866466"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "РЕШЕНИЕ",
+      "category": "COMPANY"
+    },
+    {
+      "value": "Именем Российской Федерации",
+      "category": "PERSON",
+      "rules": true
+    },
+    {
+      "value": "ГПК РФ",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "ч. 1 ст. 159 УК РФ",
+      "category": "COURT_CASE",
+      "rules": true
+    }
+  ]
+}

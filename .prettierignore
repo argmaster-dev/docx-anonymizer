@@ -5,3 +5,6 @@ docs
 dist-e2e
 # словари ФИО генерирует scripts/make-dicts.mjs (WP12-A: vendor/dict/*.txt и NOTICE.md)
 vendor/dict
+# снимки покрытия (scripts/coverage-grid.mjs) — генерируемые, компактный JSON
+tests/fixtures/coverage/corpus.json
+tests/fixtures/coverage/prev-*.json
