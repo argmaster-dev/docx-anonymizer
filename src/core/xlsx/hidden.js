@@ -174,7 +174,10 @@ export function applyXlsxHidden(doc, S, ctx, push) {
     }
     if (cells || removed.length) {
       changed = true;
-      fixFormulaCaches(scans, new Set(removed.map((s) => s.name.toLowerCase())), cleared, definedNameAreas(xmlOf(wb)), ctx, push);
+      const verdictOf = fixFormulaCaches(scans, new Set(removed.map((s) => s.name.toLowerCase())), cleared, definedNameAreas(xmlOf(wb)), ctx, push);
+      // ряды диаграмм и сводные таблицы на удалённое — без значений удалённого (ревью WP12-D)
+      fixChartCaches(doc, names, verdictOf, ctx);
+      removePivots(doc, S, verdictOf, xmlOf, ctx, remove);
       const sst = rels.from(wb).find((r) => r.type === 'sharedStrings')?.target;
       if (sst && doc.parts.has(sst)) blankStrings(doc.parts.get(sst).xml, refs, sst, ctx);
     }
@@ -402,10 +405,7 @@ function fixFormulaCaches(scans, removedNames, cleared, nameAreas, ctx, push) {
         if (range) areas = spreadShared(areas, range);
       }
       const { code } = scanFormula(c.f.text);
-      for (const [nm, list] of nameAreas) {
-        const re = new RegExp(`(?<![\\p{L}\\p{N}_.])${nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_.(])`, 'iu');
-        if (re.test(code)) areas = [...areas, ...list];
-      }
+      areas = [...areas, ...namedAreas(code, nameAreas)];
       const ref = areas.some((a) => removedNames.has(a.sheet.toLowerCase())) || refersRemoved(code, removedNames);
       const item = { sheet, xml, areas, verdict: ref ? 'ref' : null, cells: [c] };
       items.push(item);
@@ -442,6 +442,93 @@ function fixFormulaCaches(scans, removedNames, cleared, nameAreas, ctx, push) {
       } else if (it.verdict === 'clear' && c.v && c.v.end > 0) ctx.strip(it.sheet.part, { from: c.v.start, to: c.v.end });
     }
   }
+  // то же решение для ссылок вне ячеек (ряды диаграмм, источник сводной): 'ref' — удалённый лист, 'clear' — очищенные ячейки
+  return (text, sheetName = '') => {
+    const { code } = scanFormula(text);
+    const areas = [...formulaRefs(text, sheetName), ...namedAreas(code, nameAreas)];
+    if (areas.some((a) => removedNames.has(a.sheet.toLowerCase())) || refersRemoved(code, removedNames)) return 'ref';
+    return areas.some(hitsCleared) ? 'clear' : null;
+  };
+}
+
+/** Прямоугольники имён книги, которые встречаются в коде формулы. */
+function namedAreas(code, nameAreas) {
+  const out = [];
+  for (const [nm, list] of nameAreas) {
+    const re = new RegExp(`(?<![\\p{L}\\p{N}_.])${nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_.(])`, 'iu');
+    if (re.test(code)) out.push(...list);
+  }
+  return out;
+}
+
+/**
+ * Кэш рядов диаграмм книги (ревью WP12-D): ряд, подпись или категории со ссылкой на удалённый лист или очищенные ячейки —
+ * пустой кэш (`<c:numCache><c:ptCount val="0"/></c:numCache>`, то же для strCache/multiLvlStrCache): точки удалённого не остаются,
+ * приложение пересчитает ряд по формуле (она — #REF! по общим правилам переименования листов).
+ */
+function fixChartCaches(doc, names, verdictOf, ctx) {
+  for (const part of doc.parts.values()) {
+    if (!names.has(part.name) || !/<(?:\w+:)?chartSpace[\s>]/.test(part.xml.slice(0, 2000))) continue;
+    const xml = part.xml;
+    const refs = [];
+    let f = null;
+    tokenize(xml, (t) => {
+      const local = t.name.replace(/^\w+:/, '');
+      if (t.type === 'open' && /^(?:numRef|strRef|multiLvlStrRef)$/.test(local)) refs.push({ f: '', cache: null });
+      else if (t.type === 'open' && local === 'f' && refs.length) f = t.end;
+      else if (t.type === 'close' && local === 'f' && f != null && refs.length) {
+        refs[refs.length - 1].f = unescapeXml(xml.slice(f, t.start));
+        f = null;
+      } else if ((t.type === 'open' || t.type === 'selfclose') && /^(?:numCache|strCache|multiLvlStrCache)$/.test(local) && refs.length) {
+        refs[refs.length - 1].cache = { name: t.name, start: t.start, end: t.type === 'selfclose' ? t.end : -1 };
+      } else if (t.type === 'close' && /^(?:numCache|strCache|multiLvlStrCache)$/.test(local) && refs.length) {
+        const c = refs[refs.length - 1].cache;
+        if (c) c.end = t.end;
+      } else if (t.type === 'close' && /^(?:numRef|strRef|multiLvlStrRef)$/.test(local)) {
+        const r = refs.pop();
+        if (!r?.cache || r.cache.end < 0 || !verdictOf(r.f)) return;
+        const pfx = r.cache.name.includes(':') ? `${r.cache.name.split(':')[0]}:` : '';
+        ctx.strip(part.name, { from: r.cache.start, to: r.cache.end, text: `<${r.cache.name}><${pfx}ptCount val="0"/></${r.cache.name}>` });
+      }
+    });
+  }
+}
+
+/**
+ * Сводные таблицы, у которых источник — удалённый лист или очищенные скрытые строки и столбцы (ревью WP12-D): записи кэша и
+ * наборы значений — это данные удалённого. Удаляются определение кэша, записи, все сводные таблицы на этом кэше и элемент
+ * <pivotCache> книги (пустой <pivotCaches> — целиком); ячейки, которые сводная уже вывела на видимый лист, остаются как значения.
+ */
+function removePivots(doc, S, verdictOf, xmlOf, ctx, remove) {
+  const { rels, wb } = S;
+  const doomed = new Map();
+  for (const r of rels.from(S.wb)) {
+    if (r.type !== 'pivotCacheDefinition' || r.external) continue;
+    const xml = xmlOf(r.target);
+    const m = /<(?:\w+:)?worksheetSource\b([^>]*)>/.exec(xml);
+    if (!m) continue;
+    const attr = (n) => {
+      const a = new RegExp(`\\s${n}\\s*=\\s*("([^"]*)"|'([^']*)')`).exec(m[1]);
+      return a ? unescapeXml(a[2] ?? a[3]) : null;
+    };
+    const sheet = attr('sheet');
+    const text = sheet != null ? `'${sheet.replace(/'/g, "''")}'!${attr('ref') || 'A1'}` : attr('name');
+    if (text && verdictOf(text)) doomed.set(r.id, r.target);
+  }
+  if (!doomed.size) return;
+  const defs = new Set(doomed.values());
+  for (const def of defs) {
+    remove(def);
+    for (const r of rels.from(def)) if (r.type === 'pivotCacheRecords') remove(r.target);
+  }
+  for (const r of rels.all) if (defs.has(r.target) && r.type === 'pivotCacheDefinition' && r.source !== wb) remove(r.source);
+  // книга: <pivotCache cacheId r:id> удалённых; пустой <pivotCaches> — целиком (в схеме в нём минимум один элемент)
+  const xml = xmlOf(wb);
+  const all = [...xml.matchAll(/<pivotCache\b[^>]*?\/>/g)];
+  const gone = all.filter((m) => doomed.has(/\sr:id\s*=\s*["']([^"']*)["']/.exec(m[0])?.[1]));
+  const box = /<pivotCaches\b[^>]*>[\s\S]*?<\/pivotCaches>/.exec(xml);
+  if (box && gone.length === all.length) ctx.strip(wb, { from: box.index, to: box.index + box[0].length });
+  else for (const m of gone) ctx.strip(wb, { from: /** @type {number} */ (m.index), to: /** @type {number} */ (m.index) + m[0].length });
 }
 
 /** Имя удалённого листа в коде формулы (ссылка без диапазона A1, например на имя листа): «'Лист'!» или «Лист!». */

@@ -264,6 +264,131 @@ describe('Excel: кэш формул и объединения при удале
   }, 120000);
 });
 
+describe('Excel: диаграммы и сводные на удаляемое (ревью WP12-D)', () => {
+  /** Книга: скрытый лист с данными, диаграмма на видимом листе (ряды со ссылками на скрытый лист и на скрытую строку), сводная по скрытому листу. */
+  async function bookWithChartAndPivot() {
+    const { buildXlsx } = await import('../../scripts/office-writer.mjs');
+    const { readZip, inflateEntry, writeZip } = await import('../../src/core/ooxml/zip.js');
+    const base = buildXlsx({
+      sheets: [
+        {
+          name: 'Данные',
+          hiddenRows: [3],
+          rows: [
+            ['Месяц', 'Сумма'],
+            ['Январь', 4410.5],
+            ['Февраль', 4420.25],
+          ],
+        },
+        {
+          name: 'Скрытый лист',
+          hidden: true,
+          rows: [
+            ['ФИО', 'Сумма'],
+            ['Яковлева Дарья Сергеевна', 7310.25],
+            ['СКР_ЛИСТ_ДВА', 7320.5],
+          ],
+        },
+        { name: 'Итоги', rows: [['ИТОГ_ЛИСТ']] },
+      ],
+    });
+    const dec = new TextDecoder();
+    const files = Object.fromEntries(readZip(base).map((e) => [e.name, dec.decode(inflateEntry(e))]));
+    const R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    const NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="' + R + '"';
+    const rels = (list) =>
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${list
+        .map(([id, type, target]) => `<Relationship Id="${id}" Type="${R}/${type}" Target="${target}"/>`)
+        .join('')}</Relationships>`;
+    const pt = (vals) => `<c:ptCount val="${vals.length}"/>${vals.map((v, i) => `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`).join('')}`;
+    const ser = (i, tx, cat, val, nums) =>
+      `<c:ser><c:idx val="${i}"/><c:order val="${i}"/><c:tx><c:strRef><c:f>${tx[0]}</c:f><c:strCache>${pt([tx[1]])}</c:strCache></c:strRef></c:tx>` +
+      `<c:cat><c:strRef><c:f>${cat[0]}</c:f><c:strCache>${pt(cat[1])}</c:strCache></c:strRef></c:cat>` +
+      `<c:val><c:numRef><c:f>${val}</c:f><c:numCache><c:formatCode>General</c:formatCode>${pt(nums)}</c:numCache></c:numRef></c:val></c:ser>`;
+    files['xl/charts/chart1.xml'] =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="' +
+      R +
+      '"><c:chart><c:plotArea><c:layout/><c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>' +
+      ser(
+        0,
+        ["'Скрытый лист'!$A$1", 'ФИО'],
+        ["'Скрытый лист'!$A$2:$A$3", ['Яковлева Дарья Сергеевна', 'СКР_ЛИСТ_ДВА']],
+        "'Скрытый лист'!$B$2:$B$3",
+        [7310.25, 7320.5],
+      ) +
+      ser(1, ['Данные!$B$1', 'Сумма'], ['Данные!$A$2:$A$3', ['Январь', 'Февраль']], 'Данные!$B$2:$B$3', [4410.5, 4420.25]) +
+      '<c:axId val="1"/><c:axId val="2"/></c:barChart><c:catAx><c:axId val="1"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:crossAx val="2"/></c:catAx>' +
+      '<c:valAx><c:axId val="2"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:crossAx val="1"/></c:valAx></c:plotArea></c:chart></c:chartSpace>';
+    files['xl/drawings/drawing1.xml'] =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="' +
+      R +
+      '" xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><xdr:twoCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>3</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from>' +
+      '<xdr:to><xdr:col>6</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>15</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="Диаграмма 1"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr>' +
+      '<xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>';
+    files['xl/drawings/_rels/drawing1.xml.rels'] = rels([['rId1', 'chart', '../charts/chart1.xml']]);
+    files['xl/pivotCache/pivotCacheDefinition1.xml'] =
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><pivotCacheDefinition ${NS} r:id="rId1" refreshOnLoad="1" recordCount="2"><cacheSource type="worksheet"><worksheetSource ref="A1:B3" sheet="Скрытый лист"/></cacheSource>` +
+      '<cacheFields count="2"><cacheField name="ФИО" numFmtId="0"><sharedItems count="2"><s v="Яковлева Дарья Сергеевна"/><s v="СКР_ЛИСТ_ДВА"/></sharedItems></cacheField>' +
+      '<cacheField name="Сумма" numFmtId="0"><sharedItems containsSemiMixedTypes="0" containsString="0" containsNumber="1" minValue="7310.25" maxValue="7320.5"/></cacheField></cacheFields></pivotCacheDefinition>';
+    files['xl/pivotCache/_rels/pivotCacheDefinition1.xml.rels'] = rels([['rId1', 'pivotCacheRecords', 'pivotCacheRecords1.xml']]);
+    files['xl/pivotCache/pivotCacheRecords1.xml'] =
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><pivotCacheRecords ${NS} count="2"><r><x v="0"/><n v="7310.25"/></r><r><x v="1"/><n v="7320.5"/></r></pivotCacheRecords>`;
+    files['xl/pivotTables/pivotTable1.xml'] =
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><pivotTableDefinition ${NS} name="Сводная1" cacheId="1" dataCaption="Значения" createdVersion="6" updatedVersion="6" minRefreshableVersion="3">` +
+      '<location ref="D3:E6" firstHeaderRow="1" firstDataRow="1" firstDataCol="1"/><pivotFields count="2"><pivotField axis="axisRow" showAll="0"><items count="3"><item x="0"/><item x="1"/><item t="default"/></items></pivotField>' +
+      '<pivotField dataField="1" showAll="0"/></pivotFields><rowFields count="1"><field x="0"/></rowFields><rowItems count="3"><i><x/></i><i><x v="1"/></i><i t="grand"><x/></i></rowItems><colItems count="1"><i/></colItems>' +
+      '<dataFields count="1"><dataField name="Сумма по полю Сумма" fld="1" baseField="0" baseItem="0"/></dataFields></pivotTableDefinition>';
+    files['xl/pivotTables/_rels/pivotTable1.xml.rels'] = rels([['rId1', 'pivotCacheDefinition', '../pivotCache/pivotCacheDefinition1.xml']]);
+    files['xl/worksheets/_rels/sheet3.xml.rels'] = rels([
+      ['rId1', 'drawing', '../drawings/drawing1.xml'],
+      ['rId2', 'pivotTable', '../pivotTables/pivotTable1.xml'],
+    ]);
+    files['xl/worksheets/sheet3.xml'] = files['xl/worksheets/sheet3.xml'].replace('</worksheet>', '<drawing r:id="rId1"/></worksheet>');
+    files['xl/_rels/workbook.xml.rels'] = files['xl/_rels/workbook.xml.rels'].replace(
+      '</Relationships>',
+      `<Relationship Id="rId90" Type="${R}/pivotCacheDefinition" Target="pivotCache/pivotCacheDefinition1.xml"/></Relationships>`,
+    );
+    files['xl/workbook.xml'] = files['xl/workbook.xml'].replace(/(<calcPr[^>]*\/>)/, '$1<pivotCaches><pivotCache cacheId="1" r:id="rId90"/></pivotCaches>');
+    const ov = (part, type) => `<Override PartName="/${part}" ContentType="application/vnd.openxmlformats-officedocument.${type}+xml"/>`;
+    files['[Content_Types].xml'] = files['[Content_Types].xml'].replace(
+      '</Types>',
+      ov('xl/charts/chart1.xml', 'drawingml.chart') +
+        ov('xl/drawings/drawing1.xml', 'drawing') +
+        ov('xl/pivotCache/pivotCacheDefinition1.xml', 'spreadsheetml.pivotCacheDefinition') +
+        ov('xl/pivotCache/pivotCacheRecords1.xml', 'spreadsheetml.pivotCacheRecords') +
+        ov('xl/pivotTables/pivotTable1.xml', 'spreadsheetml.pivotTable') +
+        '</Types>',
+    );
+    const enc = new TextEncoder();
+    return writeZip(Object.entries(files).map(([name, d]) => ({ name, data: enc.encode(d) })));
+  }
+
+  it('кэш рядов на удалённый лист и скрытую строку — пустой; сводная по удалённому листу — удалена; ни одного значения удалённого; LibreOffice открывает', async () => {
+    const bytes = await bookWithChartAndPivot();
+    assertValid(bytes, 'исходник');
+    // без выбора всё на месте (и данные удалённого листа — тоже, но обезличенные там, где это сущности)
+    const before = unzipText((await runOffice(bytes, 'диаграмма.xlsx')).result.bytes);
+    expect(before['xl/charts/chart1.xml']).toContain('<c:v>7310.25</c:v>');
+    expect(before['xl/pivotCache/pivotCacheRecords1.xml']).toContain('7310.25');
+    const r = (await runOffice(bytes, 'диаграмма.xlsx', { apply: { hidden: { hiddenSheets: true } } })).result;
+    assertValid(r.bytes, 'результат');
+    const p = unzipText(r.bytes);
+    expect(Object.keys(p).filter((n) => /pivot/i.test(n))).toEqual([]);
+    expect(p['xl/workbook.xml']).not.toMatch(/pivotCache/);
+    expect(p['[Content_Types].xml']).not.toMatch(/pivot/i);
+    const chart = p['xl/charts/chart1.xml'];
+    expect(chart).toMatch(/<c:f>#REF!<\/c:f><c:numCache><c:ptCount val="0"\/><\/c:numCache>/);
+    expect(chart).toMatch(/<c:f>Данные!\$B\$2:\$B\$3<\/c:f><c:numCache><c:ptCount val="0"\/><\/c:numCache>/); // строка 3 скрыта и очищена
+    expect(chart).toMatch(/<c:f>Данные!\$B\$1<\/c:f><c:strCache><c:ptCount val="1"\/>/); // видимая подпись — как была
+    // ни одного значения удалённого листа и скрытой строки ни в одной части zip
+    expect(deepLeaks(r.bytes, ['Яковлева', 'СКР_ЛИСТ_ДВА', '7310.25', '7320.5', '4420.25', 'Февраль'])).toEqual([]);
+    if (LO_ENABLED) {
+      const out = libreOfficeConvert([{ name: 'chart-pivot.xlsx', bytes: r.bytes }], 'pdf', 'hidden-chart-pivot');
+      expect(out.has('chart-pivot.pdf')).toBe(true);
+    }
+  }, 120000);
+});
+
 describe('PowerPoint: переключатели (К7)', () => {
   const name = 'deck-hidden.pptx';
 
