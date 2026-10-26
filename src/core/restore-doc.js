@@ -1,6 +1,8 @@
 // Восстановление файла от ИИ (FR-36а, FR-37): .docx с плейсхолдерами + карта замен → .docx с настоящими значениями.
 // Обратная замена идёт по тем же потокам, что и анонимизация (ТЗ §6.1–6.3): форматирование ранов сохраняется,
 // плейсхолдер, разбитый на раны, восстанавливается в первом ране (как прямая замена §6.3 п.2–4).
+// С 0.5 (WP12-B, К3) — любой формат через его адаптер (restoreDocument): книги Excel, презентации PowerPoint, CSV и JSON —
+// по тем же строгим правилам; литералы формул Excel не трогаются (формулы не меняются и при анонимизации).
 import { parseDocx } from './docx/model.js';
 import { serializeDocx } from './docx/replace.js';
 import { deanonymize, deanonymizeSpans, findUnresolved } from './deanon.js';
@@ -32,7 +34,38 @@ const ANON_URL_RE = /^https:\/\/anonymized\.invalid\/(.+)$/;
  * @returns {RestoreDocxResult}
  */
 export function restoreDocx(bytes, mapping, { decline = false } = {}) {
-  const doc = parseDocx(bytes);
+  return restoreModel(parseDocx(bytes), mapping, decline, (doc, edits) => serializeDocx(doc, edits, { keepMetadata: true, stripEmbedded: false }));
+}
+
+/**
+ * Восстановление файла любого поддерживаемого формата через его адаптер (0.5, WP12-B, К3): .xlsx/.xlsm, .pptx/.pptm, .csv,
+ * .json, .txt (как файл: по строкам, строго) — те же правила, что у restoreDocx. Адаптер формата по требованию должен быть
+ * загружен (core/adapters.js loadAdapter). Ошибки разбора — CoreError адаптера (NOT_SUPPORTED, ENCRYPTED, PARSE_FAILED).
+ * @param {Uint8Array} bytes
+ * @param {import('./mapping.js').Mapping} mapping
+ * @param {{adapter: import('./ooxml/adapter.js').DocumentAdapter, name?: string, decline?: boolean}} opts
+ * @returns {RestoreDocxResult & {mime?: string}}
+ */
+export function restoreDocument(bytes, mapping, { adapter, name, decline = false }) {
+  const doc = /** @type {any} */ (adapter.parse)(bytes, name);
+  let mime;
+  const r = restoreModel(doc, mapping, decline, (d, edits) => {
+    const out = adapter.serialize(d, edits, { keepMetadata: true, stripEmbedded: false });
+    mime = /** @type {any} */ (out).mime || adapter.mime;
+    return out;
+  });
+  return { ...r, mime };
+}
+
+/**
+ * Общая часть восстановления: метки во всех потоках модели → правки → сериализатор формата.
+ * @param {any} doc
+ * @param {import('./mapping.js').Mapping} mapping
+ * @param {boolean} decline
+ * @param {(doc: any, edits: import('./ooxml/serialize.js').TextEdit[]) => {bytes: Uint8Array, changedParts: string[]}} serialize
+ * @returns {RestoreDocxResult}
+ */
+function restoreModel(doc, mapping, decline, serialize) {
   /** @type {import('./docx/replace.js').TextEdit[]} */
   const edits = [];
   /** @type {RestoreDocxResult['unresolved']} */
@@ -45,6 +78,8 @@ export function restoreDocx(bytes, mapping, { decline = false } = {}) {
   const used = new Set();
 
   for (const s of doc.streams) {
+    // литерал формулы Excel: формулы не меняются ни при анонимизации, ни при восстановлении
+    if (s.attrKind === 'formula-literal') continue;
     if (s.attrKind === 'rel-target') {
       const url = restoreAnonUrl(s.text, mapping);
       if (url !== null) {
@@ -69,7 +104,7 @@ export function restoreDocx(bytes, mapping, { decline = false } = {}) {
     for (const u of findUnresolved(s.text, kept)) unresolved.push({ text: u.text, streamId: s.id, part: s.part });
   }
 
-  const { bytes: out, changedParts } = serializeDocx(doc, edits, { keepMetadata: true, stripEmbedded: false });
+  const { bytes: out, changedParts } = serialize(doc, edits);
   return { bytes: out, replaced: edits.length, unresolved, declined, skipped, changedParts, tokens: [...used] };
 }
 

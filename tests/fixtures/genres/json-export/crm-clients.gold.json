@@ -1,0 +1,105 @@
+{
+  "entities": [
+    {
+      "key": "p0",
+      "category": "PERSON",
+      "value": "Гаврилов Евгений Сергеевич",
+      "surname": "Гаврилов"
+    },
+    {
+      "key": "inn0",
+      "category": "INN",
+      "value": "770400000048"
+    },
+    {
+      "key": "tel0",
+      "category": "PHONE",
+      "value": "+7 916 204-31-17"
+    },
+    {
+      "key": "mail0",
+      "category": "EMAIL",
+      "value": "e.gavrilov@example.com"
+    },
+    {
+      "key": "p1",
+      "category": "PERSON",
+      "value": "Ершова Алина Петровна",
+      "surname": "Ершова"
+    },
+    {
+      "key": "inn1",
+      "category": "INN",
+      "value": "770400511363"
+    },
+    {
+      "key": "tel1",
+      "category": "PHONE",
+      "value": "+7 903 118-42-65"
+    },
+    {
+      "key": "mail1",
+      "category": "EMAIL",
+      "value": "alina.ershova@example.org"
+    },
+    {
+      "key": "p2",
+      "category": "PERSON",
+      "value": "Белоусов Максим Андреевич",
+      "surname": "Белоусов"
+    },
+    {
+      "key": "inn2",
+      "category": "INN",
+      "value": "770401022608"
+    },
+    {
+      "key": "tel2",
+      "category": "PHONE",
+      "value": "+7 925 610-77-08"
+    },
+    {
+      "key": "mail2",
+      "category": "EMAIL",
+      "value": "m.belousov@example.net"
+    },
+    {
+      "key": "p3",
+      "category": "PERSON",
+      "value": "Кравцова Дарья Олеговна",
+      "surname": "Кравцова"
+    },
+    {
+      "key": "inn3",
+      "category": "INN",
+      "value": "770401533923"
+    },
+    {
+      "key": "tel3",
+      "category": "PHONE",
+      "value": "+7 915 342-19-90"
+    },
+    {
+      "key": "mail3",
+      "category": "EMAIL",
+      "value": "darya.kravtsova@example.com"
+    },
+    {
+      "key": "pass",
+      "category": "PASSPORT",
+      "value": "4515 220871"
+    },
+    {
+      "key": "sub",
+      "category": "PERSON",
+      "value": "Лаптев А.Н.",
+      "surname": "Лаптев"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "vip",
+      "category": "PERSON"
+    }
+  ]
+}

@@ -7,7 +7,7 @@
 // Дополнительно: утечки pii/ids (gold-значение осталось в результате applyDecisions), отрицательные примеры, ставшие сущностью,
 // число COMPANY в обычном режиме, полнота организаций с ОПФ.
 //
-//   npm run eval-genres [-- --model=<каталог модели>] [--json] [--private] [--verbose] [--format=docx|pdf] [--dir=<каталог корпуса>]
+//   npm run eval-genres [-- --model=<каталог модели>] [--json] [--private] [--verbose] [--format=docx|pdf|xlsx|pptx|csv|json] [--dir=<каталог корпуса>]
 //   npm run eval-genres -- --dir=tests/fixtures/heldout   — набор ревью WP11-D (DOCX), тот же отчёт
 //   NER_MODEL_DIR=models-src/rubert-tiny2-ner-ruen npm run eval-genres
 //   PRIVATE_FIXTURES=1 npm run eval-genres   — плюс tests/fixtures/private/*.{pdf,docx} (только счётчики, без значений)
@@ -18,6 +18,8 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   parseDocx,
+  detectAdapter,
+  loadAdapter,
   fromText,
   analyze,
   applyDecisions,
@@ -35,6 +37,7 @@ import { unzipText } from '../tests/helpers/docx.js';
 import { unescapeXml } from '../src/core/docx/xml.js';
 import { lowerE } from '../src/core/detect/names/lexicon.js';
 import { loadDictsFromDisk } from './dicts-node.mjs';
+import { decodeText } from '../src/core/plain/plain-adapter.js';
 
 // словари ФИО — файлы vendor/dict/*.txt (версия 0.5, WP12-A): до первого анализа
 await loadDictsFromDisk();
@@ -63,9 +66,10 @@ const norm = (s) =>
     .replace(/[\u00a0\s]+/g, ' ')
     .trim();
 
-/** Текст результата: .anon.md или все XML-части DOCX без разметки. */
+/** Текст результата: .anon.md, текстовый файл (0.5, в своей кодировке) или все XML-части DOCX/XLSX/PPTX без разметки. */
 function resultText(doc, bytes) {
   if (doc.kind === 'text') return new TextDecoder().decode(bytes);
+  if (doc.kind === 'plain') return decodeText(bytes).text;
   return Object.entries(unzipText(bytes))
     .filter(([n]) => /\.(xml|rels)$/.test(n))
     .map(([, xml]) => unescapeXml(xml.replace(/<[^>]+>/g, ' ')))
@@ -116,10 +120,13 @@ export function partialLeaks(entities, text) {
   return out;
 }
 
+/** Форматы корпуса: DOCX и PDF (0.4), с 0.5 (WP12-B) — книги, презентации, CSV и JSON (scripts/gen-office-fixtures.mjs). */
+export const CORPUS_FORMATS = /** @type {const} */ (['docx', 'pdf', 'xlsx', 'pptx', 'csv', 'json']);
+
 /**
- * Документы корпуса: по каждому gold — DOCX и PDF, какие есть.
+ * Документы корпуса: по каждому gold — файлы всех форматов корпуса, какие есть.
  * @param {string} [dir]
- * @returns {{genre: string, name: string, format: 'docx'|'pdf', path: string, gold: any}[]}
+ * @returns {{genre: string, name: string, format: 'docx'|'pdf'|'xlsx'|'pptx'|'csv'|'json', path: string, gold: any}[]}
  */
 export function listCorpus(dir = GENRES_DIR) {
   const out = [];
@@ -131,7 +138,7 @@ export function listCorpus(dir = GENRES_DIR) {
       .sort()) {
       const name = f.slice(0, -'.gold.json'.length);
       const gold = JSON.parse(readFileSync(join(gdir, f), 'utf8'));
-      for (const format of /** @type {const} */ (['docx', 'pdf'])) {
+      for (const format of CORPUS_FORMATS) {
         const path = join(gdir, `${name}.${format}`);
         if (existsSync(path)) out.push({ genre, name, format, path, gold });
       }
@@ -140,14 +147,17 @@ export function listCorpus(dir = GENRES_DIR) {
   return out;
 }
 
-/** Файл → DocModel (DOCX — parseDocx, PDF — извлечение и разметка ядра, затем fromText). */
+/** Файл → DocModel (DOCX — parseDocx, PDF — извлечение и разметка ядра, затем fromText; остальное — адаптер формата, 0.5). */
 export async function loadDoc(path) {
   const bytes = new Uint8Array(readFileSync(path));
   if (path.endsWith('.pdf')) {
     const layout = await extractPdfNode(bytes);
     return fromText(layout.blocks, { name: basename(path), size: bytes.length });
   }
-  return parseDocx(bytes);
+  if (path.endsWith('.docx')) return parseDocx(bytes);
+  const entry = detectAdapter(bytes, basename(path));
+  if (!entry) throw new Error(`формат не поддерживается: ${basename(path)}`);
+  return (await loadAdapter(entry)).parse(bytes, basename(path));
 }
 
 /**
@@ -217,7 +227,7 @@ export async function evaluateDoc(doc, gold, mode, opts = {}) {
   const outText = resultText(doc, res.bytes);
   const out = norm(outText);
   let leaks;
-  if (doc.kind === 'text') leaks = secret.filter((e) => out.includes(norm(e.value)));
+  if (doc.kind === 'text' || doc.kind === 'plain') leaks = secret.filter((e) => out.includes(norm(e.value)));
   else {
     const hit = new Set(
       findLeaks(

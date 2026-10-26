@@ -1,0 +1,115 @@
+{
+  "entities": [
+    {
+      "key": "p0",
+      "category": "PERSON",
+      "value": "Гаврилов Евгений Сергеевич",
+      "surname": "Гаврилов"
+    },
+    {
+      "key": "snils0",
+      "category": "SNILS",
+      "value": "11223300070"
+    },
+    {
+      "key": "inn0",
+      "category": "INN",
+      "value": "500100000015"
+    },
+    {
+      "key": "card0",
+      "category": "CARD",
+      "value": "4276 3800 1234 5604"
+    },
+    {
+      "key": "p1",
+      "category": "PERSON",
+      "value": "Ершова Алина Петровна",
+      "surname": "Ершова"
+    },
+    {
+      "key": "snils1",
+      "category": "SNILS",
+      "value": "11223411180"
+    },
+    {
+      "key": "inn1",
+      "category": "INN",
+      "value": "500100221328"
+    },
+    {
+      "key": "card1",
+      "category": "CARD",
+      "value": "4276 3800 1234 6578"
+    },
+    {
+      "key": "p2",
+      "category": "PERSON",
+      "value": "Белоусов Максим Андреевич",
+      "surname": "Белоусов"
+    },
+    {
+      "key": "snils2",
+      "category": "SNILS",
+      "value": "11223522290"
+    },
+    {
+      "key": "inn2",
+      "category": "INN",
+      "value": "500100442630"
+    },
+    {
+      "key": "card2",
+      "category": "CARD",
+      "value": "4276 3800 1234 7543"
+    },
+    {
+      "key": "p3",
+      "category": "PERSON",
+      "value": "Кравцова Дарья Олеговна",
+      "surname": "Кравцова"
+    },
+    {
+      "key": "snils3",
+      "category": "SNILS",
+      "value": "11223633300"
+    },
+    {
+      "key": "inn3",
+      "category": "INN",
+      "value": "500100663943"
+    },
+    {
+      "key": "card3",
+      "category": "CARD",
+      "value": "4276 3800 1234 8517"
+    },
+    {
+      "key": "p4",
+      "category": "PERSON",
+      "value": "Тимофеев Роман Ильич",
+      "surname": "Тимофеев"
+    },
+    {
+      "key": "snils4",
+      "category": "SNILS",
+      "value": "11223744409"
+    },
+    {
+      "key": "inn4",
+      "category": "INN",
+      "value": "500100885287"
+    },
+    {
+      "key": "card4",
+      "category": "CARD",
+      "value": "4276 3800 1234 9481"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "Итого",
+      "category": "PERSON"
+    }
+  ]
+}

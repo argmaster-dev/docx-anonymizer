@@ -8,7 +8,7 @@ import { fromText } from '../core/text/model.js';
 import { isPdf } from '../core/pdf/sniff.js';
 import { analyze } from '../core/detect/runner.js';
 import { applyDecisions } from '../core/apply.js';
-import { adapterForKind, detectAdapter } from '../core/adapters.js';
+import { adapterForKind, detectAdapter, loadAdapter } from '../core/adapters.js';
 import { mergeDecisions } from '../core/contracts/entity.js';
 import { summarizeSession } from '../core/contracts/session.js';
 import { deanonymize } from '../core/deanon.js';
@@ -28,13 +28,15 @@ import { loadDicts } from '../core/detect/names/dict/load.js';
  *   extractPdf?: (bytes: Uint8Array, opts: {onProgress?: (percent: number) => void}) => Promise<import('../core/pdf/layout.js').Layout>,
  *   readPackageFile?: (url: string) => Promise<Uint8Array>,
  *   readDictFile?: (name: string) => Promise<Uint8Array | string>,
+ *   loadAdapter?: (entry: any) => Promise<import('../core/ooxml/adapter.js').DocumentAdapter>,
  *   modelStore?: {listInstalled: () => Promise<any[]>, inspectPack: (bytes: Uint8Array, opts?: object) => Promise<any>, install: (bytes: Uint8Array, opts?: object) => Promise<any>}}} env
  *   nerProvider — готовый провайдер (тесты; имеет приоритет), createNerProvider — синхронная фабрика по settings.nerModel (worker.js),
  *   extractPdf — извлечение текста PDF (версия 0.3; worker.js — pdf-loader.js, тесты — pdf.js в Node),
  *   readPackageFile и modelStore — установка встроенной модели NER из архива расширения (WP10-C, MODEL_INSTALL; worker.js —
  *   offscreen/package-fetch.js и shared/model-store.js, тесты — фейки),
  *   readDictFile — чтение словаря ФИО vendor/dict/<name>.txt (0.5, WP12-A; worker.js — readPackageFile, Node — диск); без него
- *   анализ идёт на словарях, загруженных раньше (тесты), а если их нет — без словарей с предупреждением DICT_FAILED
+ *   анализ идёт на словарях, загруженных раньше (тесты), а если их нет — без словарей с предупреждением DICT_FAILED;
+ *   loadAdapter — загрузка модуля формата по требованию (0.5, WP12-B; по умолчанию core/adapters.js, тесты подменяют сбоем)
  */
 export function createHost(env) {
   registerBuiltinDetectors();
@@ -173,20 +175,26 @@ export function createHost(env) {
       }
     }
     // Точка ветвления (версия 0.3): PDF — по сигнатуре %PDF- или по имени .pdf; иначе — адаптер формата по сигнатуре и имени
-    // (DocumentAdapter, WP12-A); не распознан — Word, его разбор ответит NOT_DOCX
-    const adapter = isPdf(bytes) || /\.pdf$/i.test(u.begin.name || '') ? null : detectAdapter(bytes, u.begin.name) || adapterForKind('docx');
-    const kind = adapter ? adapter.kind : 'pdf';
+    // (DocumentAdapter, WP12-A). Не распознан: файл без имени — Word, как до 0.5 (разбор ответит NOT_DOCX), иначе NOT_SUPPORTED
+    // (WP12-B). Excel, PowerPoint и текстовые форматы — модули по требованию: загрузка перед разбором (FORMAT_LOAD_FAILED при сбое)
+    const name = u.begin.name || '';
+    const pdf = isPdf(bytes) || /\.pdf$/i.test(name);
+    const entry = pdf ? null : detectAdapter(bytes, name) || (name ? null : adapterForKind('docx'));
+    if (!pdf && !entry) throw new CoreError('NOT_SUPPORTED', 'Формат файла не поддерживается');
+    const kind = entry ? entry.kind : 'pdf';
     let doc;
-    if (!adapter) doc = await parsePdf(bytes, u.begin.name, progress);
+    let adapter = null;
+    if (!entry) doc = await parsePdf(bytes, u.begin.name, progress);
     else {
       progress('unzip', 0);
-      doc = adapter.parse(bytes);
+      adapter = await loadFormat(entry);
+      doc = adapter.parse(bytes, name);
       progress('parse', 100);
     }
     const allocator = msg.batchId ? batches.get(msg.batchId) : undefined;
     const dictWarnings = await ensureDicts();
     const analysis = await analyze(doc, settings, { nerProvider: providerFor(settings), allocator, onProgress: progress });
-    analysis.warnings.push(...dictWarnings);
+    analysis.warnings.push(...dictWarnings, ...formatWarnings(adapter, doc, analysis.groups));
     const docId = `d${++docSeq}`;
     const session = {
       docId,
@@ -225,7 +233,7 @@ export function createHost(env) {
       userEntities: s.userEntities,
       onProgress: progress,
     });
-    analysis.warnings.push(...dictWarnings);
+    analysis.warnings.push(...dictWarnings, ...formatWarnings(adapterForKind(s.doc.kind), s.doc, analysis.groups));
     s.analysis = analysis;
     s.groups = analysis.groups.map((g) => {
       const p = prev.get(`${g.category}\u0000${g.normalized}`);
@@ -243,7 +251,9 @@ export function createHost(env) {
     const opts = msg.options || {};
     // PDF → текст (версия 0.3): .anon.md или .anon.txt по pdfMode настроек сессии
     const textFormat = settings.pdfMode === 'text' ? 'txt' : 'md';
-    const resultName = makeResultName(s.name, settings.outputSuffix, s.kind === 'pdf' ? { ext: `.${textFormat}` } : {});
+    // книга или презентация без расширения в имени (распознана по содержимому) — расширение формата, а не .docx (WP12-B)
+    const ext = s.kind === 'pdf' ? `.${textFormat}` : (s.kind === 'xlsx' || s.kind === 'pptx') && !RESULT_EXT_RE.test(s.name || '') ? `.${s.kind}` : '';
+    const resultName = makeResultName(s.name, settings.outputSuffix, ext ? { ext } : {});
     const r = applyDecisions(s.doc, s.groups, {
       mode: msg.mode || settings.mode,
       placeholderLanguage: s.analysis.placeholderLanguage,
@@ -273,6 +283,27 @@ export function createHost(env) {
     doc.warnings.push(...(layout.warnings || []));
     progress('parse', 100);
     return doc;
+  }
+
+  /**
+   * Модуль формата по требованию (Excel, PowerPoint, текстовые форматы — offscreen/chunks/, WP12-B): сбой загрузки — понятная
+   * ошибка FORMAT_LOAD_FAILED (панель предлагает повторить; сбой не кэшируется). Word — сразу.
+   */
+  async function loadFormat(entry) {
+    try {
+      return await (env.loadAdapter || loadAdapter)(entry);
+    } catch {
+      throw new CoreError('FORMAT_LOAD_FAILED', 'Не удалось загрузить модуль обработки формата');
+    }
+  }
+
+  /** Предупреждения формата по найденному (Excel: ячейка в формулах, литералы формул, имя листа; JSON: число станет строкой). */
+  function formatWarnings(adapter, doc, groups) {
+    try {
+      return adapter?.analysisWarnings ? adapter.analysisWarnings(doc, groups) : [];
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -400,8 +431,12 @@ export function toProtocolEntity(doc, g) {
   };
 }
 
+/** Расширения файлов, которые обрабатывает расширение (результат — тот же формат, WP12-B). */
+const RESULT_EXT_RE = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|log|md|csv|json)$/i;
+
 /**
- * 'договор.docx' → 'договор.anon.docx'; с `ext` (PDF, версия 0.3): 'договор.pdf' → 'договор.anon.md'.
+ * 'договор.docx' → 'договор.anon.docx', 'реестр.xlsx' → 'реестр.anon.xlsx'; с `ext` (PDF, версия 0.3): 'договор.pdf' → 'договор.anon.md'.
+ * Без известного расширения — '.docx', как до 0.5.
  * @param {string} name @param {string} [suffix] @param {{ext?: string}} [opts]
  */
 export function makeResultName(name, suffix = '.anon', opts = {}) {
@@ -409,8 +444,8 @@ export function makeResultName(name, suffix = '.anon', opts = {}) {
     const base = String(name || 'document').replace(/\.(docx|docm|pdf)$/i, '') || 'document';
     return `${base}${suffix}${opts.ext}`;
   }
-  const m = /^(.*?)(\.(docx|docm))?$/i.exec(name || 'document.docx');
-  const base = m?.[1] || 'document';
-  const ext = m?.[2] || '.docx';
-  return `${base}${suffix}${ext}`;
+  const n = name || 'document.docx';
+  const m = RESULT_EXT_RE.exec(n);
+  const base = (m ? n.slice(0, m.index) : n) || 'document';
+  return `${base}${suffix}${m ? m[0] : '.docx'}`;
 }

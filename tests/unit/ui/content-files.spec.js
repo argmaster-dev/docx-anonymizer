@@ -90,14 +90,17 @@ describe('PDF (версия 0.3)', () => {
     expect(fileKind({ name: 'a.PDF', type: '' })).toBe('pdf');
     expect(fileKind({ name: 'скан', type: PDF_MIME })).toBe('pdf');
     expect(fileKind({ name: 'a.docx', type: '' })).toBe('docx');
-    expect(fileKind({ name: 'a.txt', type: 'text/plain' })).toBe(null);
+    // 0.5 (WP12-B): текстовые файлы тоже перехватываются
+    expect(fileKind({ name: 'a.txt', type: 'text/plain' })).toBe('text');
     expect(isSupported({ name: 'a.pdf' }, { pdfMode: 'markdown' })).toBe(true);
     expect(isSupported({ name: 'a.pdf' }, { pdfMode: 'text' })).toBe(true);
     expect(isSupported({ name: 'a.pdf' }, { pdfMode: 'off' })).toBe(false);
     expect(isSupported({ name: 'a.pdf' }, defaultSettings())).toBe(true);
     expect(isSupported({ name: 'a.docx' }, { pdfMode: 'off' })).toBe(true);
-    expect(isSupported({ name: 'a.anon.md' }, defaultSettings())).toBe(false);
-    expect(hasSupported([{ name: 'a.pdf' }, { name: 'b.txt' }], { pdfMode: 'off' })).toBe(false);
+    // 0.5: .md — обрабатываемый формат (свои результаты интерсептор узнаёт по подписи файла, а не по имени)
+    expect(isSupported({ name: 'a.anon.md' }, defaultSettings())).toBe(true);
+    expect(hasSupported([{ name: 'a.pdf' }, { name: 'b.txt' }], { pdfMode: 'off' })).toBe(true);
+    expect(hasSupported([{ name: 'a.pdf' }, { name: 'b.png' }], { pdfMode: 'off' })).toBe(false);
     expect(hasSupported([{ name: 'a.pdf' }], { pdfMode: 'markdown' })).toBe(true);
   });
   it('имя и тип результата, имя маппинга', () => {
@@ -109,5 +112,35 @@ describe('PDF (версия 0.3)', () => {
     expect(resultType({ type: '' }, 'text/plain')).toBe('text/plain');
     expect(resultType({ type: 'application/vnd.ms-word.document.macroEnabled.12' }, DOCX_MIME)).toBe('application/vnd.ms-word.document.macroEnabled.12');
     expect(resultType({ type: '' })).toBe(DOCX_MIME);
+  });
+});
+
+describe('форматы 0.5 (WP12-B): Excel, PowerPoint, текстовые', () => {
+  it('вид файла по расширению (без учёта регистра) или MIME без расширения; изображения и сканы не перехватываются', () => {
+    expect(fileKind({ name: 'Реестр.XLSX', type: '' })).toBe('xlsx');
+    expect(fileKind({ name: 'макрос.xlsm', type: '' })).toBe('xlsx');
+    expect(fileKind({ name: 'итоги.pptx', type: '' })).toBe('pptx');
+    expect(fileKind({ name: 'итоги.pptm', type: '' })).toBe('pptx');
+    for (const n of ['a.txt', 'a.log', 'a.md', 'a.csv', 'a.json']) expect(fileKind({ name: n, type: '' }), n).toBe('text');
+    expect(fileKind({ name: 'blob', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })).toBe('xlsx');
+    expect(fileKind({ name: 'blob', type: 'text/plain' })).toBe(null); // текст без расширения: формат не определить
+    expect(fileKind({ name: 'фото.png', type: 'image/png' })).toBe(null);
+    expect(fileKind({ name: 'скан.jpg', type: 'image/jpeg' })).toBe(null);
+    expect(isSupported({ name: 'a.xlsx' }, { pdfMode: 'off' })).toBe(true);
+    expect(isSupported({ name: 'a.zip' }, defaultSettings())).toBe(false);
+  });
+
+  it('имя результата — тот же формат; имя ключа восстановления; тип — исходника, иначе от хоста', () => {
+    expect(makeResultName('реестр.xlsx')).toBe('реестр.anon.xlsx');
+    expect(makeResultName('Итоги.PPTX', '.x')).toBe('Итоги.x.PPTX');
+    expect(makeResultName('выгрузка.csv')).toBe('выгрузка.anon.csv');
+    expect(makeResultName('notes.txt')).toBe('notes.anon.txt');
+    expect(mappingFileName('реестр.anon.xlsx')).toBe('реестр.mapping.json');
+    expect(mappingFileName('выгрузка.anon.csv')).toBe('выгрузка.mapping.json');
+    const xlsx = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    expect(resultType({ type: '' }, xlsx)).toBe(xlsx);
+    expect(resultType({ type: xlsx }, xlsx)).toBe(xlsx);
+    expect(resultType({ type: 'text/csv' }, 'text/csv')).toBe('text/csv');
+    expect(resultType({ type: '' }, 'application/json')).toBe('application/json');
   });
 });

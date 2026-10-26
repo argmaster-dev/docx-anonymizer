@@ -7,10 +7,12 @@
  * @returns {{paragraphs: {pid: string, text: string, spans: {start: number, end: number, entityId: string, occurrenceId: string, category: string}[]}[], total: number}}
  */
 export function getParagraphs(doc, groups, q = {}) {
-  const part = q.part || 'word/document.xml';
+  // без части — основной текст: у Word и текстовой модели «word/document.xml», у Excel и PowerPoint (0.5, WP12-B) —
+  // части формата по порядку (doc.viewParts: общие строки и листы; слайды и заметки)
+  const parts = new Set(q.part ? [q.part] : /** @type {any} */ (doc).viewParts || ['word/document.xml']);
   const from = q.from || 0;
   const count = q.count || 200;
-  const paras = doc.paragraphs.filter((p) => p.part === part);
+  const paras = doc.paragraphs.filter((p) => parts.has(p.part));
   /** @type {Map<string, any[]>} */
   const spansByStream = new Map();
   for (const g of groups) {

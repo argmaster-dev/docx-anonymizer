@@ -1,0 +1,48 @@
+{
+  "entities": [
+    {
+      "key": "a1",
+      "category": "PERSON",
+      "value": "Котов Игорь",
+      "surname": "Котов"
+    },
+    {
+      "key": "a2",
+      "category": "PERSON",
+      "value": "Мельникова Ольга",
+      "surname": "Мельникова"
+    },
+    {
+      "key": "p",
+      "category": "PERSON",
+      "value": "Лаптев Артём Николаевич",
+      "surname": "Лаптев"
+    },
+    {
+      "key": "tel",
+      "category": "PHONE",
+      "value": "+7 905 733-28-46"
+    },
+    {
+      "key": "pass",
+      "category": "PASSPORT",
+      "value": "4514 116288"
+    },
+    {
+      "key": "mail",
+      "category": "EMAIL",
+      "value": "a.laptev@example.com"
+    },
+    {
+      "key": "uid1",
+      "category": "PERSON",
+      "value": "i.kotov@example.com"
+    },
+    {
+      "key": "uid2",
+      "category": "PERSON",
+      "value": "o.melnikova@example.org"
+    }
+  ],
+  "negatives": []
+}

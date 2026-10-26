@@ -100,16 +100,29 @@ const workerBuild = await build({
   const ortBytes = ortInputs.reduce((n, f) => n + (out.inputs[f]?.bytesInOutput || 0), 0);
   if (!ortInputs.length) throw new Error('onnxruntime-web не попал в worker.js');
   if (Object.keys(out.inputs).some((f) => /names\/dict\/(ru|en)-/.test(f))) throw new Error('словари ФИО попали в worker.js (должны быть в vendor/dict/)');
-  // общий код esbuild (chunk-*.js) worker.js импортирует статически — он входит в код воркера; динамические — модули по требованию
-  const staticBytes = out.imports
-    .filter((i) => i.kind === 'import-statement' && !i.external)
-    .reduce((n, i) => n + (outputs.find(([f]) => f.endsWith(i.path.replace(/^.*?offscreen\//, 'offscreen/')))?.[1].bytes || 0), 0);
+  // общий код esbuild (chunk-*.js) worker.js импортирует статически (в т.ч. через другой общий модуль) — он входит в код воркера;
+  // динамические импорты из них — модули по требованию: разбор PDF (WP12-A), Excel, PowerPoint, текстовые форматы (WP12-B) и их
+  // общие куски; у них свой бюджет, сборка печатает каждый (К14)
+  const byPath = (p) => outputs.find(([f]) => f.endsWith(p.replace(/^.*?offscreen\//, 'offscreen/')));
+  const statics = new Set();
+  const walk = (o) => {
+    for (const i of o.imports.filter((x) => x.kind === 'import-statement' && !x.external)) {
+      const t = byPath(i.path);
+      if (t && !statics.has(t[0])) {
+        statics.add(t[0]);
+        walk(t[1]);
+      }
+    }
+  };
+  walk(out);
+  const staticBytes = [...statics].reduce((n, f) => n + /** @type {any} */ (outputs.find(([x]) => x === f))[1].bytes, 0);
   console.log(
     `worker.js: ${out.bytes} байт (+ общий модуль ${staticBytes}), из них ORT ${ortBytes} (${ortInputs.map((f) => f.split('/').pop()).join(', ')}), код без ORT ${out.bytes + staticBytes - ortBytes}`,
   );
-  for (const i of out.imports.filter((x) => x.kind === 'dynamic-import' && !x.external)) {
-    const o = outputs.find(([f]) => f.endsWith(i.path.replace(/^.*?offscreen\//, 'offscreen/')));
-    if (o) console.log(`  модуль по требованию ${o[0].slice(o[0].indexOf('offscreen/'))}: ${o[1].bytes} байт`);
+  for (const [f, o] of outputs) {
+    if (!/offscreen\/chunks\/.*\.js$/.test(f) || statics.has(f)) continue;
+    const srcs = Object.keys(o.inputs).map((x) => x.replace(/^.*?src\//, ''));
+    console.log(`  модуль по требованию ${f.slice(f.indexOf('offscreen/'))}: ${o.bytes} байт (${srcs.join(', ')})`);
   }
 }
 

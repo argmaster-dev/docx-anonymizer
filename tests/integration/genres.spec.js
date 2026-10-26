@@ -11,6 +11,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { chromium } from '@playwright/test';
 import { buildGenreDocs, buildGenrePdf, GENRES, GENRES_DIR } from '../../scripts/gen-genre-fixtures.mjs';
+import { OFFICE_GENRES } from '../../scripts/gen-office-fixtures.mjs';
 import { layoutSnapshot } from '../../scripts/gen-pdf-fixtures.mjs';
 import {
   listCorpus,
@@ -83,7 +84,8 @@ beforeAll(async () => {
 
 describe('К5: корпус жанров', () => {
   it('8 жанров × ≥ 3 документа, letter и resume — ещё и на английском; DOCX (кроме deck), PDF и снимок у каждого', () => {
-    expect(readdirSync(GENRES_DIR).sort()).toEqual([...GENRES].sort());
+    // жанры форматов 0.5 (Excel, PowerPoint, CSV, JSON — WP12-B) генерирует scripts/gen-office-fixtures.mjs
+    expect(readdirSync(GENRES_DIR).sort()).toEqual([...GENRES, ...OFFICE_GENRES].sort());
     for (const g of GENRES) {
       const list = docs.filter((d) => d.genre === g);
       expect(list.length, g).toBeGreaterThanOrEqual(3);

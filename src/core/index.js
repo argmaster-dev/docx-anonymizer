@@ -8,7 +8,7 @@ export { parseFlowPart, planRunEdits, buildCharMap } from './ooxml/flow.js';
 export { serializePackage } from './ooxml/serialize.js';
 export { isZip, zipHasEntry, hasExtension } from './ooxml/adapter.js';
 export { DOCX_ADAPTER } from './docx/adapter.js';
-export { DOCUMENT_ADAPTERS, adapterForKind, detectAdapter } from './adapters.js';
+export { DOCUMENT_ADAPTERS, adapterForKind, detectAdapter, loadAdapter, registerAdapter } from './adapters.js';
 export { analyze, groupEntities } from './detect/runner.js';
 export { resolveOverlaps, compareStrength } from './detect/overlap.js';
 export { registerBuiltinDetectors } from './detect/index.js';
@@ -19,7 +19,7 @@ export { isPdf, extractPdf, lettersOnPage, mapPdfError } from './pdf/extract.js'
 export { buildLayout } from './pdf/layout.js';
 export { buildMapping, mergeMappings, MAPPING_SCHEMA_VERSION } from './mapping.js';
 export { deanonymize, deanonymizeSpans, findUnresolved } from './deanon.js';
-export { restoreDocx, restoreText } from './restore-doc.js';
+export { restoreDocx, restoreDocument, restoreText } from './restore-doc.js';
 export { findOccurrences } from './search.js';
 export { getParagraphs, occurrenceContext } from './text-view.js';
 export { PlaceholderAllocator, resolvePlaceholderLanguage, replacementFor, maskText } from './placeholders.js';

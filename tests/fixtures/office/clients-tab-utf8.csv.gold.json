@@ -1,0 +1,89 @@
+{
+  "entities": [
+    {
+      "key": "p0",
+      "category": "PERSON",
+      "value": "Гаврилов Евгений Сергеевич",
+      "surname": "Гаврилов"
+    },
+    {
+      "key": "tel0",
+      "category": "PHONE",
+      "value": "8 916 204-31-17"
+    },
+    {
+      "key": "mail0",
+      "category": "EMAIL",
+      "value": "e.gavrilov@example.com"
+    },
+    {
+      "key": "inn0",
+      "category": "INN",
+      "value": "770300000051"
+    },
+    {
+      "key": "p1",
+      "category": "PERSON",
+      "value": "Ершова Алина Петровна",
+      "surname": "Ершова"
+    },
+    {
+      "key": "tel1",
+      "category": "PHONE",
+      "value": "8 903 118-42-65"
+    },
+    {
+      "key": "mail1",
+      "category": "EMAIL",
+      "value": "alina.ershova@example.org"
+    },
+    {
+      "key": "inn1",
+      "category": "INN",
+      "value": "770300411140"
+    },
+    {
+      "key": "p2",
+      "category": "PERSON",
+      "value": "Белоусов Максим Андреевич",
+      "surname": "Белоусов"
+    },
+    {
+      "key": "tel2",
+      "category": "PHONE",
+      "value": "8 925 610-77-08"
+    },
+    {
+      "key": "mail2",
+      "category": "EMAIL",
+      "value": "m.belousov@example.net"
+    },
+    {
+      "key": "inn2",
+      "category": "INN",
+      "value": "770300822238"
+    },
+    {
+      "key": "p3",
+      "category": "PERSON",
+      "value": "Кравцова Дарья Олеговна",
+      "surname": "Кравцова"
+    },
+    {
+      "key": "tel3",
+      "category": "PHONE",
+      "value": "8 915 342-19-90"
+    },
+    {
+      "key": "mail3",
+      "category": "EMAIL",
+      "value": "darya.kravtsova@example.com"
+    },
+    {
+      "key": "inn3",
+      "category": "INN",
+      "value": "770301233355"
+    }
+  ],
+  "negatives": []
+}

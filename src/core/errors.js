@@ -11,6 +11,10 @@ export const ERROR_CODES = Object.freeze({
   PDF_ENCRYPTED: 'PDF_ENCRYPTED',
   PDF_EMPTY: 'PDF_EMPTY',
   PDF_NO_TEXT: 'PDF_NO_TEXT',
+  // Форматы 0.5 (WP12-B, docs/contracts.md §9.8): файл не распознан ни одним адаптером или не ZIP при расширении Excel/PowerPoint;
+  // не загрузился модуль формата по требованию (offscreen/chunks/)
+  NOT_SUPPORTED: 'NOT_SUPPORTED',
+  FORMAT_LOAD_FAILED: 'FORMAT_LOAD_FAILED',
   INTERNAL: 'INTERNAL',
 });
 

@@ -1,15 +1,28 @@
 // Обратная замена (С3, FR-36, FR-36а, FR-37): ответ ИИ с плейсхолдерами + маппинг (сессия или .mapping.json) → настоящие значения.
-// Ответ — вставленный текст или файл от ИИ (.docx/.docm/.md/.txt, WP10-B). Карта: из файла (разбор на странице) или из сессии
-// по GET_MAPPING; замена всегда идёт здесь, ядром: restoreText() для текста, restoreDocx() для DOCX (форматирование сохраняется).
+// Ответ — вставленный текст или файл от ИИ (.docx/.docm/.md/.txt, WP10-B; с 0.5 — .xlsx/.xlsm, .pptx/.pptm, .csv, .json, .log, WP12-B).
+// Карта: из файла (разбор на странице) или из сессии по GET_MAPPING; замена всегда идёт здесь, ядром: restoreText() для текста,
+// restoreDocx() для DOCX, restoreDocument() с адаптером формата для Excel, PowerPoint, CSV и JSON (структура и форматирование
+// сохраняются). Адаптеры форматов в бандле страницы (esbuild встраивает динамический import в IIFE) — сети нет.
 // Склонение ФИО по контексту (FR-37, редакция 0.2) включено по умолчанию; склонённые подстановки подсвечиваются зелёным.
 import './restore.css';
-import { restoreDocx, restoreText } from '../core/restore-doc.js';
+import { restoreDocx, restoreDocument, restoreText } from '../core/restore-doc.js';
+import { loadAdapter } from '../core/adapters.js';
 import { MSG } from '../shared/protocol.js';
 import { connectClient } from '../shared/port-client.js';
 import { loadSettings } from '../shared/settings-store.js';
 import { createT, resolveUiLanguage } from '../ui/i18n/index.js';
 import { RESTORE_DICT } from '../ui/i18n/restore.js';
-import { aiFileKind, countUnresolved, mimeFor, mixedValueWarnings, parseMappingFiles, pickSession, restoredName, toSegments } from '../ui/deanon/index.js';
+import {
+  aiFileAdapterKind,
+  aiFileKind,
+  countUnresolved,
+  mimeFor,
+  mixedValueWarnings,
+  parseMappingFiles,
+  pickSession,
+  restoredName,
+  toSegments,
+} from '../ui/deanon/index.js';
 import { downloadBlob, h } from '../ui/deanon/dom.js';
 import { madeByLine, helpLink } from '../ui/brand.js';
 
@@ -24,7 +37,7 @@ let sessionId = '';
 let fileMapping = null;
 /** Что восстанавливаем: вставленный текст или файл от ИИ (FR-36а) */
 let mode = 'text';
-/** @type {{name: string, size: number, kind: 'docx'|'text', bytes?: Uint8Array, text?: string} | null} */
+/** @type {{name: string, size: number, kind: 'docx'|'xlsx'|'pptx'|'csv'|'json'|'text', bytes?: Uint8Array, text?: string} | null} */
 let aiFile = null;
 /** Склонять ФИО по контексту метки (FR-37) */
 let decline = true;
@@ -103,7 +116,7 @@ function render(lang) {
   const fileInfo = h('div', { class: 'hint', dataset: { testid: 'ai-file-info' } });
   const aiInput = h('input', {
     type: 'file',
-    accept: '.docx,.docm,.md,.txt,.markdown',
+    accept: '.docx,.docm,.xlsx,.xlsm,.pptx,.pptm,.csv,.json,.md,.txt,.markdown,.log',
     dataset: { testid: 'ai-file' },
     'aria-label': t('ai_file_pick'),
     onchange: async () => {
@@ -117,7 +130,7 @@ function render(lang) {
       if (f.size > limits.maxFileSizeMB * 1024 * 1024) return (fileInfo.textContent = t('file_too_big', { limit: limits.maxFileSizeMB }));
       try {
         aiFile =
-          kind === 'docx'
+          kind !== 'text'
             ? { name: f.name, size: f.size, kind, bytes: new Uint8Array(await f.arrayBuffer()) }
             : { name: f.name, size: f.size, kind, text: await f.text() };
       } catch (err) {
@@ -351,14 +364,19 @@ function render(lang) {
     }
     if (!mapping) return;
     const name = file ? restoredName(file.name, limits.outputSuffix) : '';
-    if (file?.kind === 'docx') {
+    if (file && file.kind !== 'text') {
       let r;
       try {
-        r = restoreDocx(/** @type {Uint8Array} */ (file.bytes), mapping, { decline });
+        const kind = aiFileAdapterKind(file.kind);
+        r = kind
+          ? restoreDocument(/** @type {Uint8Array} */ (file.bytes), mapping, { adapter: await loadAdapter(kind), name: file.name, decline })
+          : restoreDocx(/** @type {Uint8Array} */ (file.bytes), mapping, { decline });
       } catch (err) {
         msg.textContent = ['NOT_DOCX', 'ENCRYPTED', 'PARSE_FAILED'].includes(err?.code)
           ? t('error_not_docx')
-          : t('error', { msg: String(err?.message || err) });
+          : err?.code === 'NOT_SUPPORTED'
+            ? t('error_bad_file')
+            : t('error', { msg: String(err?.message || err) });
         return;
       }
       showDocx(r);

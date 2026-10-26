@@ -72,6 +72,9 @@ export const ERROR_CODES = Object.freeze([
   'PDF_ENCRYPTED',
   'PDF_EMPTY',
   'PDF_NO_TEXT',
+  // форматы 0.5 (WP12-B): не поддерживается; модуль формата не загрузился
+  'NOT_SUPPORTED',
+  'FORMAT_LOAD_FAILED',
   'INTERNAL',
 ]);
 

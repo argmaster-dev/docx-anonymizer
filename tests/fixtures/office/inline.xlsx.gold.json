@@ -1,0 +1,42 @@
+{
+  "entities": [
+    {
+      "key": "p",
+      "category": "PERSON",
+      "value": "Тимофеев Роман Ильич",
+      "surname": "Тимофеев"
+    },
+    {
+      "key": "short",
+      "category": "PERSON",
+      "value": "Тимофеев Р.И.",
+      "surname": "Тимофеев"
+    },
+    {
+      "key": "snils",
+      "category": "SNILS",
+      "value": "203-117-450 00"
+    },
+    {
+      "key": "addr",
+      "category": "ADDRESS",
+      "value": "г. Тверь, ул. Озёрная, д. 14, кв. 52"
+    },
+    {
+      "key": "mail",
+      "category": "EMAIL",
+      "value": "r.timofeev@example.org"
+    },
+    {
+      "key": "bd",
+      "category": "BIRTHDATE",
+      "value": "14.03.1988"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "Анкета",
+      "category": "PERSON"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "entities": [
+    {
+      "key": "sheet",
+      "category": "PERSON",
+      "value": "Гаврилов Е.С.",
+      "surname": "Гаврилов"
+    },
+    {
+      "key": "q",
+      "category": "PERSON",
+      "value": "Ершова Алина Петровна",
+      "surname": "Ершова"
+    },
+    {
+      "key": "c3",
+      "category": "PERSON",
+      "value": "Кравцова Дарья Олеговна",
+      "surname": "Кравцова"
+    },
+    {
+      "key": "c4",
+      "category": "PERSON",
+      "value": "Тимофеев Роман Ильич",
+      "surname": "Тимофеев"
+    },
+    {
+      "key": "t1",
+      "category": "PHONE",
+      "value": "+7 903 118-42-65"
+    },
+    {
+      "key": "t3",
+      "category": "PHONE",
+      "value": "+7 915 342-19-90"
+    },
+    {
+      "key": "t4",
+      "category": "PHONE",
+      "value": "+7 926 455-03-21"
+    },
+    {
+      "key": "pass1",
+      "category": "PASSPORT",
+      "value": "4510 381246"
+    },
+    {
+      "key": "pass2",
+      "category": "PASSPORT",
+      "value": "4511 902735"
+    },
+    {
+      "key": "author",
+      "category": "PERSON",
+      "value": "Ершова Алина Петровна",
+      "surname": "Ершова",
+      "meta": true
+    }
+  ],
+  "negatives": [
+    {
+      "value": "Показатель",
+      "category": "PERSON"
+    }
+  ]
+}

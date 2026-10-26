@@ -125,6 +125,43 @@ describe('архив релиза', () => {
     console.log(`модули по требованию: ${lazy.map((f) => `${f} ${zip[f].length} байт`).join(', ')}`);
   });
 
+  // К14 0.5 (WP12-B): Excel, PowerPoint и текстовые форматы — модули по требованию offscreen/chunks/ со своим бюджетом; в коде
+  // воркера (worker.js + статические модули) их нет — только записи реестра. Импорт модуля формата — из статического общего модуля.
+  it('адаптеры Excel, PowerPoint и текстовых форматов — модули по требованию offscreen/chunks/, не в коде воркера (WP12-B)', () => {
+    const worker = strFromU8(zip['offscreen/worker.js']);
+    const statics = [...worker.matchAll(/^import\s*\{[^}]*\}\s*from\s*"\.\/(chunks\/[^"]+)";/gm)].map((x) => `offscreen/${x[1]}`);
+    const code = [worker, ...statics.map((f) => strFromU8(zip[f]))].join('\n');
+    for (const mod of [
+      'src/core/xlsx/xlsx-adapter.js',
+      'src/core/xlsx/model.js',
+      'src/core/pptx/pptx-adapter.js',
+      'src/core/plain/plain-adapter.js',
+      'src/core/ooxml/dml.js',
+    ])
+      expect(code.includes(`\n// ${mod}\n`), `${mod} в коде воркера`).toBe(false);
+    const lazy = [...code.matchAll(/import\("\.\/((?:chunks\/)?[^"]+\.js)"\)/g)].map(
+      (x) => `offscreen/${x[1].startsWith('chunks/') ? x[1] : `chunks/${x[1]}`}`,
+    );
+    const sizes = {};
+    for (const [kind, re] of [
+      ['xlsx', /xlsx-adapter-[^/]+\.js$/],
+      ['pptx', /pptx-adapter-[^/]+\.js$/],
+      ['plain', /plain-adapter-[^/]+\.js$/],
+    ]) {
+      const f = lazy.find((x) => re.test(x));
+      expect(f, `модуль ${kind}`).toBeDefined();
+      expect(zip[f], f).toBeDefined();
+      sizes[kind] = zip[f].length;
+    }
+    console.log(
+      `модули форматов: ${Object.entries(sizes)
+        .map(([k, v]) => `${k} ${v} байт`)
+        .join(', ')}`,
+    );
+    // свой бюджет модулей форматов (вместе с общим DrawingML) — 120 КиБ
+    expect(Object.values(sizes).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(120 * 1024);
+  });
+
   it('pdf.js (версия 0.3, К8): vendor/pdfjs/ с CMaps и шрифтами ≤ 6 МБ, не в worker.js; архив ≤ 12 МБ', () => {
     for (const f of ['vendor/pdfjs/pdf.mjs', 'vendor/pdfjs/pdf.worker.mjs', 'vendor/pdfjs/LICENSE']) expect(zip[f], f).toBeDefined();
     const names = Object.keys(zip).filter((n) => n.startsWith('vendor/pdfjs/'));

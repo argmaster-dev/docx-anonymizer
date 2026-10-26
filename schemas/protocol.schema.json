@@ -51,6 +51,8 @@
         "PDF_ENCRYPTED",
         "PDF_EMPTY",
         "PDF_NO_TEXT",
+        "NOT_SUPPORTED",
+        "FORMAT_LOAD_FAILED",
         "INTERNAL"
       ]
     },
@@ -294,7 +296,7 @@
         "requestId": { "$ref": "#/$defs/requestId" },
         "docId": { "type": "string", "pattern": "^d\\d+$" },
         "name": { "type": "string" },
-        "kind": { "enum": ["docx", "pdf"] },
+        "kind": { "enum": ["docx", "pdf", "xlsx", "pptx", "plain"] },
         "language": { "enum": ["ru", "en", "both"] },
         "placeholderLanguage": { "enum": ["ru", "en"] },
         "entities": { "type": "array", "items": { "$ref": "#/$defs/entity" } },

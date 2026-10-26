@@ -103,3 +103,44 @@ test.describe('словари ФИО из пакета (WP12-A)', () => {
       expect(u).toMatch(new RegExp(`^chrome-extension://${extensionId}/`));
   });
 });
+
+// К13, К14 (версия 0.5, WP12-B): Excel, PowerPoint и текстовые форматы — модули по требованию offscreen/chunks/; воркер грузит
+// модуль формата при первом файле только из своего пакета (chrome-extension://), один раз; ни одного http(s)-запроса.
+test('модули Excel, PowerPoint и текстовых форматов — по требованию из пакета расширения, без http(s) (WP12-B)', async ({ context, extensionId }) => {
+  const net = await captureAllRequests(context);
+  const ext = await context.newPage();
+  await ext.goto(`chrome-extension://${extensionId}/popup/popup.html`);
+  await installClient(ext);
+  const fx = (n) => readFileSync(resolve('tests/fixtures/office', n));
+  const xlsx = await runPipeline(ext, { name: 'реестр.xlsx', bytes: fx('registry.xlsx') });
+  expect(xlsx.resultName).toBe('реестр.anon.xlsx');
+  expect(xlsx.ent.entities.some((e) => e.category === 'INN')).toBe(true);
+  const xlsx2 = await runPipeline(ext, { name: 'crm.xlsx', bytes: fx('crm-export.xlsx') });
+  expect(xlsx2.resultName).toBe('crm.anon.xlsx');
+  const pptx = await runPipeline(ext, { name: 'итоги.pptx', bytes: fx('deck-sales.pptx') });
+  expect(pptx.resultName).toBe('итоги.anon.pptx');
+  const csv = await runPipeline(ext, { name: 'клиенты.csv', bytes: fx('clients-tab-utf8.csv') });
+  expect(csv.resultName).toBe('клиенты.anon.csv');
+  const json = await runPipeline(ext, { name: 'crm.json', bytes: fx('crm-export.json') });
+  expect(json.ent.warnings.map((w) => w.code)).toContain('JSON_NUMBER_AS_STRING');
+
+  const urls = await net.stop();
+  expect(externalRequests(urls), 'http(s)').toEqual([]);
+  expect(
+    urls.filter((u) => !/^(chrome-extension|chrome|data|about):/.test(u)),
+    'прочие схемы',
+  ).toEqual([]);
+  const own = offscreenRequests(urls);
+  for (const re of [
+    /\/offscreen\/chunks\/xlsx-adapter-[^/]+\.js$/,
+    /\/offscreen\/chunks\/pptx-adapter-[^/]+\.js$/,
+    /\/offscreen\/chunks\/plain-adapter-[^/]+\.js$/,
+  ]) {
+    // один раз на жизнь воркера, хотя книг две
+    expect(
+      own.filter((u) => re.test(u)),
+      String(re),
+    ).toHaveLength(1);
+  }
+  for (const u of urls.filter((x) => x.includes('/offscreen/chunks/'))) expect(u).toMatch(new RegExp(`^chrome-extension://${extensionId}/offscreen/chunks/`));
+});

@@ -20,6 +20,16 @@ export const PANEL_TAG = 'docx-anonymizer-root';
  * @param {number[] | undefined} pages
  */
 export const pdfPagesKey = (pages) => ((pages || []).length === 1 ? 'warnPdfPage' : 'warnPdfPages');
+
+/** Коды предупреждений со своим текстом панели (версия 0.5: DICT_FAILED — WP12-A, форматы — WP12-B). */
+export const WARN_KEYS = Object.freeze({
+  DICT_FAILED: 'warnDictFailed',
+  XLSX_CELL_REFERENCED: 'warnXlsxCellReferenced',
+  XLSX_FORMULA_LITERAL: 'warnXlsxFormulaLiteral',
+  XLSX_SHEET_RENAMED: 'warnXlsxSheetRenamed',
+  JSON_NUMBER_AS_STRING: 'warnJsonNumber',
+  JSON_INVALID: 'warnJsonInvalid',
+});
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
 function logo() {
@@ -259,7 +269,7 @@ export class Panel {
     if (box?.classList.contains('warns') && !box.childElementCount) box.remove();
   }
 
-  /** @param {number} i @param {{entities: any[], warnings?: any[], restored?: boolean, kind?: 'docx'|'pdf', ext?: string, api: any}} d */
+  /** @param {number} i @param {{entities: any[], warnings?: any[], restored?: boolean, kind?: 'docx'|'pdf'|'xlsx'|'pptx'|'plain', ext?: string, api: any}} d */
   setReady(i, d) {
     const f = this.files[i];
     if (!f) return;
@@ -338,7 +348,8 @@ export class Panel {
             ? this.t('warnNer', { reason: this.t(`nerReason_${reason}`) })
             : w.code === 'PDF_PAGES_NO_TEXT' // версия 0.3: смешанный PDF — страницы без текстового слоя (одна — в единственном числе)
               ? this.t(pdfPagesKey(w.details?.pages), { pages: (w.details?.pages || []).join(', ') })
-              : this.t('warnGeneric', { code: w.code });
+              : // 0.5: словари не загрузились, предупреждения форматов (Excel, JSON) — свои тексты; прочее — код
+                this.t(WARN_KEYS[w.code] || 'warnGeneric', { code: w.code, n: w.count ?? 0 });
       warns.push(h('div', { class: 'warn', text }));
     }
     if (warns.length) f.view.append(h('div', { class: 'warns' }, ...warns));

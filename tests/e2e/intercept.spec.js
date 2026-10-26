@@ -134,9 +134,10 @@ test.describe('перехват на сайте', () => {
     expect(a).toEqual(c);
   });
 
+  // 0.5 (WP12-B): .txt теперь обрабатывается — «необрабатываемый» файл здесь архив .zip
   test('файл без .docx проходит без панели', async ({ context, extensionId }) => {
     const page = await setup(context, extensionId);
-    await page.setInputFiles('#single', { name: 'note.txt', mimeType: 'text/plain', buffer: Buffer.from('привет') });
+    await page.setInputFiles('#single', { name: 'архив.zip', mimeType: 'application/zip', buffer: Buffer.from('привет') });
     await expect.poll(async () => (await dump(page)).length).toBe(1);
     expect(await page.evaluate(() => document.querySelector('docx-anonymizer-root'))).toBeNull();
   });

@@ -1,0 +1,70 @@
+{
+  "exported": "2026-10-26",
+  "total": 4,
+  "clients": [
+    {
+      "id": 1000,
+      "fio": "Гаврилов Евгений Сергеевич",
+      "inn": 770400000048,
+      "phone": "+7 916 204-31-17",
+      "contacts": {
+        "email": "e.gavrilov@example.com",
+        "telegram": null
+      },
+      "passport": "4515 220871",
+      "note": "нет",
+      "tags": [
+        "vip",
+        "b2b"
+      ]
+    },
+    {
+      "id": 1001,
+      "fio": "Ершова Алина Петровна",
+      "inn": 770400511363,
+      "phone": "+7 903 118-42-65",
+      "contacts": {
+        "email": "alina.ershova@example.org",
+        "telegram": null
+      },
+      "passport": null,
+      "note": "нет",
+      "tags": [
+        "vip",
+        "b2b"
+      ]
+    },
+    {
+      "id": 1002,
+      "fio": "Белоусов Максим Андреевич",
+      "inn": 770401022608,
+      "phone": "+7 925 610-77-08",
+      "contacts": {
+        "email": "m.belousov@example.net",
+        "telegram": null
+      },
+      "passport": null,
+      "note": "Заменяет Лаптев А.Н. в отпуске",
+      "tags": [
+        "vip",
+        "b2b"
+      ]
+    },
+    {
+      "id": 1003,
+      "fio": "Кравцова Дарья Олеговна",
+      "inn": 770401533923,
+      "phone": "+7 915 342-19-90",
+      "contacts": {
+        "email": "darya.kravtsova@example.com",
+        "telegram": null
+      },
+      "passport": null,
+      "note": "нет",
+      "tags": [
+        "vip",
+        "b2b"
+      ]
+    }
+  ]
+}

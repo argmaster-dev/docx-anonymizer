@@ -21,18 +21,39 @@ export function isPdfFile(file) {
   return /\.pdf$/i.test(file.name || '') || file.type === PDF_MIME;
 }
 
-/** Вид файла для перехвата: 'docx' | 'pdf' | null (остальное проходит как есть). */
+/** Форматы 0.5 (WP12-B): расширение без учёта регистра или MIME. Сканы и изображения не перехватываются (OCR — версия 0.6). */
+const OTHER_KINDS = [
+  {
+    kind: 'xlsx',
+    re: /\.(xlsx|xlsm)$/i,
+    mime: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel.sheet.macroEnabled.12'],
+  },
+  {
+    kind: 'pptx',
+    re: /\.(pptx|pptm)$/i,
+    mime: ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint.presentation.macroEnabled.12'],
+  },
+  // текстовые — только по расширению: формат (CSV, JSON, строки) хост определяет по имени
+  { kind: 'text', re: /\.(txt|log|md|csv|json)$/i, mime: [] },
+];
+
+/** Вид файла для перехвата: 'docx' | 'pdf' | 'xlsx' | 'pptx' | 'text' | null (остальное проходит как есть). */
 export function fileKind(file) {
   if (isDocx(file)) return 'docx';
   if (isPdfFile(file)) return 'pdf';
+  if (!file) return null;
+  const name = file.name || '';
+  for (const k of OTHER_KINDS) if (k.re.test(name)) return k.kind;
+  // по MIME — только если у имени нет другого расширения («фото.png» с типом text/plain — не текст)
+  if (!/\.[^./\\]+$/.test(name)) for (const k of OTHER_KINDS) if (k.mime.includes(file.type)) return k.kind;
   return null;
 }
 
-/** Обрабатывает ли расширение файл при этих настройках: DOCX — всегда, PDF — если pdfMode не 'off' (FR-04, версия 0.3). */
+/** Обрабатывает ли расширение файл при этих настройках: PDF — если pdfMode не 'off' (FR-04, версия 0.3), остальные виды — всегда. */
 export function isSupported(file, settings) {
   const kind = fileKind(file);
   if (kind === 'pdf') return (settings?.pdfMode ?? 'markdown') !== 'off';
-  return kind === 'docx';
+  return kind !== null;
 }
 
 /** Есть ли среди файлов хотя бы один обрабатываемый. */
@@ -56,22 +77,25 @@ export function mergeInOrder(originals, replacements) {
   return originals.map((f, i) => replacements.get(i) ?? f);
 }
 
-/** Имя файла для скачивания маппинга: «договор.anon.docx» (или «.anon.md», «.anon.txt» из PDF) → «договор.mapping.json». */
+/** Расширения результатов «тот же формат» (WP12-B): имя результата сохраняет расширение исходника. */
+const SAME_EXT_RE = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|log|md|csv|json)$/i;
+
+/** Имя файла для скачивания маппинга: «договор.anon.docx» (или «.anon.md», «.anon.txt» из PDF, «.anon.xlsx»…) → «договор.mapping.json». */
 export function mappingFileName(resultName) {
   const base = String(resultName || 'document')
-    .replace(/\.(docx|docm|md|txt)$/i, '')
+    .replace(SAME_EXT_RE, '')
     .replace(/\.anon$/i, '');
   return `${base}.mapping.json`;
 }
 
 /**
- * Тип результата: для DOCX сохраняем MIME исходника (FR-05), если пустой — MIME документа Word; для PDF — тип текста
- * от хоста (text/markdown или text/plain, версия 0.3).
+ * Тип результата: MIME исходника сохраняется (FR-05); пустой — MIME результата от хоста, без него — документа Word;
+ * для PDF — тип текста от хоста (text/markdown или text/plain, версия 0.3).
  * @param {{type?: string}} original @param {string} [mime] MIME результата из RESULT_BEGIN
  */
 export function resultType(original, mime) {
   if (mime && /^text\//.test(mime)) return mime;
-  return original?.type || DOCX_MIME;
+  return original?.type || mime || DOCX_MIME;
 }
 
 /** Содержит ли сообщение ошибки признак инвалидации контекста расширения (FR-09). */
@@ -90,7 +114,7 @@ export function formatSize(bytes, lang = 'ru') {
 }
 
 /**
- * Имя результата на стороне клиента: 'договор.docx' → 'договор.anon.docx'; с `{ext}` — 'договор.pdf' → 'договор.anon.md'. Нужно, потому что при повторной
+ * Имя результата на стороне клиента: 'договор.docx' → 'договор.anon.docx' (Excel, PowerPoint, текст — так же); с `{ext}` — 'договор.pdf' → 'договор.anon.md'. Нужно, потому что при повторной
  * загрузке файла с тем же содержимым хост возвращает прежнюю сессию (§3.6) вместе с её именем.
  */
 export function makeResultName(name, suffix = '.anon', opts = {}) {
@@ -99,6 +123,8 @@ export function makeResultName(name, suffix = '.anon', opts = {}) {
     const base = String(name || 'document').replace(/\.(docx|docm|pdf)$/i, '') || 'document';
     return `${base}${suffix}${opts.ext}`;
   }
-  const m = /^(.*?)(\.(docx|docm))?$/i.exec(name || 'document.docx');
-  return `${m?.[1] || 'document'}${suffix}${m?.[2] || '.docx'}`;
+  // тот же формат (0.5): 'реестр.xlsx' → 'реестр.anon.xlsx', 'выгрузка.csv' → 'выгрузка.anon.csv'; без расширения — .docx, как раньше
+  const n = name || 'document.docx';
+  const m = SAME_EXT_RE.exec(n);
+  return `${(m ? n.slice(0, m.index) : n) || 'document'}${suffix}${m ? m[0] : '.docx'}`;
 }

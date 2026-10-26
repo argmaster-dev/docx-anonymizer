@@ -1,0 +1,496 @@
+// Текстовые форматы (DocumentAdapter, ТЗ §5.3; версия 0.5, WP12-B, Ц2, К4; docs/concept-0.5.md п. 4, docs/contracts.md §9.8).
+// Модуль по требованию (offscreen/chunks/, core/adapters.js). Модель — обычная DocModel, как у текстовой модели PDF (core/text/):
+// потоки-абзацы в части «word/document.xml» (база знаний сторон, поиск, вкладка «Текст» работают без изменений), но результат —
+// тот же формат и та же кодировка, а не Markdown:
+//   - .txt, .log, .md — как есть: поток на непустую строку, правки — по смещениям в тексте файла;
+//   - .csv — разделитель «,», «;» или табуляция определяется по первым строкам, кавычки по RFC 4180; ячейка — поток, ячейки —
+//     таблица с заголовком (detect/tables.js: «ИНН» над числом); число строк, столбцов и разделитель сохраняются;
+//   - .json — только строковые значения (ключи и структура не меняются, результат — валидный JSON); число-идентификатор под
+//     ключом «inn», «phone», «snils»… — поток со своим ключом-меткой, заменяется строкой (предупреждение JSON_NUMBER_AS_STRING).
+// Кодировка: UTF-8 с BOM и без, UTF-16 с BOM, иначе Windows-1251 — определяется и сохраняется. Значения в логи не попадают (NFR-14).
+import { detectLanguage } from '../ooxml/model.js';
+import { hasExtension } from '../ooxml/adapter.js';
+import { CoreError } from '../errors.js';
+import { registerAdapter } from '../adapters.js';
+import { tableBlocks } from '../table-blocks.js';
+
+const EXTENSIONS = ['.txt', '.log', '.md', '.csv', '.json'];
+const MAIN = 'word/document.xml';
+const MIME = { txt: 'text/plain', log: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json' };
+
+/* ---------- кодировки ---------- */
+
+/** Таблица Windows-1251 для записи: символ → байт (из декодера платформы, без своих таблиц в коде). */
+let cp1251 = null;
+function cp1251Table() {
+  if (!cp1251) {
+    cp1251 = new Map();
+    const all = new TextDecoder('windows-1251').decode(Uint8Array.from({ length: 256 }, (_, i) => i));
+    for (let i = 0; i < 256; i++) if (!cp1251.has(all[i])) cp1251.set(all[i], i);
+  }
+  return cp1251;
+}
+
+/**
+ * Байты → текст и кодировка: BOM UTF-8/UTF-16 — по нему; иначе строгий UTF-8; не прошёл — Windows-1251.
+ * @param {Uint8Array} bytes
+ * @returns {{text: string, encoding: 'utf-8'|'utf-16le'|'utf-16be'|'windows-1251', bom: boolean}}
+ */
+export function decodeText(bytes) {
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
+    return { text: new TextDecoder('utf-8').decode(bytes.subarray(3)), encoding: 'utf-8', bom: true };
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return { text: new TextDecoder('utf-16le').decode(bytes.subarray(2)), encoding: 'utf-16le', bom: true };
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return { text: new TextDecoder('utf-16be').decode(bytes.subarray(2)), encoding: 'utf-16be', bom: true };
+  try {
+    return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), encoding: 'utf-8', bom: false };
+  } catch {
+    return { text: new TextDecoder('windows-1251').decode(bytes), encoding: 'windows-1251', bom: false };
+  }
+}
+
+/**
+ * Текст → байты в той же кодировке. В Windows-1251 символ без кода (редкие знаки замены) становится «?».
+ * @param {string} text
+ * @param {{encoding: string, bom: boolean}} enc
+ */
+export function encodeText(text, enc) {
+  if (enc.encoding === 'utf-8') {
+    const body = new TextEncoder().encode(text);
+    if (!enc.bom) return body;
+    const out = new Uint8Array(body.length + 3);
+    out.set([0xef, 0xbb, 0xbf]);
+    out.set(body, 3);
+    return out;
+  }
+  if (enc.encoding === 'windows-1251') {
+    const t = cp1251Table();
+    const out = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++) out[i] = t.get(text[i]) ?? 0x3f;
+    return out;
+  }
+  const le = enc.encoding === 'utf-16le';
+  const out = new Uint8Array(2 + text.length * 2);
+  out.set(le ? [0xff, 0xfe] : [0xfe, 0xff]);
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    out[2 + i * 2] = le ? c & 0xff : c >> 8;
+    out[3 + i * 2] = le ? c >> 8 : c & 0xff;
+  }
+  return out;
+}
+
+/* ---------- разбор ---------- */
+
+/**
+ * Блок текстовой модели: кусок файла и как его записать обратно.
+ * @typedef {{pid: string, kind: 'p'|'cell', text: string, start: number, end: number, write: 'raw'|'csv'|'json', quoted?: boolean,
+ *   table?: {index: number, row: number, col: number, cols?: number}, number?: boolean, stream?: boolean}} PlainBlock
+ */
+
+/** Формат по имени файла; без имени — по содержимому (JSON, CSV, иначе текст). */
+function formatOf(name, text) {
+  const m = /\.(txt|log|md|csv|json)$/i.exec(String(name || ''));
+  if (m) return /** @type {'txt'|'log'|'md'|'csv'|'json'} */ (m[1].toLowerCase());
+  const head = text.trimStart()[0];
+  if (head === '{' || head === '[') return 'json';
+  return detectDelimiter(text) ? 'csv' : 'txt';
+}
+
+/** Строки текста: непустые — блоки «как есть» (смещения в тексте файла). */
+function lineBlocks(text) {
+  const out = [];
+  const re = /[^\r\n]+/g;
+  let m;
+  while ((m = re.exec(text))) if (m[0].trim()) out.push({ kind: 'p', text: m[0], start: m.index, end: m.index + m[0].length, write: 'raw', stream: true });
+  return out;
+}
+
+/**
+ * Разделитель CSV по первым 20 записям: тот из «;», «,», табуляции, который встречается вне кавычек в каждой записи
+ * одинаковое число раз (≥ 1); при равенстве — чаще встречающийся. Не нашёлся — null.
+ * @param {string} text
+ */
+export function detectDelimiter(text) {
+  let best = null;
+  let bestScore = 0;
+  for (const d of [';', ',', '\t']) {
+    const rows = parseCsv(text, d, 20);
+    if (rows.length < 1) continue;
+    const counts = rows.filter((r) => r.length > 1 || r[0].text).map((r) => r.length - 1);
+    if (!counts.length || counts[0] < 1) continue;
+    const same = counts.filter((c) => c === counts[0]).length / counts.length;
+    const score = same * 1000 + counts[0];
+    if (same >= 0.8 && score > bestScore) {
+      best = d;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+/**
+ * Записи CSV (RFC 4180): поля в кавычках с "" внутри и переводами строк, CRLF/LF. Ячейка — текст и сырой диапазон.
+ * @param {string} text
+ * @param {string} delim
+ * @param {number} [limit]  не больше стольких записей
+ * @returns {{text: string, start: number, end: number, quoted: boolean}[][]}
+ */
+export function parseCsv(text, delim, limit = Infinity) {
+  const rows = [];
+  let row = [];
+  let i = 0;
+  const n = text.length;
+  if (!n) return rows;
+  while (i <= n && rows.length < limit) {
+    const start = i;
+    let value;
+    let quoted = false;
+    if (text[i] === '"') {
+      quoted = true;
+      let j = i + 1;
+      let v = '';
+      for (;;) {
+        const q = text.indexOf('"', j);
+        if (q < 0) {
+          v += text.slice(j);
+          j = n;
+          break;
+        }
+        v += text.slice(j, q);
+        if (text[q + 1] === '"') {
+          v += '"';
+          j = q + 2;
+        } else {
+          j = q + 1;
+          break;
+        }
+      }
+      // мусор после закрывающей кавычки до разделителя — часть сырого поля (не по RFC, но не теряем)
+      let k = j;
+      while (k < n && text[k] !== delim && text[k] !== '\n' && text[k] !== '\r') k++;
+      value = v + text.slice(j, k);
+      i = k;
+    } else {
+      let k = i;
+      while (k < n && text[k] !== delim && text[k] !== '\n' && text[k] !== '\r') k++;
+      value = text.slice(i, k);
+      i = k;
+    }
+    row.push({ text: value, start, end: i, quoted });
+    if (i < n && text[i] === delim) {
+      i++;
+      continue;
+    }
+    rows.push(row);
+    row = [];
+    if (i >= n) break;
+    if (text[i] === '\r' && text[i + 1] === '\n') i += 2;
+    else i++;
+    if (i >= n) break;
+  }
+  if (row.length) rows.push(row);
+  return rows;
+}
+
+function csvBlocks(text, delim) {
+  const rows = parseCsv(text, delim);
+  const cols = Math.max(0, ...rows.map((r) => r.length));
+  const out = [];
+  rows.forEach((r, ri) =>
+    r.forEach((c, ci) => {
+      if (!c.text.trim()) return;
+      out.push({
+        kind: 'cell',
+        text: c.text,
+        start: c.start,
+        end: c.end,
+        write: 'csv',
+        quoted: c.quoted,
+        table: { index: 0, row: ri, col: ci, cols },
+        stream: true,
+      });
+    }),
+  );
+  return { blocks: out, rows: rows.length, cols };
+}
+
+/* ---------- JSON ---------- */
+
+/** Ключ → метка для детекторов (заголовок строки «ключ | значение»): латинские ключи выгрузок → русские метки каталога. */
+const KEY_LABELS = [
+  [/^(?:inn|инн|taxid|tin)$/, 'ИНН', true],
+  [/^(?:kpp|кпп)$/, 'КПП', true],
+  [/^(?:ogrn|ogrnip|огрн|огрнип)$/, 'ОГРН', true],
+  [/^(?:bik|bic|бик)$/, 'БИК', true],
+  [/^(?:snils|снилс)$/, 'СНИЛС', true],
+  [/^(?:phone|phonenumber|tel|telephone|mobile|mobilephone|телефон|тел)$/, 'Телефон', true],
+  [/^(?:passport|passportnumber|паспорт)$/, 'Паспорт', true],
+  [/^(?:account|accountnumber|acc|rs|settlementaccount|счет|счёт|расчетныйсчет)$/, 'Расчётный счёт', true],
+  [/^(?:corraccount|ks|корсчет)$/, 'Корр. счёт', true],
+  [/^(?:card|cardnumber|pan|карта)$/, 'Номер карты', true],
+  [/^(?:email|mail|emailaddress|почта)$/, 'E-mail', false],
+  [/^(?:birthdate|birthday|dob|dateofbirth|датарождения)$/, 'Дата рождения', false],
+  [/^(?:fio|fullname|фио)$/, 'ФИО', false],
+  [/^(?:firstname|givenname|имя)$/, 'Имя', false],
+  [/^(?:lastname|surname|familyname|фамилия)$/, 'Фамилия', false],
+  [/^(?:middlename|patronymic|отчество)$/, 'Отчество', false],
+  [/^(?:address|addr|legaladdress|адрес)$/, 'Адрес', false],
+];
+
+/**
+ * Метка ключа JSON и можно ли под ним искать идентификатор в числе.
+ * @param {string} key
+ * @returns {{label: string, numeric: boolean}}
+ */
+export function keyLabel(key) {
+  const k = String(key || '')
+    .toLowerCase()
+    .replace(/[\s_\-.]/g, '');
+  for (const [re, label, numeric] of KEY_LABELS) if (re.test(k)) return { label: /** @type {string} */ (label), numeric: /** @type {boolean} */ (numeric) };
+  return { label: String(key || ''), numeric: false };
+}
+
+/**
+ * Строковые значения и числа JSON с позициями (ключи — нет). Ошибка синтаксиса — исключение.
+ * @param {string} text
+ * @returns {{kind: 'string'|'number', start: number, end: number, value: string, key: string}[]}
+ */
+export function scanJson(text) {
+  const out = [];
+  let i = 0;
+  const n = text.length;
+  const ws = () => {
+    while (i < n && (text[i] === ' ' || text[i] === '\t' || text[i] === '\n' || text[i] === '\r')) i++;
+  };
+  const fail = () => {
+    throw new SyntaxError('JSON');
+  };
+  const str = () => {
+    const start = i;
+    i++;
+    while (i < n && text[i] !== '"') i += text[i] === '\\' ? 2 : 1;
+    if (i >= n) fail();
+    i++;
+    return { start, end: i, value: /** @type {string} */ (JSON.parse(text.slice(start, i))) };
+  };
+  const value = (key) => {
+    ws();
+    const c = text[i];
+    if (c === '{') {
+      i++;
+      ws();
+      if (text[i] === '}') return void i++;
+      for (;;) {
+        ws();
+        if (text[i] !== '"') fail();
+        const k = str().value;
+        ws();
+        if (text[i] !== ':') fail();
+        i++;
+        value(k);
+        ws();
+        if (text[i] === ',') i++;
+        else if (text[i] === '}') return void i++;
+        else fail();
+      }
+    }
+    if (c === '[') {
+      i++;
+      ws();
+      if (text[i] === ']') return void i++;
+      for (;;) {
+        value(key);
+        ws();
+        if (text[i] === ',') i++;
+        else if (text[i] === ']') return void i++;
+        else fail();
+      }
+    }
+    if (c === '"') return void out.push({ kind: 'string', key, ...str() });
+    const m = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|^(?:true|false|null)/.exec(text.slice(i, i + 400));
+    if (!m) fail();
+    if (/^\d/.test(m[0]) || m[0][0] === '-') out.push({ kind: 'number', key, start: i, end: i + m[0].length, value: m[0] });
+    i += m[0].length;
+  };
+  value('');
+  ws();
+  if (i < n) fail();
+  return out;
+}
+
+function jsonBlocks(text) {
+  const out = [];
+  let t = 0;
+  for (const v of scanJson(text)) {
+    const { label, numeric } = keyLabel(v.key);
+    if (v.kind === 'number' && !(numeric && /^\d{6,20}$/.test(v.value))) continue;
+    if (v.kind === 'string' && !v.value.trim()) continue;
+    // ключ и значение — строка таблицы «ключ | значение»: ключ становится меткой строки (rowHeader, detect/tables.js)
+    const index = t++;
+    if (label) out.push({ kind: 'cell', text: label, start: v.start, end: v.start, write: 'json', table: { index, row: 0, col: 0, cols: 2 }, stream: false });
+    out.push({
+      kind: 'cell',
+      text: v.value,
+      start: v.start,
+      end: v.end,
+      write: 'json',
+      number: v.kind === 'number',
+      table: { index, row: 0, col: 1, cols: 2 },
+      stream: true,
+    });
+  }
+  return out;
+}
+
+/* ---------- модель ---------- */
+
+/**
+ * Разбирает текстовый файл. Формат — по имени (.txt/.log/.md/.csv/.json), без имени — по содержимому.
+ * Битый JSON разбирается как текст по строкам (предупреждение JSON_INVALID); CSV без разделителя — одна колонка.
+ * @param {Uint8Array} bytes
+ * @param {string} [name]
+ */
+export function parsePlain(bytes, name) {
+  const enc = decodeText(bytes);
+  const text = enc.text;
+  const format = formatOf(name, text);
+  /** @type {{code: string, count?: number, details?: object}[]} */
+  const warnings = [];
+  let blocks;
+  let delimiter = null;
+  if (format === 'json') {
+    try {
+      blocks = jsonBlocks(text);
+    } catch {
+      warnings.push({ code: 'JSON_INVALID' });
+      blocks = lineBlocks(text);
+    }
+  } else if (format === 'csv') {
+    delimiter = detectDelimiter(text) || ',';
+    blocks = csvBlocks(text, delimiter).blocks;
+  } else blocks = lineBlocks(text);
+
+  /** @type {any[]} */
+  const streams = [];
+  /** @type {any[]} */
+  const paragraphs = [];
+  let n = 0;
+  let k = 0;
+  for (const b of blocks) {
+    if (!b.stream) {
+      b.pid = `k${k++}`; // ключ JSON: только метка таблицы, без потока
+      continue;
+    }
+    const pid = `p${n++}`;
+    b.pid = pid;
+    const id = `${pid}:live`;
+    // число JSON под ключом-идентификатором — поток-значение (attr): не идёт в NER, правка — строкой (предупреждение)
+    streams.push(
+      b.number
+        ? { id, part: MAIN, pid, type: 'attr', attrKind: 'json-number', text: b.text, pos: b.start, order: n - 1 }
+        : { id, part: MAIN, pid, type: 'live', text: b.text, pos: b.start, order: n - 1 },
+    );
+    paragraphs.push({ pid, part: MAIN, depth: b.kind === 'cell' ? 1 : 0, pos: b.start, streams: { live: id }, kind: b.kind });
+  }
+  // таблица для заголовков (detect/tables.js): CSV — ячейки, первая строка из ≥ 2 ячеек без цифр — шапка без «метки слева»
+  // (core/table-blocks.js); JSON — пары «ключ | значение», ключ — метка строки
+  let h = 0;
+  const tables =
+    format === 'csv'
+      ? tableBlocks(
+          blocks.filter((b) => b.table).map((b) => ({ pid: b.pid, text: b.text, row: b.table.row, col: b.table.col })),
+          { index: 0, minHeader: 2, scanRows: 1, fakePid: () => `h${h++}` },
+        )
+      : blocks.filter((b) => b.table).map((b) => ({ pid: b.pid, kind: 'cell', text: b.text, table: b.table }));
+  return {
+    kind: 'plain',
+    format,
+    name,
+    entries: [],
+    parts: new Map(),
+    streams,
+    streamById: new Map(streams.map((s) => [s.id, s])),
+    paragraphs,
+    blocks: tables,
+    plain: { text, encoding: enc.encoding, bom: enc.bom, delimiter, items: blocks.filter((b) => b.stream) },
+    warnings,
+    language: detectLanguage(streams, (s) => s.type === 'live'),
+    size: bytes.length,
+  };
+}
+
+/* ---------- запись ---------- */
+
+/**
+ * Правки → тот же формат и кодировка. Неизменённые куски файла — символ в символ.
+ * @param {ReturnType<typeof parsePlain>} doc
+ * @param {import('../ooxml/serialize.js').TextEdit[]} edits
+ */
+export function serializePlain(doc, edits) {
+  /** @type {Map<string, import('../ooxml/serialize.js').TextEdit[]>} */
+  const byStream = new Map();
+  for (const e of edits) {
+    const s = doc.streamById.get(e.streamId);
+    if (!s) throw new CoreError('INTERNAL', `Неизвестный поток ${e.streamId}`);
+    if (e.start < 0 || e.end > s.text.length || e.start > e.end) throw new CoreError('INTERNAL', `Диапазон вне потока ${e.streamId}`);
+    let arr = byStream.get(e.streamId);
+    if (!arr) byStream.set(e.streamId, (arr = []));
+    arr.push(e);
+  }
+  const byPid = new Map(doc.plain.items.map((b) => [b.pid, b]));
+  const delim = doc.plain.delimiter || ',';
+  const raw = [];
+  for (const [id, list] of byStream) {
+    list.sort((a, b) => a.start - b.start || a.end - b.end);
+    for (let i = 1; i < list.length; i++) if (list[i].start < list[i - 1].end) throw new CoreError('INTERNAL', `Пересекающиеся правки в потоке ${id}`);
+    const s = doc.streamById.get(id);
+    const b = /** @type {PlainBlock} */ (byPid.get(s.pid));
+    let t = s.text;
+    for (let i = list.length - 1; i >= 0; i--) t = t.slice(0, list[i].start) + list[i].newText + t.slice(list[i].end);
+    if (b.write === 'raw') {
+      for (const e of list) raw.push({ from: b.start + e.start, to: b.start + e.end, text: e.newText });
+    } else if (b.write === 'csv') {
+      const needQuote = b.quoted || t.includes(delim) || /["\r\n]/.test(t);
+      raw.push({ from: b.start, to: b.end, text: needQuote ? `"${t.replace(/"/g, '""')}"` : t });
+    } else raw.push({ from: b.start, to: b.end, text: JSON.stringify(t) });
+  }
+  raw.sort((a, b) => a.from - b.from);
+  let out = '';
+  let pos = 0;
+  for (const r of raw) {
+    out += doc.plain.text.slice(pos, r.from) + r.text;
+    pos = r.to;
+  }
+  out += doc.plain.text.slice(pos);
+  const changed = raw.length ? [MAIN] : [];
+  return { bytes: encodeText(out, doc.plain), text: out, changedParts: changed, removedParts: [], mime: MIME[doc.format] || 'text/plain' };
+}
+
+/**
+ * Предупреждения: число JSON под ключом-идентификатором станет строкой (тип значения меняется).
+ * @param {ReturnType<typeof parsePlain>} doc
+ * @param {import('../contracts/entity.js').EntityGroup[]} groups
+ */
+export function plainWarnings(doc, groups) {
+  const ids = new Set();
+  for (const g of groups) {
+    if (!g.enabled) continue;
+    const excluded = new Set(g.excludedOccurrences || []);
+    for (const o of g.occurrences) if (!excluded.has(o.id) && doc.streamById.get(o.streamId)?.attrKind === 'json-number') ids.add(o.streamId);
+  }
+  return ids.size ? [{ code: 'JSON_NUMBER_AS_STRING', count: ids.size }] : [];
+}
+
+/** @type {import('../ooxml/adapter.js').DocumentAdapter & {analysisWarnings: typeof plainWarnings}} */
+export const PLAIN_ADAPTER = Object.freeze({
+  kind: 'plain',
+  extensions: EXTENSIONS,
+  mime: 'text/plain',
+  detect: (bytes, name) => hasExtension(name, EXTENSIONS),
+  parse: (bytes, name) => parsePlain(bytes, name),
+  serialize: (doc, edits) => serializePlain(/** @type {any} */ (doc), edits),
+  parts: () => [],
+  analysisWarnings: plainWarnings,
+});
+
+registerAdapter(PLAIN_ADAPTER);

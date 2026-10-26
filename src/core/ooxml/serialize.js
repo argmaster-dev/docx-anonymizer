@@ -26,6 +26,10 @@ import { CoreError } from '../errors.js';
  * Что сериализатор знает о формате (адаптер).
  * @typedef {object} PackageSerializeDescription
  * @property {RegExp} embeddedParts  записи встроенных объектов и диаграмм, удаляемые при stripEmbedded (Word: word/embeddings|charts)
+ * @property {(doc: import('./model.js').DocModel, byStream: Map<string, TextEdit[]>, pushRaw: (part: string, e: {from: number, to: number, text: string}) => void) => void} [plan]
+ *   правки, которые адаптер строит сам (WP12-B: числовая ячейка Excel становится строковой, переименование листа во всех
+ *   формулах, колонтитулы с кодами «&P»): адаптер удаляет свои потоки из byStream и кладёт правки диапазонов XML через pushRaw;
+ *   остальные потоки обрабатываются как обычно (через раны или значением)
  */
 
 /**
@@ -71,11 +75,15 @@ export function serializePackage(doc, edits, options, desc) {
   }
 
   for (const [streamId, list] of byStream) {
-    const s = /** @type {import('./model.js').Stream} */ (doc.streamById.get(streamId));
     list.sort((a, b) => a.start - b.start || a.end - b.end);
     for (let i = 1; i < list.length; i++) {
       if (list[i].start < list[i - 1].end) throw new CoreError('INTERNAL', `Пересекающиеся правки в потоке ${streamId}`);
     }
+  }
+  // правки, которые адаптер формата строит сам (WP12-B); Word их не задаёт
+  if (desc.plan) desc.plan(doc, byStream, pushRaw);
+  for (const [streamId, list] of byStream) {
+    const s = /** @type {import('./model.js').Stream} */ (doc.streamById.get(streamId));
     if (s.segments) {
       const part = /** @type {import('./model.js').Part} */ (doc.parts.get(s.part));
       planRunEdits(part.xml, s, list, /** @type {import('./flow.js').FlowMarkup} */ (part.markup), (e) => pushRaw(s.part, e));

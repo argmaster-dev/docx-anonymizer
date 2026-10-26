@@ -1,0 +1,85 @@
+{
+  "entities": [
+    {
+      "key": "p0",
+      "category": "PERSON",
+      "value": "Белоусов Максим Андреевич",
+      "surname": "Белоусов"
+    },
+    {
+      "key": "tel0",
+      "category": "PHONE",
+      "value": "925 610-77-08"
+    },
+    {
+      "key": "inn0",
+      "category": "INN",
+      "value": "770200000065"
+    },
+    {
+      "key": "p1",
+      "category": "PERSON",
+      "value": "Кравцова Дарья Олеговна",
+      "surname": "Кравцова"
+    },
+    {
+      "key": "tel1",
+      "category": "PHONE",
+      "value": "915 342-19-90"
+    },
+    {
+      "key": "inn1",
+      "category": "INN",
+      "value": "770200300189"
+    },
+    {
+      "key": "p2",
+      "category": "PERSON",
+      "value": "Тимофеев Роман Ильич",
+      "surname": "Тимофеев"
+    },
+    {
+      "key": "tel2",
+      "category": "PHONE",
+      "value": "926 455-03-21"
+    },
+    {
+      "key": "inn2",
+      "category": "INN",
+      "value": "770200600200"
+    },
+    {
+      "key": "p3",
+      "category": "PERSON",
+      "value": "Соболева Виктория Игоревна",
+      "surname": "Соболева"
+    },
+    {
+      "key": "tel3",
+      "category": "PHONE",
+      "value": "977 801-62-34"
+    },
+    {
+      "key": "inn3",
+      "category": "INN",
+      "value": "770200900316"
+    },
+    {
+      "key": "hidden",
+      "category": "PERSON",
+      "value": "Федотова Ксения Андреевна",
+      "surname": "Федотова"
+    },
+    {
+      "key": "pass",
+      "category": "PASSPORT",
+      "value": "4513 774021"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "Ключевые контакты",
+      "category": "PERSON"
+    }
+  ]
+}

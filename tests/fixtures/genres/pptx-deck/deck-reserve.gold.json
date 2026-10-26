@@ -1,0 +1,44 @@
+{
+  "entities": [
+    {
+      "key": "layout",
+      "category": "PERSON",
+      "value": "Федотова К.А.",
+      "surname": "Федотова"
+    },
+    {
+      "key": "cand",
+      "category": "PERSON",
+      "value": "Соболева Виктория Игоревна",
+      "surname": "Соболева"
+    },
+    {
+      "key": "bd",
+      "category": "BIRTHDATE",
+      "value": "02.11.1990"
+    },
+    {
+      "key": "snils",
+      "category": "SNILS",
+      "value": "345-612-789 88"
+    },
+    {
+      "key": "mail",
+      "category": "EMAIL",
+      "value": "v.soboleva@example.net"
+    },
+    {
+      "key": "author",
+      "category": "PERSON",
+      "value": "Федотова Ксения Андреевна",
+      "surname": "Федотова",
+      "meta": true
+    }
+  ],
+  "negatives": [
+    {
+      "value": "Кадровый резерв",
+      "category": "PERSON"
+    }
+  ]
+}

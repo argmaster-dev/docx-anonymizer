@@ -887,7 +887,8 @@ e2e и сборка — под `flock /home/alexf14/.local/tmp/claude-1000/docx-
   `npm run dicts` (`--check` совпадает), модули `src/core/detect/names/dict/{ru,en}-*.js` удалены. `names/dict/load.js`: `loadDicts(read)` — один раз на жизнь
   воркера, сбой окончательный (пустые списки + `DICT_FAILED {reason: READ_FAILED|BAD_FORMAT}` к каждому анализу; повтор после сбоя оставил бы устаревший
   `SIG_MEMO` в `person-dict.js`). Хост начинает загрузку при создании, `ANALYZE`/`ADD_ENTITY` её ждут; в Node — `scripts/dicts-node.mjs` и `setupFiles` vitest.
-  `readPackageFile` — второй путь `/vendor/dict/<имя>.txt`. Сжатый размер словарей в архиве: 142 179 байт против ≈ 142 553 доли словарей в сжатом `worker.js` 0.4.
+  `readPackageFile` — второй путь `/vendor/dict/<имя>.txt`. Итог по архиву (вместо оценки «доли словарей» в сжатом `worker.js`, ревью WP12-A): лёгкий архив
+  6 486 404 байт против 6 479 326 у 0.4.1 — **+7 078 байт** (словари отдельными файлами, модуль PDF по требованию, общий слой OOXML).
 - **Бюджет (К14):** вынос словарей освободил 359 234 байт, но код 0.4 без ORT и словарей был 431 580 байт (секции `names/dict/index.js` и `codec.js` 0.4 считались
   словарями) — до 400 КиБ не хватало ≈ 22 КБ. Поэтому разбор PDF ядра (`core/pdf/extract.js` + `layout.js`, 38 399 байт) вынесен в модуль по требованию
   `offscreen/chunks/extract-*.js` (esbuild `splitting`, динамический импорт в `offscreen/pdf-loader.js`; `isPdf` — в новом `core/pdf/sniff.js`; хост
@@ -919,6 +920,65 @@ e2e и сборка — под `flock /home/alexf14/.local/tmp/claude-1000/docx-
 - **Вне зоны (минимально):** `src/core/pdf/{sniff,extract}.js` (сигнатура отдельно, реэкспорт), `vitest.config.js` (`setupFiles`), `package.json` (`bench`),
   `scripts/{eval-genres,gen-ner-eval}.mjs` (загрузка словарей), `.prettierignore`, `README.md`, `docs/spec-full.md` (ссылка на `vendor/dict/NOTICE.md`),
   `eslint.config.js` (игнор `.claude/**` — рабочие копии агентов внутри репозитория).
+
+## WP12-B — Excel, PowerPoint, текстовые форматы (версия 0.5)
+
+**Файлы.** Новые: `src/core/xlsx/{model,refs,xlsx-adapter}.js`, `src/core/pptx/pptx-adapter.js`, `src/core/plain/plain-adapter.js`, `src/core/ooxml/dml.js`,
+`src/core/table-blocks.js`, `scripts/office-writer.mjs`, `scripts/gen-office-fixtures.mjs`, `tests/fixtures/office/**`, `tests/fixtures/genres/{xlsx-crm,xlsx-statement,pptx-deck,csv-export,json-export}/**`,
+`tests/integration/{xlsx,pptx,host-formats}.spec.js`, `tests/integration/support/office.js`, `tests/unit/{text-formats,restore-ooxml,xlsx-refs}.spec.js`, `tests/e2e/formats.spec.js`.
+Изменяемые: `src/core/{adapters,apply,errors,index,restore-doc,text-view}.js`, `src/core/ooxml/{adapter,serialize}.js`, `src/offscreen/host.js`, `src/content/{files,flow}.js`,
+`src/restore/restore.js`, `src/ui/deanon/index.js`, `src/ui/panel/panel.js`, `src/ui/i18n/{common,panel,restore,help,popup,options}.js`, `src/shared/protocol.js`,
+`schemas/protocol.schema.json`, `scripts/{build,eval-genres}.mjs`, `package.json` (`gen-office-fixtures`), `docs/contracts.md` (§9.8), этот раздел; попутно (ревью WP12-A) —
+`src/core/detect/names/dict/load.js` (JSDoc), `tests/unit/names/dict-codec.spec.js`. Не трогать (WP12-C): `src/core/{categories,settings,mapping,deanon}.js`,
+`src/core/detect/identifiers/**`, `src/core/detect/tables.js`, `tests/fixtures/categories/**`, жанры DOCX/PDF `scripts/gen-genre-fixtures.mjs`, README, `docs/contracts.md` §8.
+
+**Сделать** (решение координатора — модули по требованию, как разбор PDF в WP12-A; `docs/contracts.md` §9.8): Excel (общие и inline-строки, числа-идентификаторы
+с заголовком столбца, примечания и цепочки, колонтитулы с кодами, имена листов с согласованным переименованием, формулы не меняются, литералы — предупреждение,
+граф ссылок — предупреждение «на ячейку ссылаются формулы»), PowerPoint (слайды, заметки, таблицы, группы, SmartArt в `a:t`, комментарии обоих видов, макеты — если там
+сущность, геометрия не меняется), текстовые форматы (.txt/.log/.md как есть, .csv с разделителем/кавычками/кодировкой, .json со строками и числами-идентификаторами по
+ключу), восстановление ответа ИИ в этих форматах, перехват и тексты ru/en, `NOT_SUPPORTED` и `FORMAT_LOAD_FAILED`, фикстуры и жанры корпуса, e2e; малые замечания ревью WP12-A.
+
+**Приёмка:**
+
+| Критерий | Проверка | Факт |
+|---|---|---|
+| К1: ≥ 6 книг (CRM, реестр, ведомость с числовыми ИНН и счетами, несколько листов, формулы, объединённые ячейки, примечания) — все gold `pii`/`ids` закрыты; формулы, стили, ширины столбцов, имена листов (кроме содержащих сущность) совпадают; LibreOffice открывает без восстановления, формулы пересчитываются без `#REF!` | `tests/integration/xlsx.spec.js` (26) | 6 книг × 0 утечек (целиком и частью, во всех XML-частях); части и их порядок, `styles.xml`, тема, `<cols>`, `<mergeCells>`, стиль `s` каждой ячейки, коды колонтитулов, формулы — те же (лист «Гаврилов Е.С.» → «ФИО_n», ссылки на него — согласованно); LibreOffice 26.2 с пересчётом при открытии: 12 файлов открыты, `#REF!`/`#ССЫЛ` нет |
+| К2: ≥ 4 презентации (таблицы, группы, заметки, комментарии) — gold закрыт; число слайдов, фигур, геометрия не меняются; LibreOffice открывает | `tests/integration/pptx.spec.js` (15) | 4 презентации × 0 утечек; каркас каждого слайда, заметок, макета и образца (фигуры, `cNvPr id`, `a:off`/`a:ext`, ячейки) — тот же; образец без данных — байт в байт; LibreOffice: 8 файлов, слайдов столько же |
+| К3: восстановление `.xlsx`/`.pptx` (и CSV/JSON): метки заменены, форматирование сохранено, 0 ложных замен на тексте без меток | `tests/unit/restore-ooxml.spec.js` (20), e2e `formats.spec.js` (3 восстановления) | 13 фикстур: нераспознанных 0, ни одной метки; общие строки, комментарии, слайды, заметки после восстановления — байт в байт как в исходнике; книга и презентация с «Счет 1», «Договор 1», «ФИО 1» — 0 замен, байты те же; лист получает значение метки, формулы — тоже |
+| К4: CSV — число строк и столбцов, разделитель; JSON валиден, те же ключи; gold закрыт | `tests/unit/text-formats.spec.js` (15) | 3 CSV (`;` Windows-1251, `,` UTF-8 с BOM, табуляция UTF-8): строки, столбцы, кавычки, шапка, кодировка и BOM — как в исходнике; JSON: структура и типы те же (кроме ИНН числом → строка, `JSON_NUMBER_AS_STRING`), gold закрыт |
+| К13: ни одного http(s)-запроса; модуль формата — только из пакета | e2e `nfr.spec.js` (новый тест), `formats.spec.js` | модули `xlsx-adapter`, `pptx-adapter`, `plain-adapter` загружены по одному разу и только с `chrome-extension://<id>/offscreen/chunks/`; http(s) — 0 |
+| К14: `worker.js` без ORT ≤ 400 КиБ (ТЗ; в концепции с 26.10.2026 — сторож 512 КиБ, `pack.spec.js` проверяет 400); модули форматов — отдельно, печатаются сборкой; архивы ≤ 12 / 45 МБ | `tests/integration/pack.spec.js` (+1), `npm run pack` | код воркера без ORT **404 850 байт = 395,4 КиБ** (WP12-A — 401 313; запас 4 750 байт); модули по требованию: xlsx 27 619, pptx 7 672, plain 14 163, общий DrawingML 3 763, `table-blocks` 848 байт; лёгкий архив 6 528 554, полный 36 071 710 байт |
+| Жанры корпуса 0.5: `xlsx-crm`, `xlsx-statement`, `pptx-deck`, `csv-export`, `json-export` | `npm run eval-genres`, `genres.spec.js` | 10 документов; без модели в обоих режимах P/R = 1,00 по всем категориям, утечек и отрицательных примеров 0, ОПФ R = 1,00 (синтетика одного автора — оптимистично) |
+| `NOT_SUPPORTED`, `FORMAT_LOAD_FAILED`, протокол, тексты ru/en | `tests/integration/host-formats.spec.js` (10), `schemas.spec.js` | не распознан / битый `.xlsx`/`.pptx` — `NOT_SUPPORTED`, битый `.docx` — по-прежнему `NOT_DOCX`; сбой модуля — `FORMAT_LOAD_FAILED`, повтор загружает; `ENTITIES.kind` по схеме |
+| регрессия DOCX | `tests/integration/docx-regression.spec.js` | снимок не менялся, 168 хешей совпадают |
+| `npm run lint`, `npm test`, `npm run e2e`, `npm run pack` | запуск | зелёные (числа — в «Статусе») |
+
+**Статус:** выполнено 26.10.2026 (коммит — в истории ветки `v0.5` следом за `fb8afc0`).
+
+- **Архитектура:** реестр `core/adapters.js` — Word + лёгкие записи `{kind, extensions, mime, detect, load}` (Excel, PowerPoint, `plain`); `detectAdapter` в два прохода
+  (содержимое, затем имя); `loadAdapter` у хоста перед разбором, модуль сам регистрируется (`registerAdapter`); `applyDecisions` берёт MIME из результата
+  сериализатора; общий сериализатор получил необязательный план адаптера (`plan`) — правки ячеек, имени листа, колонтитулов. Сжатие пробелов `worker.js` не включалось.
+- **Таблицы для заголовков:** `detect/tables.js` не менялся — листы, таблицы слайдов и CSV представлены `doc.blocks` (`core/table-blocks.js`): шапка без «метки слева»
+  (иначе «Телефон» справа от «ФИО» становился ФИО), заголовок листа над шапкой — отдельной таблицей (ИНН и счёт под шапкой «Расчётный счёт» находятся).
+- **Тесты:** новые — `xlsx.spec.js` (26), `pptx.spec.js` (15), `host-formats.spec.js` (10), `text-formats.spec.js` (15), `restore-ooxml.spec.js` (20),
+  `xlsx-refs.spec.js` (7), `pack.spec.js` +1, `content-files.spec.js` +2, `restore-model.spec.js` (дополнены ожидания `aiFileKind`, `mimeFor`), e2e `formats.spec.js` (6)
+  и `nfr.spec.js` +1. Итог: `npm test` — 85 файлов (84 пройдено, 1 пропущен), тестов 2 099 пройдено, 18 пропущено, 2 todo (до WP12-B — 1 999 + 4 упавших из-за
+  изменённых ожиданий и флейков); `npm run e2e` — 93 пройдено, 7 пропущено.
+- **Изменённые ожидания:** `tests/unit/ooxml/adapter.spec.js` «в 0.5 до WP12-B — только Word» → реестр `docx, xlsx, pptx, plain`, `notes.txt` распознаётся как `plain`
+  (тест писался как заготовка до WP12-B); `tests/unit/ui/content-files.spec.js` — `fileKind(a.txt)` `null` → `'text'`, `isSupported(a.anon.md)` `false` → `true`,
+  `hasSupported([a.pdf, b.txt], pdfMode off)` `false` → `true` (текстовые файлы теперь перехватываются; свои результаты интерсептор узнаёт по подписи файла);
+  e2e `intercept.spec.js` «файл без .docx проходит без панели» — `note.txt` → `архив.zip`; `tests/integration/genres.spec.js` — список каталогов корпуса
+  `GENRES` + `OFFICE_GENRES`; `tests/unit/names/dict-codec.spec.js` «декодирование быстрое» — порог прежний (< 500 мс), замер в самом тесте (лучший из трёх), а не
+  при старте словарей под нагрузкой параллельного запуска vitest (ревью WP12-A).
+- **Попутно (ревью WP12-A):** флейки-тест декодирования словарей; JSDoc `loadDicts` — при сбое курируемые имена `lexicon.js` остаются, детектор работает урезанно;
+  текст панели `warnDictFailed` ru/en вместо общего `warnGeneric`; в «Статусе» WP12-A — итог по архиву (+7 078 байт к 0.4.1).
+- **Бенчмарк** (`npm run bench`, Node 22, машина делилась с WP12-C, A/B с деревом `fb8afc0` попеременно): холодный старт 445–596 мс (HEAD) против 481–512 мс,
+  20 страниц parse+analyze 341–412 мс против 333–344 мс — в пределах шума; путь DOCX не менялся (регрессия байт-в-байт).
+- **Вне зоны (минимально):** `src/core/detect/names/dict/load.js` (только JSDoc), `tests/unit/names/dict-codec.spec.js`, `scripts/eval-genres.mjs` (`CORPUS_FORMATS`, `loadDoc`
+  через адаптер, текст результата `plain`), `tests/integration/genres.spec.js` (список каталогов), `docs/tasks.md` (раздел WP12-A). Файлы WP12-C не менялись.
+- **Не сделано:** упоминания `@Имя` в цепочках комментариев Excel не пересчитываются; заголовки «умных таблиц» (`xl/tables`) не синхронизируются с изменённой
+  ячейкой шапки; `connections.xml`, `externalLinks`, `chartEx` не разбираются; `stripEmbedded` для Excel/PowerPoint ничего не удаляет (предупреждение остаётся);
+  изображения и сканы не перехватываются (OCR — 0.6). Варианты ФИО (инициалы, падежи) и инициалы авторов при восстановлении получают значение метки — как в DOCX.
 
 ## Бэклог после 0.4
 

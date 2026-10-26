@@ -8,7 +8,7 @@ import { common } from '../ui/i18n/common.js';
 import { panel as panelDict } from '../ui/i18n/panel.js';
 import { MSG, ProtocolError, makeRequestId } from '../shared/protocol.js';
 import { saveSettingsPatch } from '../shared/settings-store.js';
-import { isSupported, resultType, mappingFileName, isInvalidatedError, makeResultName } from './files.js';
+import { isSupported, isPdfFile, resultType, mappingFileName, isInvalidatedError, makeResultName } from './files.js';
 import { Link, contextValid, readOpenShadowFlag } from './runtime.js';
 import { exclusionValue } from '../ui/preview/model.js';
 import { shouldShowOrgPolicyHint, withMaskedCompany } from '../ui/panel/org-policy.js';
@@ -56,7 +56,7 @@ async function runOnce(originals, deps) {
   const catalog = buildCatalog(settings);
   const link = new Link();
   const openShadow = await readOpenShadowFlag();
-  // обрабатываемые файлы: DOCX и PDF (если pdfMode не 'off', версия 0.3); остальные проходят как есть
+  // обрабатываемые файлы: DOCX, PDF (если pdfMode не 'off', версия 0.3), Excel, PowerPoint и текстовые (0.5); остальные проходят как есть
   const procIdx = originals.map((f, i) => (isSupported(f, settings) ? i : -1)).filter((i) => i >= 0);
   const batchId = procIdx.length > 1 ? makeRequestId('b') : null;
 
@@ -173,7 +173,8 @@ async function runOnce(originals, deps) {
     panel.setError(procIdx.indexOf(i), {
       code,
       message: known.startsWith('err.') ? err.message : known,
-      retry: code === 'HOST_UNAVAILABLE' || code === 'INTERNAL',
+      // модуль формата не загрузился (0.5, WP12-B) — можно повторить: сбой загрузки не кэшируется
+      retry: code === 'HOST_UNAVAILABLE' || code === 'INTERNAL' || code === 'FORMAT_LOAD_FAILED',
     });
   }
 
@@ -254,8 +255,11 @@ async function runOnce(originals, deps) {
         });
         stepNo++;
         // имя — по исходному файлу (хост при повторе по sha отдаёт имя прежней сессии), расширение и тип — от хоста:
-        // PDF уходит текстом .anon.md / .anon.txt (версия 0.3)
-        const ext = /\.(md|txt)$/i.exec(res.name || '')?.[0];
+        // PDF уходит текстом .anon.md / .anon.txt (версия 0.3); остальные форматы — тем же форматом (0.5)
+        // расширение от хоста — только у PDF: .txt и .md сами по себе (0.5) остаются собой
+        // у файла без расширения (распознан хостом по содержимому) — расширение результата хоста
+        const own = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|log|md|csv|json)$/i.test(originals[i].name || '');
+        const ext = isPdfFile(originals[i]) ? /\.(md|txt)$/i.exec(res.name || '')?.[0] : own ? undefined : /\.(xlsx|pptx)$/i.exec(res.name || '')?.[0];
         const file = new File([res.bytes], makeResultName(originals[i].name, settings.outputSuffix, ext ? { ext } : {}), {
           type: resultType(originals[i], res.mime),
           lastModified: Date.now(),

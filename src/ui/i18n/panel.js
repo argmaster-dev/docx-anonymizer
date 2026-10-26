@@ -14,6 +14,15 @@ export const panel = {
     warnNer: 'Модель NER не сработала ({reason}) — найденное получено правилами и словарями',
     warnPdfPages: 'Страницы {pages} не содержат текста (похоже, скан) — их содержимое не обработано и в чат не попадёт',
     warnPdfPage: 'Страница {pages} не содержит текста (похоже, скан) — её содержимое не обработано и в чат не попадёт',
+    // 0.5: словари ФИО не загрузились (WP12-A) — правила, курируемые имена и модель работают
+    warnDictFailed:
+      'Словари имён не загрузились — имена ищутся правилами и моделью, часть редких фамилий может быть пропущена. Перезапустите браузер и обработайте файл снова',
+    // 0.5 (WP12-B): Excel и JSON
+    warnXlsxCellReferenced: 'На заменённые числа ссылаются формулы ({n}): ячейки станут текстом, формулы покажут ошибку значения',
+    warnXlsxFormulaLiteral: 'Данные внутри формул ({n}) не заменяются — формулы остаются как есть. Проверьте формулы вручную',
+    warnXlsxSheetRenamed: 'Листы с данными в названии ({n}) будут переименованы, ссылки на них в формулах — тоже',
+    warnJsonNumber: 'Числа-идентификаторы в JSON ({n}) станут строками с метками',
+    warnJsonInvalid: 'Файл не разобран как JSON — обработан как обычный текст по строкам',
     pdfNote: 'Текст PDF уйдёт в чат как {ext} — скачать можно после замен',
     nerReason_MODEL_LOAD_FAILED: 'не загрузилась',
     nerReason_INFERENCE_FAILED: 'ошибка распознавания',
@@ -79,6 +88,13 @@ export const panel = {
     warnNer: 'The NER model did not run ({reason}) — results come from rules and dictionaries',
     warnPdfPages: 'Pages {pages} contain no text (probably scanned) — their content was not processed and will not reach the chat',
     warnPdfPage: 'Page {pages} contains no text (probably scanned) — its content was not processed and will not reach the chat',
+    warnDictFailed:
+      'The name dictionaries did not load — names are found by rules and the model, some rare surnames may be missed. Restart the browser and process the file again',
+    warnXlsxCellReferenced: 'Formulas refer to replaced numbers ({n}): the cells become text and the formulas will show a value error',
+    warnXlsxFormulaLiteral: 'Data inside formulas ({n}) is not replaced — formulas stay as they are. Check the formulas manually',
+    warnXlsxSheetRenamed: 'Sheets with data in their names ({n}) will be renamed, and so will the references to them in formulas',
+    warnJsonNumber: 'Identifier numbers in the JSON ({n}) will become strings with placeholders',
+    warnJsonInvalid: 'The file could not be parsed as JSON — it was processed as plain text, line by line',
     pdfNote: 'The PDF text will go to the chat as {ext} — you can download it after the replacements',
     nerReason_MODEL_LOAD_FAILED: 'failed to load',
     nerReason_INFERENCE_FAILED: 'recognition error',

@@ -1,0 +1,111 @@
+{
+  "entities": [
+    {
+      "key": "inn0",
+      "category": "INN",
+      "value": "7701001005"
+    },
+    {
+      "key": "acc0",
+      "category": "ACCOUNT",
+      "value": "40702810400000005000"
+    },
+    {
+      "key": "p0",
+      "category": "PERSON",
+      "value": "Белоусов М.А.",
+      "surname": "Белоусов"
+    },
+    {
+      "key": "inn1",
+      "category": "INN",
+      "value": "7701080198"
+    },
+    {
+      "key": "acc1",
+      "category": "ACCOUNT",
+      "value": "40702810800000005037"
+    },
+    {
+      "key": "p1",
+      "category": "PERSON",
+      "value": "Кравцова Д.О.",
+      "surname": "Кравцова"
+    },
+    {
+      "key": "inn2",
+      "category": "INN",
+      "value": "7701159384"
+    },
+    {
+      "key": "acc2",
+      "category": "ACCOUNT",
+      "value": "40702810300000005074"
+    },
+    {
+      "key": "p2",
+      "category": "PERSON",
+      "value": "Тимофеев Р.И.",
+      "surname": "Тимофеев"
+    },
+    {
+      "key": "inn3",
+      "category": "INN",
+      "value": "7701238572"
+    },
+    {
+      "key": "acc3",
+      "category": "ACCOUNT",
+      "value": "40702810700000005111"
+    },
+    {
+      "key": "p3",
+      "category": "PERSON",
+      "value": "Соболева В.И.",
+      "surname": "Соболева"
+    },
+    {
+      "key": "org0",
+      "category": "COMPANY",
+      "value": "Альтаир",
+      "opf": true
+    },
+    {
+      "key": "org1",
+      "category": "COMPANY",
+      "value": "Гранит-Строй",
+      "opf": true
+    },
+    {
+      "key": "org2",
+      "category": "COMPANY",
+      "value": "Северный ветер",
+      "opf": true
+    },
+    {
+      "key": "org3",
+      "category": "COMPANY",
+      "value": "Медиана",
+      "opf": true
+    },
+    {
+      "key": "maker",
+      "category": "PERSON",
+      "value": "Лаптев А.Н.",
+      "surname": "Лаптев"
+    },
+    {
+      "key": "author",
+      "category": "PERSON",
+      "value": "Лаптев Артём Николаевич",
+      "surname": "Лаптев",
+      "meta": true
+    }
+  ],
+  "negatives": [
+    {
+      "value": "Итого",
+      "category": "PERSON"
+    }
+  ]
+}

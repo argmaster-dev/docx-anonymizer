@@ -1,6 +1,6 @@
 # Контракты модулей
 
-Документ описывает, **что есть** в коде и **как к этому подключаться** (версия 0.3.0: MVP WP1–WP5, пакеты 0.2 WP6–WP9 и 0.3 WP10-A…D — PDF §7, восстановление файла §1.6, встроенная модель §6.8; 0.4 — §8; 0.5 WP12-A — словари в `vendor/dict` §2, общий слой OOXML и `DocumentAdapter` §9).
+Документ описывает, **что есть** в коде и **как к этому подключаться** (версия 0.3.0: MVP WP1–WP5, пакеты 0.2 WP6–WP9 и 0.3 WP10-A…D — PDF §7, восстановление файла §1.6, встроенная модель §6.8; 0.4 — §8; 0.5 WP12-A — словари в `vendor/dict` §2, общий слой OOXML и `DocumentAdapter` §9; WP12-B — Excel, PowerPoint, текстовые форматы §9.8).
 Источник истины — код с JSDoc; здесь — смысл и правила. Рамки MVP — `docs/mvp-scope.md`, цели 0.2 и 0.3 — `docs/concept-0.2.md`, `docs/concept-0.3.md`,
 ТЗ — `docs/spec-full.md`, рабочие пакеты — `docs/tasks.md`.
 
@@ -21,7 +21,13 @@ popup / content / options / restore ──port "docx"──► background (route
 | `src/core/ooxml/zip.js` | свой ZIP: чтение, детерминированная запись, байт-копия нетронутых записей (до 0.5 — `core/docx/zip.js`, там остался реэкспорт) | фундамент; WP12-A |
 | `src/core/ooxml/xml.js` | линейный токенизатор XML, (un)escape, `applyRangeEdits` (до 0.5 — `core/docx/xml.js`, реэкспорт) | фундамент; WP12-A |
 | `src/core/ooxml/model.js`, `flow.js`, `opc.js`, `serialize.js`, `adapter.js` | общий слой OOXML (§9): каркас пакета `parsePackage`, потоки/charMap/замена через раны по описанию разметки `FlowMarkup`, rels/docProps/чистка ссылок, сборка `serializePackage`, интерфейс `DocumentAdapter` | WP12-A |
-| `src/core/adapters.js` | реестр адаптеров форматов: `DOCUMENT_ADAPTERS`, `adapterForKind`, `detectAdapter` (§9) | WP12-A |
+| `src/core/adapters.js` | реестр адаптеров форматов: `DOCUMENT_ADAPTERS` (Word + лёгкие записи форматов по требованию), `adapterForKind`, `detectAdapter`, `loadAdapter`, `registerAdapter` (§9, §9.8) | WP12-A; WP12-B |
+| `src/core/ooxml/dml.js` | DrawingML и общее Excel/PowerPoint: `DML`, `parseDrawingPart` (alt-тексты), `addElementTextStreams`, `addAttrStreams`, `linkAuthors`, `embeddedWarning` (§9.8) | WP12-B |
+| `src/core/xlsx/` | Excel по требованию: `model.js` (`parseXlsx`, `SML`, части и порядок, числа-идентификаторы, колонтитулы, имена листов, формулы), `refs.js` (ссылки A1, переименование листа, `safeSheetName`), `xlsx-adapter.js` (`XLSX_ADAPTER`, сериализация `plan`, `xlsxWarnings`) (§9.8) | WP12-B |
+| `src/core/pptx/pptx-adapter.js` | PowerPoint по требованию: `parsePptx`, `PPTX_ADAPTER`, части и порядок, комментарии и авторы, таблицы слайдов (§9.8) | WP12-B |
+| `src/core/plain/plain-adapter.js` | текстовые форматы по требованию (.txt/.log/.md/.csv/.json): кодировки, CSV RFC 4180, JSON со смещениями, `PLAIN_ADAPTER` (§9.8) | WP12-B |
+| `src/core/table-blocks.js` | ячейки таблиц форматов 0.5 → `doc.blocks` для `detect/tables.js`: шапка, заголовок над шапкой (§9.8) | WP12-B |
+| `scripts/office-writer.mjs`, `scripts/gen-office-fixtures.mjs` | свой писатель OOXML (книги и презентации); фикстуры `tests/fixtures/office/` и жанры `xlsx-crm`, `xlsx-statement`, `pptx-deck`, `csv-export`, `json-export` (`npm run gen-office-fixtures`, `--check`) | WP12-B |
 | `src/core/docx/model.js` | адаптер Word поверх ooxml/: `WORDML`, части и порядок FR-25 (`docxParts`, `partRank`), авторы/alt/поля/вид абзаца; `parseDocx` → `DocModel` (`kind: 'docx'`) | фундамент; WP12-A |
 | `src/core/docx/replace.js`, `adapter.js` | `serializeDocx(doc, edits, opts)` = `serializePackage` с записями встроенных объектов Word; `DOCX_ADAPTER`, `DOCX_MIME` | фундамент; WP12-A |
 | `src/core/pdf/sniff.js` | `isPdf` — сигнатура PDF без загрузки разбора (хост; `extract.js` реэкспортирует) | WP12-A |
@@ -36,7 +42,7 @@ popup / content / options / restore ──port "docx"──► background (route
 | `src/core/detect/overlap.js` | `resolveOverlaps()` (FR-20) | фундамент |
 | `src/core/apply.js`, `mapping.js`, `placeholders.js` | `planEdits()` + `applyDecisions()` (сериализатор по `doc.kind`), маппинг, плейсхолдеры, режимы | фундамент; WP10-A |
 | `src/core/deanon.js` | `deanonymize()` (FR-36), опция `decline` (FR-37); `deanonymizeSpans()`, `findUnresolved()` — то же в координатах входа | фундамент; WP6; WP10-B |
-| `src/core/restore-doc.js` | `restoreDocx()` — восстановление файла DOCX от ИИ с сохранением форматирования, `restoreText` (FR-36а, §1.6) | WP10-B |
+| `src/core/restore-doc.js` | `restoreDocx()` — восстановление файла DOCX от ИИ с сохранением форматирования, `restoreText` (FR-36а, §1.6); `restoreDocument()` — любой формат через адаптер (§9.8) | WP10-B; WP12-B |
 | `src/core/deanon-morph.js` | склонение ФИО при восстановлении: `parsePersonValue`, `detectCase`, `declineInContext` (FR-37) | WP6 |
 | `src/core/settings.js`, `sites.js` | схема настроек (`SETTINGS_SCHEMA_VERSION` 2), дефолты, миграции; allowlist/blocklist | фундамент; WP6–WP9 |
 | `src/core/search.js`, `text-view.js` | поиск всех вхождений; данные для вкладки «Текст» | фундамент |
@@ -300,13 +306,16 @@ registerDocumentDetector('kb', (doc, entities, ctx) => [{ streamId, category: 'P
   version?, bytes?, ms?, code?}` — ответ хоста, в `TERMINAL`. `url` — только `chrome-extension://` (схема), `sha256` — hex64.
 - Файлы — чанками base64 по `CHUNK_CHARS` = 4 МиБ символов (кратно 4): `FILE_BEGIN {name, size, chunks, sha256?, origin?}` → `FILE_CHUNK {index, data}`… → `ANALYZE {settingsOverride?, batchId?}`.
   Ответ — `PROGRESS {stage, percent}`… и `ENTITIES`. Результат — `RESULT_BEGIN {name, mime, size, chunks, docId}` → `RESULT_CHUNK`… → `RESULT_END {docId, mapping, stats}`.
+  Форматы 0.5 (§9.8): `ENTITIES.kind` — `docx` | `pdf` | `xlsx` | `pptx` | `plain`; результат — тот же формат (`имя.anon.xlsx`, `.anon.csv`…), `mime` — формата
+  (книга с макросами — `application/vnd.ms-excel.sheet.macroEnabled.12`, CSV — `text/csv`, JSON — `application/json`); коды `NOT_SUPPORTED` (не распознан, не ZIP при
+  расширении Excel/PowerPoint) и `FORMAT_LOAD_FAILED` (не загрузился модуль формата; панель предлагает «Повторить»).
   PDF (0.3, §7): стадия `pdf` вместо `unzip`; `ENTITIES.kind` — `docx` | `pdf`; `RESULT_BEGIN.name` — `имя.anon.md` / `.anon.txt` (по `settings.pdfMode` сессии), `mime` —
   `text/markdown` / `text/plain`; коды `PDF_INVALID | PDF_ENCRYPTED | PDF_EMPTY | PDF_NO_TEXT`, предупреждение `PDF_PAGES_NO_TEXT {count, details: {pages}}`.
 - Клиент:
   ```js
   const client = connectClient();
   const ent = await client.analyzeFile({ name, bytes /* или base64 из readAsDataURL */, origin, onProgress });
-  // ent: {docId, name, kind /* 'docx'|'pdf' */, language, placeholderLanguage, entities[], warnings[], stats, restoredDecisions}
+  // ent: {docId, name, kind /* 'docx'|'pdf'|'xlsx'|'pptx'|'plain' */, language, placeholderLanguage, entities[], warnings[], stats, restoredDecisions}
   const res = await client.apply({ docId: ent.docId, mode, decisions, options: {keepMetadata, stripEmbedded} });
   // res: {name: 'x.anon.docx', mime, bytes: Uint8Array, mapping, stats}
   await client.request(MSG.GET_TEXT, { docId, part, from, count });          // → TEXT {paragraphs[{pid,text,spans[]}], total}
@@ -1061,7 +1070,8 @@ DocModel ──► analyze() ──► planEdits() ──► adapterForKind(doc.
 
 Реестр: `DOCUMENT_ADAPTERS` (порядок = приоритет распознавания), `adapterForKind(kind)` (модель без `kind` — Word; неизвестный — `null`, `applyDecisions` → `INTERNAL`),
 `detectAdapter(bytes, name)` — первый адаптер, чей `detect` истинен, иначе `null`. Хост (`onAnalyze`): PDF — как в 0.3; иначе `detectAdapter(...) || Word`
-(нераспознанный файл получает прежнюю ошибку Word `NOT_DOCX`). Помощники: `isZip(bytes)`, `zipHasEntry(bytes, name)` (только центральный каталог; не ZIP,
+(нераспознанный файл получает прежнюю ошибку Word `NOT_DOCX`). **С WP12-B** — см. §9.8: форматы по требованию, `detectAdapter` в два прохода (сначала
+содержимое, потом имя), нераспознанный файл с именем — `NOT_SUPPORTED`. Помощники: `isZip(bytes)`, `zipHasEntry(bytes, name)` (только центральный каталог; не ZIP,
 битый, зашифрованный — `false`), `hasExtension(name, exts)`. PDF — не адаптер: извлечение асинхронное и требует pdf.js из окружения (§7).
 
 ### 9.2. Каркас пакета (`ooxml/model.js`)
@@ -1141,3 +1151,79 @@ markup, push)` — замена через раны (§6.3 п.2–4): новый
 - **Вне ядра, но затронуто:** `content/files.js` (`fileKind`, `isSupported`, `makeResultName`, `resultType`), `host.makeResultName`, `restore-doc.js` (восстановление
   файла через адаптер: `parse` + `serialize` вместо `parseDocx`/`serializeDocx`), `ENTITIES.kind` и схема протокола (`docx|pdf` → + `xlsx|pptx`).
 - **Скрытые данные (WP12-D):** счётчики комментариев, правок, скрытого текста — хуками `onElement` при разборе (`ooxml/hidden.js`), без второго прохода.
+
+### 9.8. Excel, PowerPoint и текстовые форматы (версия 0.5, WP12-B, `docs/concept-0.5.md` п. 2–4, К1–К4, К13, К14)
+
+```
+bytes, name ──► detectAdapter: проход 1 — только содержимое (ZIP с word/document.xml | xl/workbook.xml | ppt/presentation.xml), проход 2 — имя
+            ──► Word: сразу │ xlsx/pptx/plain: await loadAdapter(entry) — import('./xlsx/xlsx-adapter.js') → offscreen/chunks/xlsx-adapter-*.js
+            ──► adapter.parse(bytes, name) → DocModel {kind, blocks (таблицы), viewParts, …} ──► analyze ──► adapter.analysisWarnings(doc, groups)
+            ──► applyDecisions → adapterForKind(doc.kind).serialize (уже загружен) → {bytes, mime}
+```
+
+**Модули по требованию и реестр** (`core/adapters.js`). Word — в коде воркера; Excel, PowerPoint и текстовые форматы — лёгкие записи `LazyAdapterEntry
+{kind, extensions, mime, detect, load: () => import(...)}`: в `worker.js` попадают только они и `detect` (через `zipHasEntry`/`hasExtension`), код формата —
+`offscreen/chunks/{xlsx,pptx,plain}-adapter-*.js` и общий `chunk-*.js` (`ooxml/dml.js`, `table-blocks.js`); сборка печатает каждый модуль по требованию
+(`scripts/build.mjs`), `pack.spec.js` проверяет, что их нет в коде воркера, и бюджет модулей форматов (≤ 120 КиБ вместе). `loadAdapter(entryOrKind)` —
+полный адаптер (Word — сразу; формат — после загрузки, результат кэшируется, сбой — нет: следующий файл пробует снова). Модуль формата при загрузке сам
+вызывает `registerAdapter(adapter)` — так `adapterForKind` находит его и при прямом импорте (тесты, скрипты). Синхронный `applyDecisions` берёт уже
+загруженный адаптер; не загружен — `INTERNAL`. В IIFE-бандле страницы восстановления esbuild встраивает те же модули (динамический `import()` без
+разделения кода) — страница работает без сети и без чанков.
+
+**Хост** (`offscreen/host.js`): `entry = detectAdapter(bytes, name) || (name ? null : Word)`; нет — `CoreError('NOT_SUPPORTED')`; модуль формата —
+`env.loadAdapter || loadAdapter`, сбой → `CoreError('FORMAT_LOAD_FAILED')` (панель: текст `err.FORMAT_LOAD_FAILED`, кнопка «Повторить»); `adapter.parse(bytes, name)`;
+после `analyze` (и `ADD_ENTITY`) — `adapter.analysisWarnings?.(doc, groups)` в `warnings`. Имя результата — тот же формат (`makeResultName`: `реестр.xlsx` →
+`реестр.anon.xlsx`, без известного расширения — `.docx`, книга/презентация без расширения — `.xlsx`/`.pptx`). DOCX: битый `.docx` — по-прежнему `NOT_DOCX`.
+
+**Интерфейс** (дополнения к §9.1): `parse(bytes, name?)` (имя нужно текстовым форматам); `serialize(...)` может вернуть `mime` (книга с макросами, CSV, JSON) —
+`applyDecisions` берёт `out.mime || adapter.mime`; необязательный `analysisWarnings(doc, groups) → {code, count}[]`. Общий сериализатор: необязательный
+`PackageSerializeDescription.plan(doc, byStream, pushRaw)` — правки, которые строит адаптер (удаляет свои потоки из `byStream`, кладёт правки диапазонов XML).
+
+| Вид | Части (порядок обхода FR-25) | Потоки |
+|---|---|---|
+| `xlsx` | `sharedStrings` → листы → примечания → цепочки комментариев → `persons` → надписи `drawings` → диаграммы → `workbook` → кэш сводных → `*.rels` → `docProps` | общие и inline-строки (`SML`: `si`/`is`, ран `r`, текст `t`, без `rPh`); `attr`: `cell-number` (число-идентификатор `<v>` из 6–15 цифр, со своим абзацем и `pid`), `cell-cache` (кэш строковой формулы `t="str"`, кэш диаграммы `<c:v>` в `c:strCache`, `<s v>` сводной), `formula-literal` (строковый литерал формулы длиннее двух символов — только поиск), `header-footer` (куски колонтитула между кодами `&L &C &R &P &N &D &T &F &A &"шрифт" &12 &K…`), `sheet-name`, `alt` (ссылка `display`/`tooltip`, alt надписи), `author` (примечание; не `tc={…}`), `author`/`author-id` (`persons`: `displayName`, `userId`), `fileSharing/@userName` |
+| `pptx` | слайды → заметки → комментарии (обычные и `modernComment_*`) → `commentAuthors`/`authors` → SmartArt (`diagrams/data*`, `drawing*`) → диаграммы → макеты и образцы → `*.rels` → `docProps` | DrawingML `DML` (`a:p`/`a:r`/`a:t`, поле `a:fld`, разрыв `a:br` между ранами, без `xml:space`); обычный комментарий — `<p:text>` в `<p:cm>` (свой `FlowMarkup`); `alt` — `cNvPr/@descr`, `@title`, у рисунка и `@name`; авторы — `author`, `initials`, `author-id` (связь по элементу, FR-11) |
+| `plain` (`.txt` `.log` `.md` `.csv` `.json`) | одна «часть» `word/document.xml` (как текстовая модель PDF) | строка файла (txt/log/md), ячейка CSV, строковое значение JSON; число JSON под ключом-идентификатором — `attr`/`json-number` |
+
+**Excel — правки** (`xlsx-adapter.js` `plan`): число-идентификатор → `<c … t="inlineStr"><is><t>метка</t></is></c>` (у ячейки с формулой — `t="str"` и кэш `<v>`),
+прочие атрибуты (`s` — стиль) не меняются; имя листа → `safeSheetName` (без `[ ] : * ? / \`, ≤ 31 символа, не пустое, без повтора — « (2)»), ссылки на лист
+во всех формулах (`<f>`, `definedName`, `<c:f>` диаграмм, `formula`/`formula1`/`formula2`/`xm:f`), ссылке `hyperlink/@location` и `worksheetSource/@sheet`
+переименовываются согласованно (`refs.js renameSheets`: имя всегда в апострофах, литералы и другие книги `[1]Лист!` — нет); литерал формулы не меняется;
+колонтитул — «&» нового текста удваивается; после правки ячеек или имени листа — `calcPr fullCalcOnLoad="1"` (Excel и LibreOffice с пересчётом при
+открытии получают значения формул от новых ячеек). Встроенные объекты (`xl/embeddings`, `xl/media`) — предупреждение `EMBEDDED_NOT_PROCESSED`,
+`stripEmbedded` их не удаляет (на них ссылаются листы; у PowerPoint — так же). Предупреждения `analysisWarnings`: `XLSX_CELL_REFERENCED {count}` —
+число с сущностью в ячейке, на которую ссылаются формулы или диаграммы (граф ссылок `refs.js`: A1-ссылки вне литералов, столбцы и строки целиком,
+общая формула — прямоугольником на весь диапазон, имена книги — если имя встречается в формулах; грубо), `XLSX_FORMULA_LITERAL {count}`, `XLSX_SHEET_RENAMED {count}`.
+
+**Таблицы для заголовков** (`table-blocks.js`, `detect/tables.js` без правок): лист Excel, таблица слайда, CSV → `doc.blocks[] {pid, kind: 'cell', text, table: {index, row, col}}`.
+Шапка — первая строка (из первых 10) с ≥ 3 ячейками без цифр (CSV — первая строка с ≥ 2): её ячейки получают служебные `pid` `h<N>` без потока
+(иначе «Телефон» справа от «ФИО» получил бы «метку слева» и стал ФИО по правилу анкеты), строки над шапкой (заголовок листа «Реестр … 2026») — своя
+таблица `title<N>` (без «:» — `tables.js` делит ключ по нему). Объединённая ячейка шапки повторяется над каждым столбцом диапазона; общая строка Excel
+в данных — по первому вхождению. JSON: пара «ключ | значение» — строка своей таблицы, ключ (латинский — переведённый `keyLabel`: `inn` → «ИНН»,
+`phone` → «Телефон»…) — метка строки.
+
+**Текстовые форматы**: кодировка — BOM UTF-8/UTF-16, иначе строгий UTF-8, иначе Windows-1251 (таблица записи — из декодера платформы); результат —
+та же кодировка и BOM. CSV — разделитель `;`/`,`/табуляция по первым 20 записям (одинаковое число в ≥ 80 % записей), кавычки RFC 4180; изменённая ячейка
+в кавычках, если была в кавычках или в ней разделитель, кавычка, перевод строки. JSON — свой разбор со смещениями (`scanJson`), меняются только строки
+(`JSON.stringify` значения) и числа-идентификаторы под ключом из `keyLabel` (`JSON_NUMBER_AS_STRING {count}`); битый JSON — по строкам, `JSON_INVALID`.
+`.txt/.log/.md` — правки по смещениям строк, остальное символ в символ.
+
+**Восстановление** (`restore-doc.js`): `restoreDocument(bytes, mapping, {adapter, name?, decline?})` — те же строгие правила, что `restoreDocx` (§1.6;
+`restoreDocx` = общая часть + `serializeDocx`, байты DOCX не изменились — снимок регрессии); литералы формул пропускаются; лист, переименованный при
+анонимизации, получает значение метки (ссылки — тоже). Страница восстановления: `aiFileKind` → `docx | xlsx | pptx | csv | json | text`; xlsx/pptx/csv/json —
+`restoreDocument` с адаптером (`loadAdapter`), `.md/.txt/.log` — как текст (`restoreText`, как в 0.3).
+
+**Перехват и интерфейс**: `content/files.js` — `fileKind` → `docx | pdf | xlsx | pptx | text | null` (по расширению; Excel/PowerPoint — и по MIME без
+расширения), изображения и сканы не перехватываются (OCR — 0.6; текст `err.PDF_NO_TEXT` — «распознавание сканов — в следующей версии»);
+`makeResultName`/`mappingFileName`/`resultType` — тот же формат, MIME исходника или от хоста; панель — тексты предупреждений `WARN_KEYS` (`DICT_FAILED`,
+`XLSX_*`, `JSON_*`), прочие коды — `warnGeneric`. Вкладка «Текст»: без `part` — `doc.viewParts` (Excel: общие строки и листы; PowerPoint: слайды и заметки).
+
+**Фикстуры и тесты**: `tests/fixtures/office/` (6 книг, 4 презентации, 3 CSV, 1 JSON + gold), жанры корпуса (`eval-genres.mjs`: `CORPUS_FORMATS`, `loadDoc`
+через адаптер); `tests/integration/{xlsx,pptx,host-formats}.spec.js`, `tests/unit/{text-formats,restore-ooxml,xlsx-refs}.spec.js`, e2e `formats.spec.js`
+и `nfr.spec.js` (модули форматов — только `chrome-extension://`, один раз). LibreOffice (локально, `SKIP_LIBREOFFICE`): книги и презентации открываются
+без восстановления; книги — с пересчётом формул при открытии (`OOXMLRecalcMode = 0` в профиле теста) без `#REF!`.
+
+**Не сделано / ограничения**: упоминания `@Имя` в цепочке комментариев Excel (`<mention startIndex length>`) не пересчитываются; столбцы умных таблиц
+(`xl/tables/*.xml tableColumn/@name`) не меняются — сущность в заголовке умной таблицы рассогласует его с ячейкой; подключения (`connections.xml`),
+внешние книги (`externalLinks` — кэш значений) и `chartEx` не разбираются; удаление встроенных объектов (`stripEmbedded`) для Excel и PowerPoint не делается;
+скрытые листы, строки и слайды обрабатываются как обычные (счётчики и удаление — WP12-D).

@@ -1,0 +1,55 @@
+{
+  "entities": [
+    {
+      "key": "p",
+      "category": "PERSON",
+      "value": "Гаврилов Евгений Сергеевич",
+      "surname": "Гаврилов"
+    },
+    {
+      "key": "tel",
+      "category": "PHONE",
+      "value": "+7 916 204-31-17"
+    },
+    {
+      "key": "mail",
+      "category": "EMAIL",
+      "value": "e.gavrilov@example.com"
+    },
+    {
+      "key": "inn",
+      "category": "INN",
+      "value": "7701005000"
+    },
+    {
+      "key": "org",
+      "category": "COMPANY",
+      "value": "Гранит-Строй",
+      "opf": true
+    },
+    {
+      "key": "n",
+      "category": "PERSON",
+      "value": "Ершова Алина Петровна",
+      "surname": "Ершова"
+    },
+    {
+      "key": "ntel",
+      "category": "PHONE",
+      "value": "+7 903 118-42-65"
+    },
+    {
+      "key": "author",
+      "category": "PERSON",
+      "value": "Котов Игорь",
+      "surname": "Котов",
+      "meta": true
+    }
+  ],
+  "negatives": [
+    {
+      "value": "План на ноябрь",
+      "category": "PERSON"
+    }
+  ]
+}

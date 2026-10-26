@@ -1,6 +1,7 @@
 // applyDecisions: группы с решениями → байты результата + маппинг (FR-25–FR-28).
 // Сериализатор — адаптера формата по doc.kind (DocumentAdapter, ТЗ §5.3, с 0.5 — WP12-A, src/core/adapters.js): DOCX → .docx
-// (serializeDocx); текстовая модель PDF (версия 0.3, doc.kind === 'text') → Markdown/текст (serializeText).
+// (serializeDocx); текстовая модель PDF (версия 0.3, doc.kind === 'text') → Markdown/текст (serializeText); Excel, PowerPoint и
+// текстовые форматы (WP12-B) — адаптеры по требованию: к вызову applyDecisions хост уже загрузил их (loadAdapter), иначе INTERNAL.
 import { adapterForKind } from './adapters.js';
 import { CoreError } from './errors.js';
 import { serializeText, TEXT_MIME } from './text/serialize.js';
@@ -83,7 +84,8 @@ export function applyDecisions(doc, groups, options = {}) {
     const adapter = adapterForKind(/** @type {any} */ (doc).kind);
     if (!adapter) throw new CoreError('INTERNAL', 'Нет адаптера для вида документа');
     out = adapter.serialize(doc, edits, { keepMetadata: options.keepMetadata, stripEmbedded: options.stripEmbedded });
-    mime = adapter.mime;
+    // MIME — адаптера; сериализатор может уточнить его по документу (книга с макросами, CSV/JSON у текстовых форматов, WP12-B)
+    mime = /** @type {any} */ (out).mime || adapter.mime;
   }
   const { bytes, changedParts, removedParts } = out;
 

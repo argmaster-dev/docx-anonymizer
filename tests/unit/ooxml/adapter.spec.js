@@ -63,13 +63,17 @@ describe('адаптер Word', () => {
 });
 
 describe('реестр адаптеров', () => {
-  it('в 0.5 до WP12-B — только Word; adapterForKind: модель без kind — Word, неизвестный вид — null', () => {
-    expect(DOCUMENT_ADAPTERS.map((a) => a.kind)).toEqual(['docx']);
+  // WP12-B: реестр — Word и три формата по требованию (Excel, PowerPoint, текстовые); до загрузки модуля формата
+  // adapterForKind для него — null (applyDecisions → INTERNAL), распознавание — лёгкой записью реестра
+  it('0.5: Word и форматы по требованию; adapterForKind: модель без kind — Word, неизвестный или не загруженный вид — null', () => {
+    expect(DOCUMENT_ADAPTERS.map((a) => a.kind)).toEqual(['docx', 'xlsx', 'pptx', 'plain']);
     expect(adapterForKind('docx')).toBe(DOCX_ADAPTER);
     expect(adapterForKind(undefined)).toBe(DOCX_ADAPTER);
     expect(adapterForKind('xlsx')).toBeNull();
+    expect(adapterForKind('odt')).toBeNull();
     expect(detectAdapter(makeDocx(para(run('x'))), 'x.bin')).toBe(DOCX_ADAPTER);
-    expect(detectAdapter(enc('просто текст'), 'notes.txt')).toBeNull();
+    expect(detectAdapter(enc('просто текст'), 'notes.txt')?.kind).toBe('plain');
+    expect(detectAdapter(enc('просто текст'), 'notes.bin')).toBeNull();
   });
 
   it('помощники: isZip, zipHasEntry (битый ZIP — false), hasExtension без учёта регистра', () => {

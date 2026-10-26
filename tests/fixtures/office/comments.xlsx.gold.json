@@ -1,0 +1,61 @@
+{
+  "entities": [
+    {
+      "key": "ex1",
+      "category": "PERSON",
+      "value": "Лаптев А.Н.",
+      "surname": "Лаптев"
+    },
+    {
+      "key": "ex2",
+      "category": "PERSON",
+      "value": "Федотова К.А.",
+      "surname": "Федотова"
+    },
+    {
+      "key": "author",
+      "category": "PERSON",
+      "value": "Тимофеев Роман",
+      "surname": "Тимофеев"
+    },
+    {
+      "key": "tel",
+      "category": "PHONE",
+      "value": "+7 925 610-77-08"
+    },
+    {
+      "key": "mail",
+      "category": "EMAIL",
+      "value": "m.belousov@example.net"
+    },
+    {
+      "key": "pass",
+      "category": "PASSPORT",
+      "value": "4512 563019"
+    },
+    {
+      "key": "call",
+      "category": "PERSON",
+      "value": "Кравцова Дарья Олеговна",
+      "surname": "Кравцова"
+    },
+    {
+      "key": "tc",
+      "category": "PERSON",
+      "value": "Соболева Виктория",
+      "surname": "Соболева"
+    },
+    {
+      "key": "tcmail",
+      "category": "PERSON",
+      "value": "v.soboleva@example.net"
+    },
+    {
+      "key": "box",
+      "category": "PERSON",
+      "value": "Соболева Виктория Игоревна",
+      "surname": "Соболева"
+    }
+  ],
+  "negatives": []
+}

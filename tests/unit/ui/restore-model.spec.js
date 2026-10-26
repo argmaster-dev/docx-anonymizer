@@ -10,6 +10,13 @@ describe('aiFileKind', () => {
     expect(aiFileKind('answer.md')).toBe('text');
     expect(aiFileKind('answer.markdown')).toBe('text');
     expect(aiFileKind('answer.TXT')).toBe('text');
+    // 0.5 (WP12-B): Excel, PowerPoint, CSV и JSON — через адаптер формата; журнал — как текст
+    expect(aiFileKind('ответ.xlsx')).toBe('xlsx');
+    expect(aiFileKind('ответ.XLSM')).toBe('xlsx');
+    expect(aiFileKind('слайды.pptx')).toBe('pptx');
+    expect(aiFileKind('выгрузка.csv')).toBe('csv');
+    expect(aiFileKind('выгрузка.json')).toBe('json');
+    expect(aiFileKind('app.log')).toBe('text');
     expect(aiFileKind('answer.pdf')).toBeNull();
     expect(aiFileKind('docx')).toBeNull();
     expect(aiFileKind('')).toBeNull();
@@ -85,6 +92,10 @@ describe('mimeFor', () => {
     expect(mimeFor('a.restored.docx')).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     expect(mimeFor('a.restored.docm')).toBe('application/vnd.ms-word.document.macroEnabled.12');
     expect(mimeFor('a.restored.md')).toMatch(/^text\/markdown/);
+    expect(mimeFor('a.restored.xlsx')).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect(mimeFor('a.restored.pptx')).toBe('application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    expect(mimeFor('a.restored.csv')).toBe('text/csv');
+    expect(mimeFor('a.restored.json')).toBe('application/json');
     expect(mimeFor('a.restored.txt')).toMatch(/^text\/plain/);
     expect(mimeFor('a.bin')).toBe('application/octet-stream');
   });

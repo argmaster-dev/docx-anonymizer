@@ -1,0 +1,177 @@
+{
+  "entities": [
+    {
+      "key": "p0",
+      "category": "PERSON",
+      "value": "Гаврилов Евгений Сергеевич",
+      "surname": "Гаврилов"
+    },
+    {
+      "key": "tel0",
+      "category": "PHONE",
+      "value": "+7 916 204-31-17"
+    },
+    {
+      "key": "mail0",
+      "category": "EMAIL",
+      "value": "e.gavrilov@example.com"
+    },
+    {
+      "key": "inn0",
+      "category": "INN",
+      "value": "770100000079"
+    },
+    {
+      "key": "p1",
+      "category": "PERSON",
+      "value": "Ершова Алина Петровна",
+      "surname": "Ершова"
+    },
+    {
+      "key": "tel1",
+      "category": "PHONE",
+      "value": "79031184265"
+    },
+    {
+      "key": "mail1",
+      "category": "EMAIL",
+      "value": "alina.ershova@example.org"
+    },
+    {
+      "key": "inn1",
+      "category": "INN",
+      "value": "770100137115"
+    },
+    {
+      "key": "p2",
+      "category": "PERSON",
+      "value": "Белоусов Максим Андреевич",
+      "surname": "Белоусов"
+    },
+    {
+      "key": "tel2",
+      "category": "PHONE",
+      "value": "+7 925 610-77-08"
+    },
+    {
+      "key": "mail2",
+      "category": "EMAIL",
+      "value": "m.belousov@example.net"
+    },
+    {
+      "key": "inn2",
+      "category": "INN",
+      "value": "770100274256"
+    },
+    {
+      "key": "p3",
+      "category": "PERSON",
+      "value": "Кравцова Дарья Олеговна",
+      "surname": "Кравцова"
+    },
+    {
+      "key": "tel3",
+      "category": "PHONE",
+      "value": "79153421990"
+    },
+    {
+      "key": "mail3",
+      "category": "EMAIL",
+      "value": "darya.kravtsova@example.com"
+    },
+    {
+      "key": "inn3",
+      "category": "INN",
+      "value": "770100411304"
+    },
+    {
+      "key": "p4",
+      "category": "PERSON",
+      "value": "Тимофеев Роман Ильич",
+      "surname": "Тимофеев"
+    },
+    {
+      "key": "tel4",
+      "category": "PHONE",
+      "value": "+7 926 455-03-21"
+    },
+    {
+      "key": "mail4",
+      "category": "EMAIL",
+      "value": "r.timofeev@example.org"
+    },
+    {
+      "key": "inn4",
+      "category": "INN",
+      "value": "770100548450"
+    },
+    {
+      "key": "p5",
+      "category": "PERSON",
+      "value": "Соболева Виктория Игоревна",
+      "surname": "Соболева"
+    },
+    {
+      "key": "tel5",
+      "category": "PHONE",
+      "value": "79778016234"
+    },
+    {
+      "key": "mail5",
+      "category": "EMAIL",
+      "value": "v.soboleva@example.net"
+    },
+    {
+      "key": "inn5",
+      "category": "INN",
+      "value": "770100685591"
+    },
+    {
+      "key": "author",
+      "category": "PERSON",
+      "value": "Зуев Павел",
+      "surname": "Зуев",
+      "meta": true
+    },
+    {
+      "key": "footer",
+      "category": "PERSON",
+      "value": "Мельникова О.В.",
+      "surname": "Мельникова"
+    },
+    {
+      "key": "org0",
+      "category": "COMPANY",
+      "value": "Альтаир",
+      "opf": true
+    },
+    {
+      "key": "org1",
+      "category": "COMPANY",
+      "value": "Гранит-Строй",
+      "opf": true
+    },
+    {
+      "key": "org2",
+      "category": "COMPANY",
+      "value": "Северный ветер",
+      "opf": true
+    },
+    {
+      "key": "org3",
+      "category": "COMPANY",
+      "value": "Медиана",
+      "opf": true
+    }
+  ],
+  "negatives": [
+    {
+      "value": "Клиент",
+      "category": "PERSON"
+    },
+    {
+      "value": "Партнёр",
+      "category": "PERSON"
+    }
+  ]
+}

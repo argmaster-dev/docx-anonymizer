@@ -98,15 +98,25 @@ export function mixedValueWarnings(mapping, tokens) {
 /* ---------- Файл от ИИ (WP10-B, FR-36а) ---------- */
 
 /**
- * Вид файла от ИИ по имени: DOCX восстанавливается с сохранением форматирования, Markdown/текст — как текст.
+ * Вид файла от ИИ по имени: DOCX восстанавливается с сохранением форматирования; Excel, PowerPoint, CSV и JSON (0.5, WP12-B) —
+ * через адаптер формата с сохранением структуры (строгие правила FR-36а); Markdown, текст и журнал — как текст.
  * @param {string} name
- * @returns {'docx'|'text'|null}
+ * @returns {'docx'|'xlsx'|'pptx'|'csv'|'json'|'text'|null}
  */
 export function aiFileKind(name) {
   const ext = extOf(name);
   if (ext === '.docx' || ext === '.docm') return 'docx';
-  if (ext === '.md' || ext === '.markdown' || ext === '.txt') return 'text';
+  if (ext === '.xlsx' || ext === '.xlsm') return 'xlsx';
+  if (ext === '.pptx' || ext === '.pptm') return 'pptx';
+  if (ext === '.csv') return 'csv';
+  if (ext === '.json') return 'json';
+  if (ext === '.md' || ext === '.markdown' || ext === '.txt' || ext === '.log') return 'text';
   return null;
+}
+
+/** Вид адаптера ядра (core/adapters.js) для файла от ИИ, который восстанавливается через адаптер; иначе null. */
+export function aiFileAdapterKind(kind) {
+  return kind === 'xlsx' || kind === 'pptx' ? kind : kind === 'csv' || kind === 'json' ? 'plain' : null;
 }
 
 /** Суффикс анонимизированного файла по умолчанию (настройка outputSuffix). */
@@ -155,7 +165,20 @@ export function mimeFor(name) {
     case '.markdown':
       return 'text/markdown;charset=utf-8';
     case '.txt':
+    case '.log':
       return 'text/plain;charset=utf-8';
+    case '.xlsx':
+      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    case '.xlsm':
+      return 'application/vnd.ms-excel.sheet.macroEnabled.12';
+    case '.pptx':
+      return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    case '.pptm':
+      return 'application/vnd.ms-powerpoint.presentation.macroEnabled.12';
+    case '.csv':
+      return 'text/csv';
+    case '.json':
+      return 'application/json';
     default:
       return 'application/octet-stream';
   }

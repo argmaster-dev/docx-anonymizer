@@ -15,6 +15,8 @@ export const common = {
     'stage.zip': 'Сборка файла…',
     'stage.sending': 'Передача…',
     'err.NOT_DOCX': 'Файл повреждён или не является .docx',
+    'err.NOT_SUPPORTED': 'Формат файла не поддерживается или файл повреждён. Обрабатываются .docx, .xlsx, .pptx, PDF с текстом, .txt, .md, .csv, .json и .log',
+    'err.FORMAT_LOAD_FAILED': 'Не удалось загрузить модуль обработки этого формата. Нажмите «Повторить»; если не поможет — перезапустите браузер',
     'err.ENCRYPTED': 'Файл зашифрован паролем или имеет формат .doc — обработка невозможна',
     'err.TOO_LARGE': 'Файл больше {limit} МБ',
     'err.TOO_LARGE_PAGES': 'В PDF {pages} страниц — больше предела {limit}',
@@ -24,7 +26,8 @@ export const common = {
     'err.PDF_INVALID': 'Файл повреждён или не является PDF',
     'err.PDF_ENCRYPTED': 'PDF защищён паролем — обработка невозможна. Снимите пароль и загрузите файл снова',
     'err.PDF_EMPTY': 'В PDF нет страниц',
-    'err.PDF_NO_TEXT': 'В PDF нет текстового слоя — похоже, это скан. Сканы пока не обрабатываются: распознайте текст (OCR) или загрузите как есть',
+    'err.PDF_NO_TEXT':
+      'В PDF нет текстового слоя — похоже, это скан. Распознавание сканов — в следующей версии; пока распознайте текст (OCR) сами или загрузите как есть',
     'err.INTERNAL': 'Внутренняя ошибка обработки',
     'tooltip.on': 'DOCX Anonymizer — перехват включён на {host}',
     'tooltip.off': 'DOCX Anonymizer — перехват выключен',
@@ -48,6 +51,9 @@ export const common = {
     'stage.zip': 'Building file…',
     'stage.sending': 'Transferring…',
     'err.NOT_DOCX': 'The file is damaged or is not a .docx',
+    'err.NOT_SUPPORTED':
+      'The file format is not supported or the file is damaged. Supported: .docx, .xlsx, .pptx, PDF with text, .txt, .md, .csv, .json and .log',
+    'err.FORMAT_LOAD_FAILED': 'Could not load the module for this file format. Press "Retry"; if that does not help, restart the browser',
     'err.ENCRYPTED': 'The file is password-protected or in the legacy .doc format — it cannot be processed',
     'err.TOO_LARGE': 'The file is larger than {limit} MB',
     'err.TOO_LARGE_PAGES': 'The PDF has {pages} pages — more than the limit of {limit}',
@@ -57,7 +63,8 @@ export const common = {
     'err.PDF_INVALID': 'The file is damaged or is not a PDF',
     'err.PDF_ENCRYPTED': 'The PDF is password-protected — it cannot be processed. Remove the password and upload the file again',
     'err.PDF_EMPTY': 'The PDF has no pages',
-    'err.PDF_NO_TEXT': 'The PDF has no text layer — it looks like a scan. Scans are not processed yet: run OCR or upload it as is',
+    'err.PDF_NO_TEXT':
+      'The PDF has no text layer — it looks like a scan. Scan recognition is coming in the next version; for now run OCR yourself or upload it as is',
     'err.INTERNAL': 'Internal processing error',
     'tooltip.on': 'DOCX Anonymizer — interception is on for {host}',
     'tooltip.off': 'DOCX Anonymizer — interception is off',
