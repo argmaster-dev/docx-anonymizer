@@ -5,3 +5,6 @@ docs
 dist-e2e
 src/core/detect/names/dict/ru-*.js
 src/core/detect/names/dict/en-*.js
+# снимки покрытия (scripts/coverage-grid.mjs) — генерируемые, компактный JSON
+tests/fixtures/coverage/corpus.json
+tests/fixtures/coverage/prev-*.json
