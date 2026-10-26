@@ -1,6 +1,7 @@
 // WP7, К4: время анализа ~300-страничного синтетического текста со словарным детектором ≤ 130 % от времени без него.
 // 2 400 абзацев × ~65 слов из фиксированного словаря, ~8 % слов с заглавной, ~1 % — пары «Имя Фамилия».
-// Прогрев, затем медиана из 3 прогонов для dictNames: false и true. Детекторы — полный встроенный набор.
+// Прогрев, затем минимум из 5 чередующихся прогонов для dictNames: false и true (устойчиво к нагрузке соседних тестов:
+// разовый всплеск нагрузки попадает в один прогон, а не в отношение; 0.5, WP12-C). Детекторы — полный встроенный набор.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { analyze } from '../../../src/core/detect/runner.js';
 import { clearDetectors, registerBuiltinDetectors } from '../../../src/core/index.js';
@@ -52,14 +53,19 @@ function corpus(paragraphs, seed) {
   return out;
 }
 
-async function median3(doc, settings) {
-  const times = [];
-  for (let i = 0; i < 3; i++) {
-    const t0 = performance.now();
-    await analyze(doc, settings);
-    times.push(performance.now() - t0);
+/** Минимум времени из `n` прогонов, режимы чередуются: оба видят одну и ту же нагрузку машины. */
+async function minTimes(doc, a, b, n = 5) {
+  let ta = Infinity;
+  let tb = Infinity;
+  for (let i = 0; i < n; i++) {
+    let t0 = performance.now();
+    await analyze(doc, a);
+    ta = Math.min(ta, performance.now() - t0);
+    t0 = performance.now();
+    await analyze(doc, b);
+    tb = Math.min(tb, performance.now() - t0);
   }
-  return times.sort((a, b) => a - b)[1];
+  return [ta, tb];
 }
 
 describe('К4: производительность словарного детектора', () => {
@@ -75,8 +81,7 @@ describe('К4: производительность словарного дет�
     // прогрев: JIT, декодирование словарей, мемо
     await analyze(doc, off);
     await analyze(doc, on);
-    const tOff = await median3(doc, off);
-    const tOn = await median3(doc, on);
+    const [tOff, tOn] = await minTimes(doc, off, on);
     const ratio = tOn / tOff;
     console.log(`К4: без словаря ${tOff.toFixed(0)} мс, со словарём ${tOn.toFixed(0)} мс, отношение ${ratio.toFixed(3)}`);
     expect(ratio).toBeLessThanOrEqual(1.3);

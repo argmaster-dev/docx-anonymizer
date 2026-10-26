@@ -99,8 +99,11 @@ export function docSeriesTail(text, start, ctx) {
  * @param {Fmt[]} fmts
  * @param {string} [v] имя проверки для `validator`
  * @param {Function} [more] дополнительный поиск «метка → значение»
+ * @param {(digits: string) => boolean} [fb] запасной путь документа: номер сразу после его метки, не прошедший формат, — тоже
+ *   этот документ (`labeled`): человек явно написал «загранпаспорт», значит это номер загранпаспорта (в 0.4 такие номера
+ *   закрывались как PASSPORT / ОГРН; без запасного пути метка документа делала их «чужими» для ИНН и ОГРН и они оставались открытыми)
  */
-function detector(id, fmts, v, more) {
+function detector(id, fmts, v, more, fb) {
   const bareFmt = fmts.some((f) => f.bare && !f.only);
   return (text, ctx) => {
     if (ctx?.stream?.attrKind === 'rel-target') return []; // адрес ссылки — целиком URL (FR-13)
@@ -127,6 +130,14 @@ function detector(id, fmts, v, more) {
       }
     }
     if (more) for (const c of more(text, ctx)) if (taken.free(c.start, c.end)) push(c);
+    if (fb)
+      for (const [p] of valueStarts(id, text, ctx)) {
+        NUMVAL.lastIndex = p;
+        const val = NUMVAL.exec(text)?.[0];
+        const digits = val?.replace(/\D/g, '') || '';
+        if (digits.length < 5 || !fb(digits) || !taken.free(p, p + val.length) || docContext(text, p, ctx) !== id) continue;
+        push(cand(p, p + val.length, 'labeled'));
+      }
     return out.sort((a, b) => a.start - b.start);
   };
 }
@@ -140,6 +151,8 @@ const MARK = '(?:№|#|N[oо]\\.|Nr\\.|N[oо]?(?![\\p{L}]))';
 const FILL = rx(`(?:${SP}+(?:[\\p{L}«»"'().-]+|${DATE_SRC}(?:${SP}?г\\.)?)){0,3}?(?=${SP}*${MARK})`, 'iuy');
 // после метки — пояснение в скобках («Вероисповедание (при желании): …»), затем «:» / тире и «№»
 const GAP = rx(`${SP}*(?:\\([^()\\n]{1,30}\\)${SP}*)?(?:[:–—-]${SP}*)?(?:${MARK}${SP}*:?${SP}*)?`, 'iuy');
+/** Номер после метки документа для запасного пути: группы цифр через пробел, дефис или «№», впереди — серия из двух букв. */
+const NUMVAL = rx(`(?:[A-ZА-ЯЁ]{2}${SP}?(?:№${SP}*)?)?\\d+(?:(?:${SP}|${DASH}|${SP}?№${SP}?)\\d+){0,4}`, 'uy');
 const TOK = rx('[\\p{L}\\p{N}]+(?:[-/._:№\\u2010-\\u2013\\u00ad][\\p{L}\\p{N}]+)*', 'uy');
 /** Слово-номер в самой метке: «номер заказа», «код клиента», «ИКЗ» — знак «№» после неё не обязателен. */
 const NUMBERISH = /номер|number|код|\bno\b|\bid\b|икз|кусп|уид|енп|№|#/iu;
@@ -357,11 +370,17 @@ const ipv4Loose = (v) => {
 
 /** Потоковые детекторы категорий 0.5 (кроме частей паспорта — `docs.js`). */
 export const PAPER_DETECTORS = {
-  INTL_PASSPORT: detector('INTL_PASSPORT', [f(`\\d{2}${NO}\\d{7}`, { doc: true, chk: (v) => passport(v.replace(/\D/g, '')) })], 'passport'),
-  DRIVER_LICENSE: detector('DRIVER_LICENSE', [f(`\\d{2}${SP}?(?:\\d{2}|[${CYR}]{2})${NO}\\d{6}`, { doc: true })]),
-  MILITARY_ID: detector('MILITARY_ID', [f(`[${CYR}]{2}${NO}\\d{7}`, { doc: true })]),
-  RESIDENCE_PERMIT: detector('RESIDENCE_PERMIT', [f(`(?:\\d{2}|[${CYR}A-Z]{2})${NO}\\d{6,10}`, { doc: true })]),
-  MIGRATION_CARD: detector('MIGRATION_CARD', [f(`\\d{2}${SP}?\\d{2}${NO}\\d{7}`, { doc: true })]),
+  INTL_PASSPORT: detector(
+    'INTL_PASSPORT',
+    [f(`\\d{2}${NO}\\d{7}`, { doc: true, chk: (v) => passport(v.replace(/\D/g, '')) })],
+    'passport',
+    undefined,
+    () => true,
+  ),
+  DRIVER_LICENSE: detector('DRIVER_LICENSE', [f(`\\d{2}${SP}?(?:\\d{2}|[${CYR}]{2})${NO}\\d{6}`, { doc: true })], undefined, undefined, () => true),
+  MILITARY_ID: detector('MILITARY_ID', [f(`[${CYR}]{2}${NO}\\d{7}`, { doc: true })], undefined, undefined, () => true),
+  RESIDENCE_PERMIT: detector('RESIDENCE_PERMIT', [f(`(?:\\d{2}|[${CYR}A-Z]{2})${NO}\\d{6,10}`, { doc: true })], undefined, undefined, () => true),
+  MIGRATION_CARD: detector('MIGRATION_CARD', [f(`\\d{2}${SP}?\\d{2}${NO}\\d{7}`, { doc: true })], undefined, undefined, () => true),
   // «I-МЮ № 123456»: римская серия, дефис, две буквы, номер — жёсткая структура (и паспорт СССР); запись акта — по метке
   CIVIL_CERT: detector(
     'CIVIL_CERT',
@@ -376,8 +395,15 @@ export const PAPER_DETECTORS = {
     'roman',
     tokens('CIVIL_CERT', { ok: (v) => /^\d{3,22}$/.test(v) }),
   ),
-  OMS: detector('OMS', [f(`\\d{4}(?:${SP}?\\d{4}){3}`, { doc: true, chk: oms })], 'oms'),
-  VEHICLE_DOC: detector('VEHICLE_DOC', [f(`\\d{2}${SP}?(?:\\d{2}|[${CYR}A-Z]{2})${NO}\\d{6}`, { doc: true }), f('\\d{15}', { doc: true })]),
+  // ОМС: 16 цифр с неверной контрольной — не полис (К5); номер другой длины после метки полиса — полис, закрывается (как в 0.4 — ОГРН)
+  OMS: detector('OMS', [f(`\\d{4}(?:${SP}?\\d{4}){3}`, { doc: true, chk: oms })], 'oms', undefined, (d) => d.length !== 16),
+  VEHICLE_DOC: detector(
+    'VEHICLE_DOC',
+    [f(`\\d{2}${SP}?(?:\\d{2}|[${CYR}A-Z]{2})${NO}\\d{6}`, { doc: true }), f('\\d{15}', { doc: true })],
+    undefined,
+    undefined,
+    () => true,
+  ),
   // VIN без метки — верная проверочная цифра или известный WMI; по метке — и кириллица, строчные, пробелы между группами
   VIN: detector(
     'VIN',
