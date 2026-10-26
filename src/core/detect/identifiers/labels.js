@@ -348,7 +348,12 @@ function catsAt(text, p, ctx) {
  */
 export function labelsOf(id, text, ctx) {
   const m = streamMemo(text, ctx);
+  // кэш на поток: каждая категория спрашивает о своих метках из нескольких мест (ранний выход детектора, значения после
+  // метки, поля здоровья) — без кэша длинный абзац с метками обходился квадратично (третье ревью WP12-C)
+  const done = (m.of ||= new Map()).get(id);
+  if (done) return done;
   const out = [];
+  m.of.set(id, out);
   for (const p of labelStarts(text, ctx))
     for (const c of catsAt(text, p, ctx)) {
       if (c.cat !== id) continue;

@@ -218,10 +218,16 @@ const ICD_START = rx(`^${ICD}(?![\\p{L}\\p{N}])`, 'u');
 const TXT_STOP =
   /\n|\t|(?:[ \u00a0]+\p{Lu}\p{Ll}+)?[ \u00a0]*_{2,}|(?<![\p{L}])(?:Лечащий врач|Врач|Подпись|Дата|ФИО|Ф\.[ \u00a0]?И\.[ \u00a0]?О\.|Фамилия|Пациент|Место рождения|Гражданство|Образование|Пол)[ \u00a0]*:/u;
 /** Своя метка с разделителем «:» / тире после неё — начало нового поля здоровья или особой категории. */
-const ownField = (text, at, ctx) =>
-  [...labelsOf('HEALTH', text, ctx), ...labelsOf('SPECIAL', text, ctx)].some(
-    ([a, e]) => a === at && /^[ \t\u00a0]*(?:\([^()\n]{1,30}\)[ \t\u00a0]*)?[:–—-]/u.test(text.slice(e, e + 40)),
-  );
+let ownMemo = { text: null, stream: null, ends: new Map() };
+const ownField = (text, at, ctx) => {
+  // начало метки → её концы (кэш на поток: поиск по всем меткам на каждую проверку был квадратичным)
+  if (ownMemo.text !== text || ownMemo.stream !== ctx?.stream) {
+    const ends = new Map();
+    for (const [a, e] of [...labelsOf('HEALTH', text, ctx), ...labelsOf('SPECIAL', text, ctx)]) ends.set(a, [...(ends.get(a) || []), e]);
+    ownMemo = { text, stream: ctx?.stream, ends };
+  }
+  return (ownMemo.ends.get(at) || []).some((e) => /^[ \t\u00a0]*(?:\([^()\n]{1,30}\)[ \t\u00a0]*)?[:–—-]/u.test(text.slice(e, e + 40)));
+};
 /** Метка в начале обычной фразы («Инвалидность — это не приговор», «Национальности: все равны…») — не поле. */
 const NOT_VALUE = /^(?:это|все|всё|каждый|каждая|любой|любая|никто|ничто|не[ \u00a0]+является)(?![\p{L}])/iu;
 /** Метка поля: перед ней начало строки или «, ; . ( : •» и тире (без поиска по всему потоку — окно 40 символов). */
