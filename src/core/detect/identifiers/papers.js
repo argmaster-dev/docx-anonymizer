@@ -11,7 +11,7 @@
 import { ipv4, ipv6, oms, passport, roman, vin } from '../../validators.js';
 import { isCategoryEnabled } from '../../categories.js';
 import { getDetectors } from '../../contracts/detector.js';
-import { NB, NA, EXTRA_RX, foreignHit, intervals, labelHits, labelStarts, labelsOf, labelWindows, lowerBound, scan } from './labels.js';
+import { NB, NA, EXTRA_RX, foreignHit, intervals, labelCatsAt, labelHits, labelStarts, labelsOf, labelWindows, lowerBound, scan } from './labels.js';
 import { trimUrl } from './contact.js';
 
 const SP = '[ \\t\\u00a0]';
@@ -126,7 +126,7 @@ function detector(id, fmts, v, more, fb) {
         const mine = hits.has(id) && (!f.doc || doc === id);
         const bare = !f.only && !!f.bare?.(val, text, c.start, ctx);
         if (mine) push(cand(c.start, end, bare ? 'validated' : 'labeled', v));
-        else if (bare && (f.hard || !foreignHit(hits, id))) push(cand(c.start, end, 'validated', v));
+        else if (bare && (f.hard || !foreignHit(hits, id, val))) push(cand(c.start, end, 'validated', v));
       }
     }
     if (more) for (const c of more(text, ctx)) if (taken.free(c.start, c.end)) push(c);
@@ -152,7 +152,7 @@ const FILL = rx(`(?:${SP}+(?:[\\p{L}«»"'().-]+|${DATE_SRC}(?:${SP}?г\\.)?)){0
 // после метки — пояснение в скобках («Вероисповедание (при желании): …»), затем «:» / тире и «№»
 const GAP = rx(`${SP}*(?:\\([^()\\n]{1,30}\\)${SP}*)?(?:[:–—-]${SP}*)?(?:${MARK}${SP}*:?${SP}*)?`, 'iuy');
 /** Номер после метки документа для запасного пути: группы цифр через пробел, дефис или «№», впереди — серия из двух букв. */
-const NUMVAL = rx(`(?:[A-ZА-ЯЁ]{2}${SP}?(?:№${SP}*)?)?\\d+(?:(?:${SP}|${DASH}|${SP}?№${SP}?)\\d+){0,4}`, 'uy');
+const NUMVAL = rx(`(?:[A-ZА-ЯЁ]{2}${SP}?(?:№${SP}*)?)?\\d+(?:(?:${SP}|${DASH}|${SP}?№${SP}?)(?:[A-ZА-ЯЁ]{2}(?=${SP}?(?:№${SP}?)?\\d)|\\d+)){0,4}`, 'uy');
 const TOK = rx('[\\p{L}\\p{N}]+(?:[-/._:№\\u2010-\\u2013\\u00ad][\\p{L}\\p{N}]+)*', 'uy');
 /** Слово-номер в самой метке: «номер заказа», «код клиента», «ИКЗ» — знак «№» после неё не обязателен. */
 const NUMBERISH = /номер|number|код|\bno\b|\bid\b|икз|кусп|уид|енп|№|#/iu;
@@ -217,6 +217,11 @@ const ICD_START = rx(`^${ICD}(?![\\p{L}\\p{N}])`, 'u');
  */
 const TXT_STOP =
   /\n|\t|(?:[ \u00a0]+\p{Lu}\p{Ll}+)?[ \u00a0]*_{2,}|(?<![\p{L}])(?:Лечащий врач|Врач|Подпись|Дата|ФИО|Ф\.[ \u00a0]?И\.[ \u00a0]?О\.|Фамилия|Пациент|Место рождения|Гражданство|Образование|Пол)[ \u00a0]*:/u;
+/** Своя метка с разделителем «:» / тире после неё — начало нового поля здоровья или особой категории. */
+const ownField = (text, at, ctx) =>
+  [...labelsOf('HEALTH', text, ctx), ...labelsOf('SPECIAL', text, ctx)].some(
+    ([a, e]) => a === at && /^[ \t\u00a0]*(?:\([^()\n]{1,30}\)[ \t\u00a0]*)?[:–—-]/u.test(text.slice(e, e + 40)),
+  );
 /** Метка в начале обычной фразы («Инвалидность — это не приговор», «Национальности: все равны…») — не поле. */
 const NOT_VALUE = /^(?:это|все|всё|каждый|каждая|любой|любая|никто|ничто|не[ \u00a0]+является)(?![\p{L}])/iu;
 /** Метка поля: перед ней начало строки или «, ; . ( : •» и тире (без поиска по всему потоку — окно 40 символов). */
@@ -280,8 +285,16 @@ const freeText = (id) => (text, ctx) => {
     let end = Math.min(text.length, p + 300);
     const stop = TXT_STOP.exec(text.slice(p, end));
     if (stop) end = p + stop.index;
-    const k = lowerBound(labels, p + 1);
-    if (k < labels.length && labels[k] < end) end = labels[k];
+    // метка другой категории режет значение; своя (здоровье, особые категории) — только если за ней «:» или тире: это новое
+    // значение, его найдёт свой проход («…, аллергия на пенициллин», «…, инвалидность III группы» — продолжение)
+    for (let k = lowerBound(labels, p + 1); k < labels.length && labels[k] < end; k++) {
+      const cats = labelCatsAt(text, labels[k], ctx);
+      const own = cats.length && cats.every((c) => c === 'HEALTH' || c === 'SPECIAL');
+      if (!own || ownField(text, labels[k], ctx)) {
+        end = labels[k];
+        break;
+      }
+    }
     const n = lowerBound(nested, p + 1);
     if (n < nested.length && nested[n] < end) end = nested[n];
     while (end > p && /[\s,.;:–—-]/u.test(text[end - 1])) end--;
@@ -324,7 +337,7 @@ const NOT_VIN_CTX =
   /(?<![\p{L}])(?:арт\.|артикул\p{L}*|s\/n|sn|серийн\p{L}*(?:[ \t\u00a0]+номер\p{L}*)?|зав\.|заводск\p{L}*[ \t\u00a0]+номер\p{L}*|партия|lot|sku)[ \t\u00a0]*[:№#–—-]?[ \t\u00a0]*$/iu;
 /** WMI заводов, чьи VIN часто без проверочной цифры (Россия, Европа, Азия): без метки — ещё и по ним. */
 const WMI =
-  /^(?:XTA|XTT|XTH|X96|X7L|X9F|XW8|XWE|XUF|X4X|Z94|Z8T|Z8N|ZFA|ZAR|WVW|WV1|WV2|WBA|WBS|WDB|WDD|WAU|WF0|WP0|VF1|VF3|VF7|VSS|TMB|YV1|SAL|SJN|JTD|JTM|JMB|JN1|KMH|KNA|LVS|LGX)/;
+  /^(?:XTA|XTT|XTH|X96|X7L|X9F|XW8|XWE|XUF|XUU|X4X|Z94|Z8T|Z8N|Z6F|ZFA|ZAR|WVW|WV1|WV2|WBA|WBS|WDB|WDD|W1K|W1N|WAU|WF0|WP0|VF1|VF3|VF7|VSS|TMB|YV1|SAL|SJN|JN1|JN8|JMB|JMZ|JM1|JF1|JHM|SHH|JTD|JTM|JTN|JTE|JTH|JTJ|JT2|KMH|KNA|KNM|KNE|LVS|LGX|LGW|LVV|LB3|L6T|LVT|LSG|KL1)/;
 const VIN_MAP = { А: 'A', В: 'B', Е: 'E', К: 'K', М: 'M', Н: 'H', Р: 'P', С: 'C', Т: 'T', У: 'Y', Х: 'X', О: 'O' };
 /** VIN по метке: кириллические двойники латиницы, строчные, пробелы между группами → 17 знаков без I/O/Q. */
 const vinNorm = (v) =>

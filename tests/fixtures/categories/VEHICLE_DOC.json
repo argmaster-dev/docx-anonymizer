@@ -109,6 +109,15 @@
           "level": "labeled"
         }
       ]
+    },
+    {
+      "text": "ПТС 77 УН 1234567",
+      "expect": [
+        {
+          "text": "77 УН 1234567",
+          "level": "labeled"
+        }
+      ]
     }
   ],
   "negative": [

@@ -100,6 +100,15 @@
           "level": "labeled"
         }
       ]
+    },
+    {
+      "text": "в/у 77 ОК 12345",
+      "expect": [
+        {
+          "text": "77 ОК 12345",
+          "level": "labeled"
+        }
+      ]
     }
   ],
   "negative": [

@@ -33,6 +33,15 @@ const passportDoc = (text, start, ctx) => {
   const d = docContext(text, start, ctx);
   return !d || d === 'PASSPORT';
 };
+/** Орган и дата выдачи — общие части паспорта и загранпаспорта («загранпаспорт 75 1234567 выдан МВД 0001»). */
+const issueDoc = (text, start, ctx) => {
+  const d = docContext(text, start, ctx);
+  return !d || d === 'PASSPORT' || d === 'INTL_PASSPORT';
+};
+/** Номер сразу после метки документа: «серия/номер/№» и группы цифр (запасной путь — номер неверного формата). */
+const NUM_AFTER_RE = /^[ \t\u00a0:–—-]*(?:(?:серия|серии|номер|№|N)[ \t\u00a0:.]*)*(\d[\d \u00a0№\-\u2010-\u2013]{3,20}\d)(?![\p{L}\p{N}])/iu;
+/** «Кем выдан г. Москва, ул. Тверская, д. 1» — это адрес, а не орган: его закрывает ADDRESS целиком. */
+const ADDRESS_LIKE_RE = /^[№ \t\u00a0]*(?:\d{6},?[ \t\u00a0]*)?(?:г\.|город)[ \t\u00a0]*[^,\n]+,[ \t\u00a0]*(?:ул\.|улица|пр-т|просп|пер\.|наб\.|ш\.|б-р)/iu;
 let lastScan = { text: null, ctx: null, parts: [] };
 
 /**
@@ -47,7 +56,7 @@ function passportParts(text, ctx) {
   // все части — только по метке: поток без меток паспорта (и не ячейка таблицы) не сканируется
   const has = (id) => labelsOf(id, text, ctx).length > 0;
   const cell = !!(ctx?.stream?.rowHeader || ctx?.stream?.columnHeader);
-  if (!cell && !['PASSPORT', 'PASSPORT_ISSUER', 'PASSPORT_DATE', 'PASSPORT_DEPT'].some(has)) return parts;
+  if (!cell && !['PASSPORT', 'INTL_PASSPORT', 'PASSPORT_ISSUER', 'PASSPORT_DATE', 'PASSPORT_DEPT'].some(has)) return parts;
   const taken = intervals();
   const free = (a, b) => taken.free(a, b);
   const add = (cat, start, end) => {
@@ -66,9 +75,22 @@ function passportParts(text, ctx) {
       }
     }
   }
+  // номер неверного формата сразу после метки паспорта («паспорт 4506 12345») — тоже паспорт (лишнее маскирование дешевле утечки);
+  // номер загранпаспорта (его закрывает INTL_PASSPORT) — только как опора для органа и даты выдачи
+  for (const id of ['PASSPORT', 'INTL_PASSPORT'])
+    for (const [, end] of labelsOf(id, text, ctx)) {
+      const m = NUM_AFTER_RE.exec(text.slice(end, end + 60));
+      if (!m || m[1].replace(/\D/g, '').length < 5) continue;
+      const a = end + m[0].length - m[1].length;
+      const b = end + m[0].length;
+      const d = docContext(text, a, ctx);
+      if (id === 'PASSPORT' && (d === null || d === 'PASSPORT') && free(a, b)) add('PASSPORT', a, b);
+      if (d === id && !nums.includes(b)) nums.push(b);
+    }
   /** Орган выдачи с позиции `at` до даты, «код подразделения» или запятой; дата в той же строке — дата выдачи. */
   const issuer = (at) => {
     let line = text.slice(at, at + 200).split('\n')[0];
+    if (ADDRESS_LIKE_RE.test(line)) return;
     const df = DATE_FIRST_RE.exec(line);
     if (df) {
       // дата перед органом — вместе с «г.» / «года» («выдан 12.03.2006 г. ОВД …»): ничего между датой и органом не остаётся
@@ -96,16 +118,15 @@ function passportParts(text, ctx) {
     if (m) issuer(end + m[0].length);
   }
   // «Кем выдан: …» и «Дата выдачи: …» по метке — в тексте и в ячейке таблицы
-  for (const [at, end] of labelsOf('PASSPORT_ISSUER', text, ctx))
-    if (passportDoc(text, at, ctx)) issuer(end + /^[ \u00a0:–—-]*/u.exec(text.slice(end))[0].length);
+  for (const [at, end] of labelsOf('PASSPORT_ISSUER', text, ctx)) if (issueDoc(text, at, ctx)) issuer(end + /^[ \u00a0:–—-]*/u.exec(text.slice(end))[0].length);
   const s0 = text.search(/\S/u);
-  if (s0 >= 0 && labelState(text, s0, ctx, 'PASSPORT_ISSUER').mine && passportDoc(text, s0, ctx)) issuer(s0);
+  if (s0 >= 0 && labelState(text, s0, ctx, 'PASSPORT_ISSUER').mine && issueDoc(text, s0, ctx)) issuer(s0);
   // «Дата выдачи: …» в тексте — только если ближе всех назван паспорт (иначе это дата справки, доверенности…); в ячейке
   // под меткой строки «Дата выдачи» паспорт назван в соседних строках анкеты — достаточно, что другой документ не назван
   for (const c of scan(text, DATE_RE)) {
     if (labelState(text, c.start, ctx, 'PASSPORT_DATE').mine !== 'strict') continue;
     const d = docContext(text, c.start, ctx);
-    if (d === 'PASSPORT' || (!d && cell && c.start === s0)) add('PASSPORT_DATE', c.start, c.end);
+    if (d === 'PASSPORT' || d === 'INTL_PASSPORT' || (!d && cell && c.start === s0)) add('PASSPORT_DATE', c.start, c.end);
   }
   for (const c of scan(text, DEPT_RE)) if (labelState(text, c.start, ctx, 'PASSPORT_DEPT').mine) add('PASSPORT_DEPT', c.start, c.end);
   return parts;

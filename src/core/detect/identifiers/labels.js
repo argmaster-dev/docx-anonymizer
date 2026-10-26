@@ -109,7 +109,7 @@ export const EXTRA_RX = {
   CIVIL_CERT: `(?:свидетельств${A}${W}об?${W}(?:рождени|браке|заключени|расторжени|смерти|перемен|установлени)${A}(?:${W}(?:брака|имени|отцовства))?|запис${A}${W}акта|актов${A}${W}запис${A}|(?:birth|marriage|death|divorce)${W}certificate)${SER}`,
   OMS: `(?:(?:полис${A}${W})?обязательн${A}${W}медицинск${A}${W}страховани${A}|полис${A}(?:${W}омс)?|омс|енп|единый${W}номер${W}полиса|(?:health${W}insurance|oms)${W}policy)${SER}`,
   VEHICLE_DOC: `(?:паспорт${A}${W}(?:транспортн${A}${W}средств${A}|тс)|эптс|птс|стс|свидетельств${A}${W}о${W}регистрации${W}(?:тс|транспортн${A}(?:${W}средств${A})?)|vehicle${W}(?:registration|passport))${SER}`,
-  VIN: `vin(?:-?код)?|идентификационн${A}${W}номер${W}(?:тс|транспортного${W}средства|\\(vin\\))|vehicle${W}identification${W}number`,
+  VIN: `кузов${A}(?:${S}№)?|номер${W}кузова|шасси(?:${S}\\(рам${A}\\))?(?:${S}№)?|рам${A}${S}№|vin(?:-?код)?|идентификационн${A}${W}номер${W}(?:тс|транспортного${W}средства|\\(vin\\))|vehicle${W}identification${W}number`,
   PLATE: `гос\\.?${S}(?:рег\\.?${S})?(?:номер|знак)${A}|государственн${A}${W}(?:регистрационн${A}${W})?знак${A}|регистрационн${A}${W}знак${A}|номерн${A}${W}знак${A}|грз|г\\/н|(?:license|registration)${W}plate|plate${W}(?:no\\.?|number)`,
   IP: `ip(?:-?${S}адрес${A}|${W}address)?`,
   MAC: `mac(?:-?${S}адрес${A}|${W}address)?`,
@@ -125,7 +125,7 @@ export const EXTRA_RX = {
   INVOICE_NO: `(?:номер${W})?сч[её]т${A}(?:-фактур${A}|${W}на${W}оплату)?|упд|invoice`,
   CLIENT_NO: `(?:номер|код)${W}(?:клиента|абонента|покупателя)|клиент${A}|абонент${A}|(?:client|customer|account)${W}(?:id|no\\.?|number|#)`,
   IP_REG: `патент${A}(?:${W}на${W}(?:изобретение|полезную${W}модель|промышленный${W}образец))?|товарн${A}${W}знак${A}|знак${A}${W}обслуживания|программ${A}${W}для${W}эвм|баз${A}${W}данных|trademark|patent`,
-  HEALTH: `(?:основн${A}${W}|сопутствующ${A}${W}|клиническ${A}${W}|заключительн${A}${W})?диагноз${A}(?:${W}(?:основн|сопутствующ|клиническ|заключительн|окончательн|направительн)${A})?|(?:основн|сопутствующ)${A}(?=${S}:)|(?:код${W})?мкб(?:-?10)?|анамнез${A}|аллерги${A}|сведения${W}о${W}здоровье|состояни${A}${W}здоровья|группа${W}инвалидности|инвалидност${A}|diagnosis|icd(?:-?10)?(?:${W}code)?|medical${W}condition`,
+  HEALTH: `(?:основн${A}${W}|сопутствующ${A}${W}|клиническ${A}${W}|заключительн${A}${W})?диагноз${A}(?:${W}(?:основн|сопутствующ|клиническ|заключительн|окончательн|направительн)${A}|${W}при${W}поступлении)?|(?:основн|сопутствующ)${A}(?=${S}:)|(?:код${W})?мкб(?:-?10)?|анамнез${A}|аллерги(?:я|и|ю|ей)(?![\\p{L}])|(?:основн|хроническ|сопутствующ)${A}${W}заболевани${A}|групп${A}${W}крови|сведения${W}о${W}здоровье|состояни${A}${W}здоровья|группа${W}инвалидности|инвалидност${A}|diagnosis|icd(?:-?10)?(?:${W}code)?|medical${W}condition`,
   SPECIAL: `вероисповедани${A}|религи${A}|религиозн${A}${W}(?:убеждени${A}|взгляд${A})|национальност${A}|этническ${A}${W}(?:принадлежност${A}|происхождени${A})|политическ${A}${W}(?:взгляд${A}|убеждени${A})|партийност${A}|судимост${A}|сведения${W}о${W}судимости|religion|ethnicity|ethnic${W}origin|political${W}(?:views|opinions)|criminal${W}record|convictions`,
 };
 
@@ -161,7 +161,12 @@ function compile(catalog) {
     if (!alt) continue;
     alts.push(alt);
     const head = `(?<![\\p{L}\\p{N}])(?:${alt})`;
-    out.push({ cat: id, at: new RegExp(head, 'uy'), strict: new RegExp(`${head}${GAP}$`, 'iu'), lenient: new RegExp(`${head}${FILLER}${GAP}$`, 'iu') });
+    out.push({
+      cat: id,
+      at: new RegExp(`${head}(?![\\p{L}\\p{N}])`, 'uy'),
+      strict: new RegExp(`${head}${GAP}$`, 'iu'),
+      lenient: new RegExp(`${head}${FILLER}${GAP}$`, 'iu'),
+    });
   }
   // быстрый отказ (0.5, 43 категории с метками): окно без единой метки не проверяется по каждой категории
   const any = `(?<![\\p{L}\\p{N}])(?:${alts.join('|')})(?![\\p{L}\\p{N}])`;
@@ -358,10 +363,10 @@ export function labelsOf(id, text, ctx) {
  * Состояние лейблов для кандидата категории `own`: `mine` — свой лейбл есть; `foreign` — прямо перед кандидатом
  * стоит (strict) лейбл ДРУГОЙ категории, а своего нет (кандидат без лейбла в таком случае не берём).
  */
-export function labelState(text, start, ctx, own) {
+export function labelState(text, start, ctx, own, value) {
   const hits = labelHits(text, start, ctx);
   const mine = hits.get(own) || null;
-  return { mine, foreign: !mine && foreignHit(hits, own) };
+  return { mine, foreign: !mine && foreignHit(hits, own, value) };
 }
 
 /**
@@ -382,8 +387,34 @@ const NOT_FOREIGN = new Set([
   'CLIENT_NO',
   'IP_REG',
 ]);
+/**
+ * Номера документов 0.5: метка документа делает значение «чужим» для ИНН, СНИЛС, ОГРН, телефона, карты, только если значение
+ * похоже на номер этого документа («полис ОМС 4000 0000 1234 5676» — полис, а не карта; «полис ОМС +7 (495) 123-45-67» —
+ * телефон). Метки остальных категорий 0.5 (госномер, VIN, кадастр, дело, доверенность…) значение «чужим» не делают вовсе:
+ * проверенный телефон или ИНН после них получает свою категорию (второе ревью WP12-C: регрессия к 0.4).
+ */
+const DOC_SHAPE = {
+  INTL_PASSPORT: /^\d{2}\s?(?:№\s?)?\d{7}$/u,
+  DRIVER_LICENSE: /^\d{2}\s?(?:\d{2}|[А-ЯЁ]{2})\s?(?:№\s?)?\d{5,6}$/u,
+  MILITARY_ID: /^[А-ЯЁ]{2}\s?(?:№\s?)?\d{7}$/u,
+  RESIDENCE_PERMIT: /^(?:\d{2}|[А-ЯЁA-Z]{2})\s?(?:№\s?)?\d{6,10}$/u,
+  MIGRATION_CARD: /^\d{2}\s?\d{2}\s?(?:№\s?)?\d{7}$/u,
+  OMS: /^\d{4}(?:\s?\d{4}){3}$/u,
+  VEHICLE_DOC: /^(?:\d{2}\s?(?:\d{2}|[А-ЯЁA-Z]{2})\s?(?:№\s?)?\d{6}|\d{15})$/u,
+  PASSPORT_DEPT: /^\d{3}[-\s\u2010-\u2013]\d{3}$/u,
+};
+const LABELS_05 = new Set(Object.keys(EXTRA_RX));
 /** Есть ли прямо перед значением (strict) метка другой категории, которая его «забирает». */
-export const foreignHit = (hits, own) => [...hits].some(([c, k]) => c !== own && k === 'strict' && !NOT_FOREIGN.has(c));
+export const foreignHit = (hits, own, value) =>
+  [...hits].some(
+    ([c, k]) =>
+      c !== own &&
+      k === 'strict' &&
+      !NOT_FOREIGN.has(c) &&
+      (!LABELS_05.has(c) || (DOC_SHAPE[c] && (value === undefined || DOC_SHAPE[c].test(String(value).trim())))),
+  );
+/** Категории, чьи метки начинаются в позиции `p` потока (для HEALTH/SPECIAL: своя метка или чужая). */
+export const labelCatsAt = (text, p, ctx) => catsAt(text, p, ctx).map((c) => c.cat);
 
 /** Кандидаты по регулярке (с флагом g) → [{start, end, text, groups}]. */
 export function* scan(text, re) {

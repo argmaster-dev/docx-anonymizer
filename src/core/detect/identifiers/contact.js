@@ -96,7 +96,7 @@ export function detectPhone(text, ctx) {
       if (digits < 7 || digits > 15) continue;
       let end = c.start + main.length;
       if (overlaps(c.start, end)) continue;
-      const { mine, foreign } = labelState(text, c.start, ctx, 'PHONE');
+      const { mine, foreign } = labelState(text, c.start, ctx, 'PHONE', main);
       const valid = phone(main);
       let level = null;
       if (mine) level = valid ? 'validated' : 'labeled';

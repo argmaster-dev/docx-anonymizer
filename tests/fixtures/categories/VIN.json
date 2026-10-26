@@ -167,6 +167,24 @@
           "level": "validated"
         }
       ]
+    },
+    {
+      "text": "Toyota Camry, номер кузова JTNBE40K303123456, 2012 г.в.",
+      "expect": [
+        {
+          "text": "JTNBE40K303123456",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "Кузов № JTNBE40K303123456",
+      "expect": [
+        {
+          "text": "JTNBE40K303123456",
+          "level": "validated"
+        }
+      ]
     }
   ],
   "negative": [

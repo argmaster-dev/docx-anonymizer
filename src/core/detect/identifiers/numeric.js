@@ -13,7 +13,7 @@ export function detectInn(text, ctx) {
   const out = [];
   for (const c of scan(text, INN_RE)) {
     const valid = inn(c.text);
-    const { mine, foreign } = labelState(text, c.start, ctx, 'INN');
+    const { mine, foreign } = labelState(text, c.start, ctx, 'INN', c.text);
     if (mine) out.push(cand(c.start, c.end, valid ? 'validated' : 'labeled', valid ? 'inn' : undefined));
     // код ТН ВЭД / ОКПД2 / артикул в окне слева или в заголовке столбца — не ИНН (WP11-D)
     // номер после серии документа («патент на работу 77 № 1900012345», 0.5) — тоже не ИНН
@@ -55,7 +55,7 @@ export function detectOgrn(text, ctx) {
   const out = [];
   for (const c of scan(text, OGRN_RE)) {
     const valid = ogrn(c.text);
-    const { mine, foreign } = labelState(text, c.start, ctx, 'OGRN');
+    const { mine, foreign } = labelState(text, c.start, ctx, 'OGRN', c.text);
     if (mine) out.push(cand(c.start, c.end, valid ? 'validated' : 'labeled', valid ? 'ogrn' : undefined));
     // штрихкод EAN-13 и код товара проходят контрольную сумму ОГРН — без лейбла не берутся (WP11-D)
     else if (valid && !foreign && !goodsCodeContext(text, c.start, c.end, ctx)) out.push(cand(c.start, c.end, 'validated', 'ogrn'));
@@ -71,7 +71,7 @@ export function detectBik(text, ctx) {
   const out = [];
   for (const c of scan(text, BIK_RE)) {
     if (!bik(c.text)) continue;
-    const { mine, foreign } = labelState(text, c.start, ctx, 'BIK');
+    const { mine, foreign } = labelState(text, c.start, ctx, 'BIK', c.text);
     if (mine) out.push(cand(c.start, c.end, 'validated', 'bik'));
     else if (!foreign && BANK_CONTEXT.test(text.slice(Math.max(0, c.start - 150), c.end + 150))) out.push(cand(c.start, c.end, 'validated', 'bik'));
   }
@@ -94,7 +94,7 @@ export function detectAccount(text, ctx) {
   const out = [];
   for (const c of scan(text, ACCOUNT_RE)) {
     if (!account(c.text)) continue;
-    const { mine, foreign } = labelState(text, c.start, ctx, 'ACCOUNT');
+    const { mine, foreign } = labelState(text, c.start, ctx, 'ACCOUNT', c.text);
     const keyOk = keyMatchesNearby(text, c.start, c.end, c.text);
     if (keyOk && !foreign) out.push(cand(c.start, c.end, 'validated', 'account'));
     else if (mine) out.push(cand(c.start, c.end, 'labeled'));
@@ -115,7 +115,7 @@ export function detectAccountByBikInDocument(doc, entities, ctx) {
     if (s.type === 'attr' || s.type === 'deleted') continue;
     for (const c of scan(s.text, ACCOUNT_RE)) {
       if (!account(c.text)) continue;
-      if (labelState(s.text, c.start, ctx, 'ACCOUNT').foreign) continue;
+      if (labelState(s.text, c.start, ctx, 'ACCOUNT', c.text).foreign) continue;
       let ok = false;
       // назад: расстояние = символы между концом БИК и началом счёта
       let gap = 0;
@@ -161,7 +161,7 @@ export function detectCard(text, ctx) {
     const digits = c.text.replace(/\D/g, '');
     if (digits.length < 13 || digits.length > 19) continue;
     const valid = luhn(digits);
-    const { mine, foreign } = labelState(text, c.start, ctx, 'CARD');
+    const { mine, foreign } = labelState(text, c.start, ctx, 'CARD', c.text);
     if (mine) out.push(cand(c.start, c.end, valid ? 'validated' : 'labeled', valid ? 'luhn' : undefined));
     else if (valid && !foreign) {
       // без лейбла: PAN начинается с 2–6; сплошные 13–15 цифр — скорее ОГРН/ОГРНИП, берём только Amex
@@ -194,7 +194,7 @@ export function detectIban(text, ctx) {
     }
     if (count !== len || /[\p{L}\p{N}]/u.test(text[i] || '')) continue;
     const valid = mod97(text.slice(c.start, i));
-    const { mine, foreign } = labelState(text, c.start, ctx, 'IBAN');
+    const { mine, foreign } = labelState(text, c.start, ctx, 'IBAN', c.text);
     if (valid && (mine || !foreign)) out.push(cand(c.start, i, 'validated', 'iban'));
     else if (mine) out.push(cand(c.start, i, 'labeled'));
   }
@@ -220,7 +220,7 @@ export function detectSnils(text, ctx) {
   const out = [];
   for (const c of scan(text, SNILS_RE)) {
     const valid = snils(c.text);
-    const { mine, foreign } = labelState(text, c.start, ctx, 'SNILS');
+    const { mine, foreign } = labelState(text, c.start, ctx, 'SNILS', c.text);
     if (mine) out.push(cand(c.start, c.end, valid ? 'validated' : 'labeled', valid ? 'snils' : undefined));
     else if (valid && !foreign) out.push(cand(c.start, c.end, 'validated', 'snils'));
   }
