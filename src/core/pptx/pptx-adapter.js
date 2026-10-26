@@ -6,30 +6,55 @@
 // и значений — число слайдов, фигур и их геометрия не меняются. Ячейки таблиц — `doc.blocks` для заголовков столбцов
 // (detect/tables.js без правок). Значения документа в логи не попадают (NFR-14).
 import { tokenize, getAttr } from '../ooxml/xml.js';
-import { parsePackage, sortParts } from '../ooxml/model.js';
+import { readZip } from '../ooxml/zip.js';
+import { parsePackage, sortParts, addAttrStream, readXmlEntry } from '../ooxml/model.js';
 import { parseFlowPart } from '../ooxml/flow.js';
 import { parseRelsPart, parseMetaPart, META_PART_RE } from '../ooxml/opc.js';
 import { serializePackage } from '../ooxml/serialize.js';
 import { zipHasEntry, hasExtension } from '../ooxml/adapter.js';
-import { parseDrawingPart, addElementTextStreams, addAttrStreams, linkAuthors, embeddedWarning, DML } from '../ooxml/dml.js';
+import { parseDrawingPart, addElementTextStreams, addAttrStreams, linkAuthors, embeddedWarning, DML, readRelations, chartExternalData } from '../ooxml/dml.js';
 import { CoreError } from '../errors.js';
 import { registerAdapter } from '../adapters.js';
 import { tableBlocks } from '../table-blocks.js';
+import { attachEmbeddedBooksWith } from '../embedded.js';
+import { XLSX_ADAPTER } from '../xlsx/xlsx-adapter.js';
 
 export const PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 const EXTENSIONS = ['.pptx', '.pptm'];
 
 const PRESENTATION = 'ppt/presentation.xml';
-const SLIDE_RE = /^ppt\/slides\/[^/]+\.xml$/;
-const NOTES_RE = /^ppt\/notesSlides\/[^/]+\.xml$/;
-const MODERN_COMMENT_RE = /^ppt\/comments\/modernComment[^/]*\.xml$/;
-const COMMENT_RE = /^ppt\/comments\/[^/]+\.xml$/;
-const COMMENT_AUTHORS = 'ppt/commentAuthors.xml';
-const AUTHORS = 'ppt/authors.xml';
-const DIAGRAM_RE = /^ppt\/diagrams\/(?:data|drawing)[^/]*\.xml$/;
-const CHART_RE = /^ppt\/charts\/chart[^/]*\.xml$/;
-const MASTER_RE = /^ppt\/(?:slideLayouts|slideMasters|notesMasters|handoutMasters)\/[^/]+\.xml$/;
-const RELS_RE = /^ppt\/(?:[^/]+\/)*_rels\/[^/]+\.rels$/;
+
+/** Роль части по типу связи (последнее звено URI типа; ревью WP12-B — не по шаблону пути). */
+const ROLE_BY_TYPE = {
+  officeDocument: 'presentation',
+  slide: 'slide',
+  notesSlide: 'notes',
+  comments: 'comments',
+  commentAuthors: 'authors',
+  authors: 'authors',
+  diagramData: 'drawing',
+  diagramDrawing: 'drawing',
+  chart: 'chart',
+  chartUserShapes: 'drawing',
+  slideLayout: 'master',
+  slideMaster: 'master',
+  notesMaster: 'master',
+  handoutMaster: 'master',
+};
+/** Запасной вариант — по пути. */
+const ROLE_BY_PATH = [
+  [/^ppt\/slides\/[^/]+\.xml$/, 'slide'],
+  [/^ppt\/notesSlides\/[^/]+\.xml$/, 'notes'],
+  [/^ppt\/comments\/[^/]+\.xml$/, 'comments'],
+  [/^ppt\/(?:commentAuthors|authors)\.xml$/, 'authors'],
+  [/^ppt\/diagrams\/(?:data|drawing)[^/]*\.xml$/, 'drawing'],
+  [/^ppt\/charts\/chart[^/]*\.xml$/, 'chart'],
+  [/^ppt\/(?:slideLayouts|slideMasters|notesMasters|handoutMasters)\/[^/]+\.xml$/, 'master'],
+];
+const RELS_RE = /(?:^|\/)_rels\/[^/]+\.rels$/;
+const EMBEDDED_RE = /(?:^|\/)embeddings\//;
+/** Ранг роли (FR-25): слайды → заметки → комментарии → авторы → SmartArt и диаграммы → макеты → презентация → связи → свойства. */
+const RANK = { slide: 0, notes: 1, comments: 2, authors: 3, drawing: 4, chart: 5, master: 6, presentation: 7, rels: 8, meta: 9 };
 
 /** Обычный комментарий: текст <p:text> прямо в <p:cm>, без ранов. */
 const PML_COMMENT = Object.freeze({
@@ -44,28 +69,35 @@ const PML_COMMENT = Object.freeze({
   specialParents: new Set(),
 });
 
-/** Ранг части для порядка обхода (FR-25): слайды → заметки → комментарии → авторы → SmartArt и диаграммы → макеты → связи → свойства. */
-export function pptxPartRank(name) {
-  if (SLIDE_RE.test(name)) return 0;
-  if (NOTES_RE.test(name)) return 1;
-  if (COMMENT_RE.test(name)) return 2;
-  if (name === COMMENT_AUTHORS || name === AUTHORS) return 3;
-  if (DIAGRAM_RE.test(name)) return 4;
-  if (CHART_RE.test(name)) return 5;
-  if (MASTER_RE.test(name)) return 6;
-  if (RELS_RE.test(name)) return 7;
-  return 8; // docProps
+/**
+ * Роль части: по связям пакета, иначе по пути; связи — 'rels', docProps — 'meta'; прочее — null.
+ * @param {string} name
+ * @param {(part: string) => string[]} [typesOf]
+ */
+export function pptxRole(name, typesOf = () => []) {
+  if (EMBEDDED_RE.test(name)) return null;
+  if (RELS_RE.test(name)) return 'rels';
+  if (META_PART_RE.test(name)) return 'meta';
+  for (const t of typesOf(name)) if (ROLE_BY_TYPE[t]) return ROLE_BY_TYPE[t];
+  if (name === PRESENTATION) return 'presentation';
+  for (const [re, role] of ROLE_BY_PATH) if (/** @type {RegExp} */ (re).test(name)) return /** @type {string} */ (role);
+  return null;
+}
+
+/** Ранг части для порядка обхода (FR-25). */
+export function pptxPartRank(name, typesOf) {
+  return RANK[/** @type {string} */ (pptxRole(name, typesOf))] ?? 9;
 }
 
 /**
  * Части презентации с текстом в порядке обхода FR-25.
  * @param {string[]} names
+ * @param {(part: string) => string[]} [typesOf]
  */
-export function pptxParts(names) {
-  const res = [SLIDE_RE, NOTES_RE, COMMENT_RE, DIAGRAM_RE, CHART_RE, MASTER_RE, RELS_RE, META_PART_RE];
+export function pptxParts(names, typesOf) {
   return sortParts(
-    names.filter((n) => n === COMMENT_AUTHORS || n === AUTHORS || res.some((re) => re.test(n))),
-    pptxPartRank,
+    names.filter((n) => pptxRole(n, typesOf)),
+    (n) => pptxPartRank(n, typesOf),
   );
 }
 
@@ -75,51 +107,85 @@ export function pptxParts(names) {
  * @returns {import('../ooxml/model.js').DocModel & {blocks: any[], viewParts: string[]}}
  */
 export function parsePptx(bytes) {
+  let entries;
+  try {
+    entries = readZip(bytes);
+  } catch (e) {
+    throw notSupported(e);
+  }
+  const names = new Set(entries.map((e) => e.name));
+  const rels = readRelations(entries);
+  const main = rels.from('').find((r) => r.type === 'officeDocument' && names.has(r.target))?.target || PRESENTATION;
+  const mainEntry = entries.find((e) => e.name === main);
+  // главная часть — презентация (а не книга или документ Word)
+  if (!mainEntry || !/<(?:\w+:)?presentation[\s>]/.test(readXmlEntry(mainEntry).slice(0, 2000)))
+    throw new CoreError('NOT_SUPPORTED', 'В архиве нет презентации PowerPoint');
+  const typesOf = (n) => (n === main ? ['officeDocument'] : rels.typesOf(n));
   /** @type {any[]} */
   const blocks = [];
+  const chartEmbeds = [];
   let tables = 0;
   let headSeq = 0;
   /** @type {import('../ooxml/model.js').PackageDescription} */
   const desc = {
     kind: 'pptx',
-    mainPart: PRESENTATION,
-    notFound: { code: 'NOT_SUPPORTED', message: 'В архиве нет ppt/presentation.xml' },
-    parts: pptxParts,
+    mainPart: main,
+    notFound: { code: 'NOT_SUPPORTED', message: 'В архиве нет презентации PowerPoint' },
+    parts: (list) => pptxParts(list, typesOf),
     parsePart(name, xml, ctx) {
-      if (SLIDE_RE.test(name) || NOTES_RE.test(name) || MASTER_RE.test(name) || DIAGRAM_RE.test(name)) {
+      const role = pptxRole(name, typesOf);
+      if (role === 'slide' || role === 'notes' || role === 'master' || role === 'drawing') {
         const first = ctx.paragraphs.length;
-        const part = parseDrawingPart(name, xml, ctx);
+        const part = parseDrawingPart(name, xml, ctx, {
+          // название слайда (<p:cSld name="…">) — тоже текст
+          onElement(t, parent, para, p) {
+            if (t.name !== 'p:cSld') return;
+            const a = getAttr(xml, t.attrStart, t.attrEnd, 'name');
+            if (a && a.raw) addAttrStream(p, ctx, a, 'alt', 'p:cSld/@name');
+          },
+        });
         markShapes(xml, ctx.paragraphs.slice(first), part);
         return part;
       }
-      if (MODERN_COMMENT_RE.test(name)) return parseDrawingPart(name, xml, ctx);
-      if (COMMENT_RE.test(name)) return parseFlowPart(name, xml, ctx, PML_COMMENT);
-      if (name === COMMENT_AUTHORS || name === AUTHORS) {
+      // комментарии: современные (p188:cmLst) — абзацы DrawingML, обычные (p:cmLst) — <p:text>
+      if (role === 'comments')
+        return /<p188:cmLst[\s>]/.test(xml) || !/<p:cmLst[\s>]/.test(xml) ? parseDrawingPart(name, xml, ctx) : parseFlowPart(name, xml, ctx, PML_COMMENT);
+      if (role === 'authors') {
         const part = { name, kind: 'people', xml, streams: [], embeddedRuns: [] };
         const spec = { name: 'author', initials: 'initials', userId: 'author-id' };
         linkAuthors(addAttrStreams(part, ctx, { 'p:cmAuthor': spec, 'p188:author': spec }));
         return part;
       }
-      if (CHART_RE.test(name)) {
+      if (role === 'chart') {
         const part = parseDrawingPart(name, xml, ctx);
         addElementTextStreams(part, ctx, (n, stack) => (n === 'c:v' && stack.some((x) => x === 'c:strCache' || x === 'c:lvl') ? 'cell-cache' : null));
+        const ext = chartExternalData(name, xml, rels.from(name));
+        if (ext) chartEmbeds.push(ext);
         return part;
       }
-      if (RELS_RE.test(name)) return parseRelsPart(name, xml, ctx);
+      if (role === 'presentation') {
+        // разделы (p14:section/@name) и произвольные показы (p:custShow/@name)
+        const part = { name, kind: 'text', xml, streams: [], embeddedRuns: [] };
+        addAttrStreams(part, ctx, { 'p14:section': { name: 'alt' }, 'p:custShow': { name: 'alt' } });
+        return part;
+      }
+      if (role === 'rels') return parseRelsPart(name, xml, ctx);
       return parseMetaPart(name, xml, ctx);
     },
     warnings: (list) => embeddedWarning(list, 'ppt/'),
-    languageStream: (s) => s.type === 'live' && (SLIDE_RE.test(s.part) || NOTES_RE.test(s.part)),
+    languageStream: (s) => s.type === 'live' && (pptxRole(s.part, typesOf) === 'slide' || pptxRole(s.part, typesOf) === 'notes'),
   };
   let doc;
   try {
     doc = parsePackage(bytes, desc);
   } catch (e) {
-    if (e instanceof CoreError && e.code === 'NOT_DOCX') throw new CoreError('NOT_SUPPORTED', 'Файл повреждён или не является презентацией PowerPoint');
-    throw e;
+    throw notSupported(e);
   }
-  const order = slideOrder(doc.entries.map((e) => e.name));
-  return Object.assign(doc, { blocks, viewParts: order });
+  const order = slideOrder(
+    doc.entries.map((e) => e.name),
+    (n) => pptxRole(n, typesOf),
+  );
+  return Object.assign(doc, { blocks, viewParts: order, chartEmbeds });
 
   /**
    * Вид абзаца по фигуре (К10 0.4): текст заголовка (<p:ph type="title|ctrTitle">) — 'heading', ячейка таблицы — 'cell';
@@ -174,16 +240,22 @@ export function parsePptx(bytes) {
       /** @type {any[]} */ (byTable.get(c.table)).push({ pid: p.pid, text: textOf.get(p.streams.live) ?? '', row: c.row, col: c.col });
     }
     // шапка таблицы — без «метки слева», заголовок над шапкой — отдельно (core/table-blocks.js)
-    for (const [index, list] of byTable) blocks.push(...tableBlocks(list, { index, fakePid: () => `h${headSeq++}` }));
+    for (const [index, list] of byTable) blocks.push(...tableBlocks(list, { index, minHeader: 2, fakePid: () => `h${headSeq++}` }));
   }
 }
 
 /** Слайды по номеру файла, затем заметки — части вкладки «Текст». */
-function slideOrder(names) {
+function slideOrder(names, role) {
   const num = (n) => Number(/(\d+)\.xml$/.exec(n)?.[1] || 0);
-  const slides = names.filter((n) => SLIDE_RE.test(n)).sort((a, b) => num(a) - num(b));
-  const notes = names.filter((n) => NOTES_RE.test(n)).sort((a, b) => num(a) - num(b));
+  const slides = names.filter((n) => role(n) === 'slide').sort((a, b) => num(a) - num(b));
+  const notes = names.filter((n) => role(n) === 'notes').sort((a, b) => num(a) - num(b));
   return [...slides, ...notes];
+}
+
+/** Не ZIP или не презентация: общий код NOT_SUPPORTED. */
+function notSupported(e) {
+  if (e instanceof CoreError && e.code === 'NOT_DOCX') return new CoreError('NOT_SUPPORTED', 'Файл повреждён или не является презентацией PowerPoint');
+  return e;
 }
 
 /** @type {import('../ooxml/adapter.js').DocumentAdapter} */
@@ -192,11 +264,25 @@ export const PPTX_ADAPTER = Object.freeze({
   extensions: EXTENSIONS,
   mime: PPTX_MIME,
   detect: (bytes, name) => zipHasEntry(bytes, PRESENTATION) || hasExtension(name, EXTENSIONS),
-  parse: (bytes) => parsePptx(bytes),
-  // встроенные объекты (OLE, данные диаграмм в embeddings/) не удаляются: на них ссылаются фигуры слайдов
+  // книги данных диаграмм (ppt/embeddings/*.xlsx) — адаптером Excel, в той же модели и с той же картой меток (core/embedded.js)
+  parse: (bytes) => {
+    const doc = parsePptx(bytes);
+    attachEmbeddedBooksWith(doc, XLSX_ADAPTER);
+    return doc;
+  },
+  // встроенные OLE-объекты слайдов не удаляются (на них ссылаются фигуры); книга данных диаграммы — при stripEmbedded
   serialize: (doc, edits, options = {}) => {
-    const out = serializePackage(doc, edits, options, { embeddedParts: /^$/ });
-    const macro = doc.entries.some((e) => e.name === 'ppt/vbaProject.bin');
+    const out = serializePackage(doc, edits, options, {
+      embeddedParts: /^$/,
+      plan: (d, byStream, push, ctx) => {
+        if (!ctx.options.stripEmbedded) return;
+        for (const e of /** @type {any} */ (d).chartEmbeds || []) {
+          ctx.remove(e.embed);
+          push(e.chart, { from: e.start, to: e.end, text: '' });
+        }
+      },
+    });
+    const macro = doc.entries.some((e) => /(?:^|\/)vbaProject\.bin$/.test(e.name));
     return { ...out, mime: macro ? 'application/vnd.ms-powerpoint.presentation.macroEnabled.12' : PPTX_MIME };
   },
   parts: pptxParts,

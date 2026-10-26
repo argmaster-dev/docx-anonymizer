@@ -7,6 +7,7 @@ import { CoreError } from './errors.js';
 import { serializeText, TEXT_MIME } from './text/serialize.js';
 import { replacementFor } from './placeholders.js';
 import { buildMapping } from './mapping.js';
+import { splitFileNameEdits } from './file-name.js';
 
 /**
  * @typedef {object} ApplyOptions
@@ -67,12 +68,16 @@ export function planEdits(doc, groups, opts = {}) {
  * @param {import('./docx/model.js').DocModel} doc
  * @param {import('./contracts/entity.js').EntityGroup[]} groups  с решениями (см. mergeDecisions)
  * @param {ApplyOptions} [options]
- * @returns {{bytes: Uint8Array, docxBytes: Uint8Array, mime: string, mapping: object, stats: {replacements: number, entities: number, changedParts: string[], removedParts: string[]}}}
+ * @returns {{bytes: Uint8Array, docxBytes: Uint8Array, mime: string, mapping: object, fileName?: string, stats: {replacements: number, entities: number, changedParts: string[], removedParts: string[]}}}
+ *   fileName — имя исходного файла с метками вместо найденного в нём (только если в имени что-то нашлось)
  *   docxBytes — прежнее имя поля (= bytes) для совместимости
  */
 export function applyDecisions(doc, groups, options = {}) {
   const mode = options.mode || 'placeholder';
-  const { edits, applied } = planEdits(doc, groups, { mode, placeholderLanguage: options.placeholderLanguage || 'ru' });
+  const planned = planEdits(doc, groups, { mode, placeholderLanguage: options.placeholderLanguage || 'ru' });
+  const { applied } = planned;
+  // имя файла (поток core/file-name.js, ревью WP12-B) — не в файл, а в имя результата
+  const { edits, fileName } = splitFileNameEdits(doc, planned.edits);
 
   let out;
   let mime;
@@ -104,6 +109,7 @@ export function applyDecisions(doc, groups, options = {}) {
     docxBytes: bytes,
     mime,
     mapping,
-    stats: { replacements: edits.length, entities: applied.size, changedParts, removedParts },
+    fileName,
+    stats: { replacements: planned.edits.length, entities: applied.size, changedParts, removedParts },
   };
 }

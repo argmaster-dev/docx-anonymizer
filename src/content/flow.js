@@ -194,7 +194,7 @@ async function runOnce(originals, deps) {
         onProgress: (stage, p) => !closed && panel.setProgress(k, stage, p),
       });
       if (closed) return;
-      analyzed.set(i, { docId: ent.docId, k });
+      analyzed.set(i, { docId: ent.docId, k, name: ent.name });
       panel.setReady(k, {
         entities: ent.entities,
         warnings: ent.warnings,
@@ -260,7 +260,11 @@ async function runOnce(originals, deps) {
         // у файла без расширения (распознан хостом по содержимому) — расширение результата хоста
         const own = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|log|md|csv|json)$/i.test(originals[i].name || '');
         const ext = isPdfFile(originals[i]) ? /\.(md|txt)$/i.exec(res.name || '')?.[0] : own ? undefined : /\.(xlsx|pptx)$/i.exec(res.name || '')?.[0];
-        const file = new File([res.bytes], makeResultName(originals[i].name, settings.outputSuffix, ext ? { ext } : {}), {
+        // имя от хоста — если сессия этого же файла: в нём найденное в имени заменено метками (ревью WP12-B, п. 16);
+        // сессия прежнего файла с тем же содержимым (§3.6) — по имени исходного файла, как раньше
+        const resultName =
+          analyzed.get(i).name === originals[i].name && res.name ? res.name : makeResultName(originals[i].name, settings.outputSuffix, ext ? { ext } : {});
+        const file = new File([res.bytes], resultName, {
           type: resultType(originals[i], res.mime),
           lastModified: Date.now(),
         });

@@ -135,3 +135,47 @@ describe('хост: книга без расширения в имени', () =>
     expect((await apply('r2', ent.docId)).begin.name).toBe('blob.anon.xlsx');
   });
 });
+
+describe('хост: встроенные книги и имя файла (ревью WP12-B)', () => {
+  it('DOCX с книгой Excel в word/embeddings: книга обезличена той же картой, предупреждение о ней снято', async () => {
+    const { buildXlsx } = await import('../../scripts/office-writer.mjs');
+    const { makeDocx, para, run } = await import('../helpers/docx.js');
+    const { readZip, inflateEntry } = await import('../../src/core/index.js');
+    const { deepLeaks } = await import('./support/office.js');
+    const book = buildXlsx({
+      sheets: [
+        {
+          name: 'Данные',
+          rows: [
+            ['ФИО', 'ИНН'],
+            ['Ершова Алина Петровна', 500100732259],
+          ],
+        },
+      ],
+    });
+    const docx = makeDocx(para(run('Подписал Ершова Алина Петровна.')), { 'word/embeddings/Microsoft_Excel_Worksheet1.xlsx': book });
+    const { upload, apply } = setup();
+    const ent = (await upload('r1', docx, 'договор.docx')).find((m) => m.type === MSG.ENTITIES);
+    expect(ent.warnings.map((w) => w.code)).not.toContain('EMBEDDED_NOT_PROCESSED');
+    const person = ent.entities.find((e) => e.value === 'Ершова Алина Петровна');
+    expect(person.occurrences.length).toBeGreaterThanOrEqual(2);
+    const r = await apply('r2', ent.docId);
+    expect(deepLeaks(r.bytes, ['Ершова', '500100732259'])).toEqual([]);
+    const inner = inflateEntry(readZip(r.bytes).find((e) => e.name === 'word/embeddings/Microsoft_Excel_Worksheet1.xlsx'));
+    expect(new TextDecoder().decode(inflateEntry(readZip(inner).find((e) => e.name === 'xl/sharedStrings.xml')))).toContain(person.placeholder);
+  });
+
+  it('имя файла с ФИО → имя результата с меткой той же карты (книга, DOCX); без данных в имени — как раньше', async () => {
+    const { upload, apply } = setup();
+    const x = (await upload('r1', file('crm-export.xlsx'), 'Гаврилов_Евгений_Сергеевич.xlsx')).find((m) => m.type === MSG.ENTITIES);
+    const res = await apply('r2', x.docId);
+    const g = x.entities.find((e) => e.value === 'Гаврилов Евгений Сергеевич');
+    expect(res.begin.name).toBe(`${g.placeholder}.anon.xlsx`);
+    expect(res.end.mapping.documents[0].resultName).toBe(res.begin.name);
+    const { makeDocx, para, run } = await import('../helpers/docx.js');
+    const d = (await upload('r3', makeDocx(para(run('Текст без данных.'))), 'Ершова_Алина_Петровна_договор.docx')).find((m) => m.type === MSG.ENTITIES);
+    expect((await apply('r4', d.docId)).begin.name).toMatch(/^\[ФИО_\d+\]_договор\.anon\.docx$/);
+    const plain = (await upload('r5', file('registry.xlsx'), 'выгрузка.xlsx')).find((m) => m.type === MSG.ENTITIES);
+    expect((await apply('r6', plain.docId)).begin.name).toBe('выгрузка.anon.xlsx');
+  });
+});

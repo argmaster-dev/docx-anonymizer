@@ -26,7 +26,7 @@ import { CoreError } from '../errors.js';
  * Что сериализатор знает о формате (адаптер).
  * @typedef {object} PackageSerializeDescription
  * @property {RegExp} embeddedParts  записи встроенных объектов и диаграмм, удаляемые при stripEmbedded (Word: word/embeddings|charts)
- * @property {(doc: import('./model.js').DocModel, byStream: Map<string, TextEdit[]>, pushRaw: (part: string, e: {from: number, to: number, text: string}) => void) => void} [plan]
+ * @property {(doc: import('./model.js').DocModel, byStream: Map<string, TextEdit[]>, pushRaw: (part: string, e: {from: number, to: number, text: string}) => void, ctx: {options: SerializeOptions, remove: (name: string) => void}) => void} [plan]
  *   правки, которые адаптер строит сам (WP12-B: числовая ячейка Excel становится строковой, переименование листа во всех
  *   формулах, колонтитулы с кодами «&P»): адаптер удаляет свои потоки из byStream и кладёт правки диапазонов XML через pushRaw;
  *   остальные потоки обрабатываются как обычно (через раны или значением)
@@ -52,10 +52,23 @@ export function serializePackage(doc, edits, options, desc) {
     arr.push(e);
   };
 
+  // 0. Встроенные книги (core/embedded.js, ревью WP12-B): их потоки — в общей модели, правки уходят своему сериализатору
+  /** @type {Map<string, any>} */
+  const embeddedOf = new Map();
+  for (const em of /** @type {any} */ (doc).embedded || []) for (const s of em.doc.streams) embeddedOf.set(s.id, em);
+  /** @type {Map<any, TextEdit[]>} */
+  const embeddedEdits = new Map();
+
   // 1. Группируем правки по потокам
   /** @type {Map<string, TextEdit[]>} */
   const byStream = new Map();
   for (const e of edits) {
+    const em = embeddedOf.get(e.streamId);
+    if (em) {
+      if (!embeddedEdits.has(em)) embeddedEdits.set(em, []);
+      /** @type {TextEdit[]} */ (embeddedEdits.get(em)).push(e);
+      continue;
+    }
     const s = doc.streamById.get(e.streamId);
     if (!s) throw new CoreError('INTERNAL', `Неизвестный поток ${e.streamId}`);
     if (e.start < 0 || e.end > s.text.length || e.start > e.end) throw new CoreError('INTERNAL', `Диапазон вне потока ${e.streamId}`);
@@ -67,7 +80,7 @@ export function serializePackage(doc, edits, options, desc) {
   // 2. Метаданные: очистка всех meta-потоков (правки сущностей в них тогда не нужны)
   if (!keepMetadata) {
     for (const s of doc.streams) {
-      if (s.type === 'meta') {
+      if (s.type === 'meta' && !embeddedOf.has(s.id)) {
         byStream.delete(s.id);
         pushRaw(s.part, { from: /** @type {number} */ (s.valueStart), to: /** @type {number} */ (s.valueEnd), text: '' });
       }
@@ -80,8 +93,10 @@ export function serializePackage(doc, edits, options, desc) {
       if (list[i].start < list[i - 1].end) throw new CoreError('INTERNAL', `Пересекающиеся правки в потоке ${streamId}`);
     }
   }
-  // правки, которые адаптер формата строит сам (WP12-B); Word их не задаёт
-  if (desc.plan) desc.plan(doc, byStream, pushRaw);
+  const removed = new Set();
+  // правки, которые адаптер формата строит сам (WP12-B); Word их не задаёт. remove — удалить запись (встроенная книга
+  // диаграммы при stripEmbedded) вместе со ссылками на неё
+  if (desc.plan) desc.plan(doc, byStream, pushRaw, { options, remove: (name) => removed.add(name) });
   for (const [streamId, list] of byStream) {
     const s = /** @type {import('./model.js').Stream} */ (doc.streamById.get(streamId));
     if (s.segments) {
@@ -91,7 +106,6 @@ export function serializePackage(doc, edits, options, desc) {
   }
 
   // 3. Удаляемые части
-  const removed = new Set();
   if (!keepMetadata) {
     for (const e of doc.entries) if (META_REMOVED_RE.test(e.name)) removed.add(e.name);
   }
@@ -117,13 +131,25 @@ export function serializePackage(doc, edits, options, desc) {
   }
   if (removed.size) cleanupReferences(doc, removed, newXml);
 
+  // 4а. Встроенные книги: тем же адаптером, с теми же метками (общая карта); удалённые — не собираются
+  /** @type {Map<string, Uint8Array>} */
+  const replaced = new Map();
+  for (const em of /** @type {any} */ (doc).embedded || []) {
+    if (removed.has(em.entry)) continue;
+    const list = embeddedEdits.get(em) || [];
+    if (!list.length && keepMetadata) continue;
+    const out = em.serialize(em.doc, list, { keepMetadata, stripEmbedded });
+    replaced.set(em.entry, out.bytes);
+  }
+
   // 5. ZIP: порядок как в исходнике, нетронутые части — сжатые байты как есть
   const enc = new TextEncoder();
   const items = [];
   for (const e of doc.entries) {
     if (removed.has(e.name)) continue;
     const x = newXml.get(e.name);
-    items.push(x !== undefined ? { name: e.name, data: enc.encode(x) } : { name: e.name, source: e });
+    const b = replaced.get(e.name);
+    items.push(x !== undefined ? { name: e.name, data: enc.encode(x) } : b ? { name: e.name, data: b } : { name: e.name, source: e });
   }
-  return { bytes: writeZip(items), changedParts: [...newXml.keys()], removedParts: [...removed] };
+  return { bytes: writeZip(items), changedParts: [...newXml.keys(), ...replaced.keys()], removedParts: [...removed] };
 }

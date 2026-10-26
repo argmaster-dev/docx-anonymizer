@@ -40,6 +40,12 @@ describe('кодировки', () => {
       const bytes = encodeText(text, e);
       expect(decodeText(bytes)).toEqual({ text, ...e });
     }
+    // UTF-16 без BOM (ревью WP12-B): по доле нулевых байтов; записывается так же, без BOM
+    for (const encoding of ['utf-16le', 'utf-16be']) {
+      const raw = encodeText(text, { encoding, bom: false });
+      expect(raw.length).toBe(text.length * 2);
+      expect(decodeText(raw)).toEqual({ text, encoding, bom: false });
+    }
     const cp = encodeText('Иванов Пётр — №5, «кавычки»', { encoding: 'windows-1251', bom: false });
     expect(cp[0]).toBe(0xc8); // «И» в Windows-1251
     expect(decodeText(cp)).toEqual({ text: 'Иванов Пётр — №5, «кавычки»', encoding: 'windows-1251', bom: false });
@@ -106,14 +112,41 @@ describe('JSON (К4)', () => {
   it('scanJson: строки и числа с позициями и ключом; ключи — не значения; битый JSON — исключение', () => {
     const t = '{"fio":"Ершова \\"Аля\\"","inn":500100732259,"a":[{"phone":"+7 916"}],"ok":true,"n":null}';
     const v = scanJson(t);
+    // ключи — тоже (ревью WP12-B: сущность в ключе заменяется), с номером объекта
     expect(v.map((x) => [x.kind, x.key, x.value])).toEqual([
+      ['key', 'fio', 'fio'],
       ['string', 'fio', 'Ершова "Аля"'],
+      ['key', 'inn', 'inn'],
       ['number', 'inn', '500100732259'],
+      ['key', 'a', 'a'],
+      ['key', 'phone', 'phone'],
       ['string', 'phone', '+7 916'],
+      ['key', 'ok', 'ok'],
+      ['key', 'n', 'n'],
     ]);
-    expect(t.slice(v[0].start, v[0].end)).toBe('"Ершова \\"Аля\\""');
+    expect(v.filter((x) => x.kind === 'key').map((x) => x.obj)).toEqual([0, 0, 0, 1, 0, 0]);
+    expect(t.slice(v[1].start, v[1].end)).toBe('"Ершова \\"Аля\\""');
     expect(() => scanJson('{"a": 1,}')).toThrow();
     expect(() => scanJson('[1] 2')).toThrow();
+  });
+
+  it('метки ключей по словам (ревью WP12-B): clientInn, contactPhone, snils_number, phone_mobile, ИНН_клиента', () => {
+    expect(keyLabel('clientInn').label).toBe('ИНН');
+    expect(keyLabel('contactPhone').label).toBe('Телефон');
+    expect(keyLabel('snils_number').label).toBe('СНИЛС');
+    expect(keyLabel('phone_mobile').label).toBe('Телефон');
+    expect(keyLabel('ИНН_клиента').label).toBe('ИНН');
+    expect(keyLabel('inn_org').label).toBe('ИНН');
+  });
+
+  it('ключ с ФИО заменяется меткой; два ключа с одной меткой в объекте — без дубля («(2)»); число из 6–20 цифр под любым ключом — поток', async () => {
+    const json = '{"Ершова Алина Петровна": 1, "[ФИО_1]": 2, "id": 7707083893, "n": 12345}';
+    const { out, doc } = await run(enc(json), 'k.json');
+    const j = JSON.parse(out.text);
+    expect(Object.keys(j)).toEqual(['[ФИО_1] (2)', '[ФИО_1]', 'id', 'n']);
+    expect(j.id).toBe('[ИНН_1]');
+    expect(j.n).toBe(12345);
+    expect(doc.language).toBe('ru');
   });
 
   it('метки ключей: inn, phone_number, snils, ФИО; прочие — как есть', () => {

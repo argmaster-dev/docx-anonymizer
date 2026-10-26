@@ -105,3 +105,48 @@ describe('таблицы заголовков (core/table-blocks.js)', () => {
     ]);
   });
 });
+
+describe('числа ячеек → показанный текст (xlsx/numfmt.js, ревью WP12-B п. 2, 11)', () => {
+  it('целые из записи числа: экспонента и «.0» — цифры; дробь и отрицательное — нет', async () => {
+    const { intDigits } = await import('../../src/core/xlsx/numfmt.js');
+    expect(intDigits('7707083893')).toBe('7707083893');
+    expect(intDigits('7.728168971E9')).toBe('7728168971');
+    expect(intDigits('74951234567.0')).toBe('74951234567');
+    expect(intDigits('1.5E3')).toBe('1500');
+    expect(intDigits('1500.25')).toBeNull();
+    expect(intDigits('-5')).toBeNull();
+    expect(intDigits('7.7E-3')).toBeNull();
+  });
+
+  it('формат из цифр и литералов: ведущие нули, разделители; формат с дробью или датой — как есть', async () => {
+    const { renderDigits } = await import('../../src/core/xlsx/numfmt.js');
+    expect(renderDigits('27409876579', '000000000000')).toBe('027409876579');
+    expect(renderDigits('1234567920', '000-000-000 00')).toBe('012-345-679 20');
+    expect(renderDigits('79161234567', '+0 (000) 000-00-00')).toBe('+7 (916) 123-45-67');
+    expect(renderDigits('7707083893', '0')).toBe('7707083893');
+    expect(renderDigits('7707083893', '#,##0.00')).toBeNull();
+    expect(renderDigits('45000', 'dd.mm.yyyy')).toBeNull();
+    expect(renderDigits('123', 'General')).toBeNull();
+  });
+
+  it('ведущие нули по заголовку столбца: ИНН 9 → 10, 11 → 12 цифр; СНИЛС 10 → 11; БИК 8 → 9; полная длина — как есть', async () => {
+    const { padByHeader } = await import('../../src/core/xlsx/numfmt.js');
+    expect(padByHeader('274098767', 'ИНН организации')).toBe('0274098767');
+    expect(padByHeader('27409876579', 'ИНН')).toBe('027409876579');
+    expect(padByHeader('7728168971', 'ИНН банка')).toBe('7728168971');
+    expect(padByHeader('1234567920', 'СНИЛС')).toBe('01234567920');
+    expect(padByHeader('44525225', 'БИК')).toBe('044525225');
+    expect(padByHeader('274098767', 'Сумма')).toBe('274098767');
+  });
+
+  it('стили: номер формата по индексу ячейки, свои форматы', async () => {
+    const { parseStyles, formatOf } = await import('../../src/core/xlsx/numfmt.js');
+    const st = parseStyles(
+      '<styleSheet><numFmts><numFmt numFmtId="164" formatCode="000000000000"/></numFmts><cellStyleXfs><xf numFmtId="3"/></cellStyleXfs><cellXfs><xf numFmtId="0"/><xf numFmtId="164"/><xf numFmtId="1"/></cellXfs></styleSheet>',
+    );
+    expect(st.xf).toEqual([0, 164, 1]);
+    expect(formatOf(st, '1')).toBe('000000000000');
+    expect(formatOf(st, '2')).toBe('0');
+    expect(formatOf(st, undefined)).toBe('General');
+  });
+});

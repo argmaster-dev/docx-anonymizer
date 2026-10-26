@@ -52,14 +52,24 @@ function corpus(paragraphs, seed) {
   return out;
 }
 
-async function median3(doc, settings) {
-  const times = [];
-  for (let i = 0; i < 3; i++) {
-    const t0 = performance.now();
-    await analyze(doc, settings);
-    times.push(performance.now() - t0);
+/**
+ * Лучшее время каждого варианта по чередующимся прогонам (без, со словарём, без, со…): всплеск нагрузки от параллельных файлов
+ * vitest (LibreOffice в тестах форматов 0.5) попадает в оба варианта, а не в один — отношение не дрожит (ревью WP12-B).
+ */
+async function bestInterleaved(doc, a, b, rounds = 4) {
+  let ta = Infinity;
+  let tb = Infinity;
+  for (let i = 0; i < rounds; i++) {
+    for (const [settings, set] of [
+      [a, (t) => (ta = Math.min(ta, t))],
+      [b, (t) => (tb = Math.min(tb, t))],
+    ]) {
+      const t0 = performance.now();
+      await analyze(doc, settings);
+      set(performance.now() - t0);
+    }
   }
-  return times.sort((a, b) => a - b)[1];
+  return [ta, tb];
 }
 
 describe('К4: производительность словарного детектора', () => {
@@ -75,8 +85,7 @@ describe('К4: производительность словарного дет�
     // прогрев: JIT, декодирование словарей, мемо
     await analyze(doc, off);
     await analyze(doc, on);
-    const tOff = await median3(doc, off);
-    const tOn = await median3(doc, on);
+    const [tOff, tOn] = await bestInterleaved(doc, off, on);
     const ratio = tOn / tOff;
     console.log(`К4: без словаря ${tOff.toFixed(0)} мс, со словарём ${tOn.toFixed(0)} мс, отношение ${ratio.toFixed(3)}`);
     expect(ratio).toBeLessThanOrEqual(1.3);

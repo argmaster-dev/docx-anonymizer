@@ -1,19 +1,22 @@
 // Разбор книги Excel (.xlsx/.xlsm) в модель потоков (версия 0.5, WP12-B, Ц1, К1; docs/concept-0.5.md п. 2, docs/contracts.md §9.8).
 // Поверх общего слоя OOXML (ooxml/): общие строки <si> и inline-строки <is> — абзацы с ранами <r>/<t> (фонетика <rPh> — не текст),
-// числа в ячейках <v> (ИНН, счёт, телефон, СНИЛС числом) — потоки-значения с заголовком столбца, кэш строковых формул (t="str"),
-// строковые литералы формул (только поиск: формулы не меняются), колонтитулы листов (коды &P, &D… — вне потоков),
-// примечания и комментарии (обычные и цепочки), авторы, имена листов, надписи и диаграммы, кэш сводных таблиц, docProps,
-// внешние ссылки. Листы и ячейки — таблицы `doc.blocks` для заголовков столбцов (detect/tables.js, без правок).
-// Значения ячеек в логи не попадают (NFR-14).
+// числа в ячейках <v> (ИНН, счёт, телефон, СНИЛС числом; показанный текст — по формату ячейки и заголовку столбца, numfmt.js),
+// кэш строковых формул (t="str"), строковые литералы формул (только поиск: формулы не меняются), константы имён книги и списки
+// проверки данных (заменяются), колонтитулы листов (коды &P, &D… — вне потоков), примечания и комментарии (обычные и цепочки),
+// VML примечаний, авторы, имена листов, надписи и диаграммы, умные таблицы (заголовки столбцов — вместе с ячейкой шапки),
+// кэш сводных таблиц, внешние книги (кэш значений, путь — заменяется всегда), подключения к данным, пользователи общей книги,
+// docProps, внешние ссылки. Части находятся по типам связей пакета (ревью WP12-B), путь — только запасной вариант.
+// Листы и ячейки — таблицы `doc.blocks` для заголовков столбцов (detect/tables.js, без правок). Значения в логи не попадают (NFR-14).
 import { tokenize, parseAttrs, getAttr, unescapeXml } from '../ooxml/xml.js';
 import { readZip } from '../ooxml/zip.js';
 import { parsePackage, readXmlEntry, sortParts, addAttrStream } from '../ooxml/model.js';
 import { parseFlowPart } from '../ooxml/flow.js';
-import { parseRelsPart, parseMetaPart, META_PART_RE, resolveTarget } from '../ooxml/opc.js';
-import { parseDrawingPart, addElementTextStreams, addAttrStreams, linkAuthors, embeddedWarning } from '../ooxml/dml.js';
+import { parseRelsPart, parseMetaPart, META_PART_RE } from '../ooxml/opc.js';
+import { parseDrawingPart, addElementTextStreams, addAttrStreams, linkAuthors, embeddedWarning, readRelations, chartExternalData } from '../ooxml/dml.js';
 import { CoreError } from '../errors.js';
 import { parseCell, parseRange, scanFormula, formulaRefs, spreadShared } from './refs.js';
-import { tableBlocks } from '../table-blocks.js';
+import { intDigits, parseStyles, formatOf, renderDigits, padByHeader } from './numfmt.js';
+import { tableBlocks, headerRow } from '../table-blocks.js';
 
 /** Разметка общих и inline-строк SpreadsheetML: текст <t> прямо в <si>/<is> или в ранах <r>; <rPh> (фонетика) — не текст. */
 /** @type {import('../ooxml/flow.js').FlowMarkup} */
@@ -49,51 +52,107 @@ const SML_THREADED = Object.freeze({
 
 export const SHARED_STRINGS = 'xl/sharedStrings.xml';
 export const WORKBOOK = 'xl/workbook.xml';
-const WORKBOOK_RELS = 'xl/_rels/workbook.xml.rels';
 
-const SHEET_RE = /^xl\/worksheets\/[^/]+\.xml$/;
-const COMMENTS_RE = /^xl\/comments[^/]*\.xml$/;
-const THREADED_RE = /^xl\/threadedComments\/[^/]+\.xml$/;
-const PERSONS_RE = /^xl\/persons\/[^/]+\.xml$/;
-const DRAWING_RE = /^xl\/drawings\/[^/]+\.xml$/;
-const CHART_RE = /^xl\/charts\/chart[^/]*\.xml$/;
-const PIVOT_RE = /^xl\/pivotCache\/pivotCache(?:Definition|Records)[^/]*\.xml$/;
-const RELS_RE = /^xl\/(?:[^/]+\/)*_rels\/[^/]+\.rels$/;
+/** Роль части по типу связи (последнее звено URI типа). */
+const ROLE_BY_TYPE = {
+  officeDocument: 'workbook',
+  worksheet: 'sheet',
+  sharedStrings: 'shared',
+  comments: 'comments',
+  threadedComment: 'threaded',
+  person: 'persons',
+  drawing: 'drawing',
+  chartUserShapes: 'drawing',
+  diagramData: 'drawing',
+  diagramDrawing: 'drawing',
+  chart: 'chart',
+  pivotCacheDefinition: 'pivot',
+  pivotCacheRecords: 'pivot',
+  table: 'table',
+  externalLink: 'external',
+  connections: 'connections',
+  usernames: 'usernames',
+  vmlDrawing: 'vml',
+  styles: 'styles',
+};
+/** Запасной вариант — по пути (пакет без связей или с нестандартными типами). */
+const ROLE_BY_PATH = [
+  [/^xl\/worksheets\/[^/]+\.xml$/, 'sheet'],
+  [/^xl\/sharedStrings\.xml$/, 'shared'],
+  [/^xl\/comments[^/]*\.xml$|^xl\/comments\/[^/]+\.xml$/, 'comments'],
+  [/^xl\/threadedComments\/[^/]+\.xml$/, 'threaded'],
+  [/^xl\/persons\/[^/]+\.xml$/, 'persons'],
+  [/^xl\/drawings\/[^/]+\.xml$/, 'drawing'],
+  [/^xl\/drawings\/[^/]+\.vml$/, 'vml'],
+  [/^xl\/charts\/chart[^/]*\.xml$/, 'chart'],
+  [/^xl\/pivotCache\/pivotCache(?:Definition|Records)[^/]*\.xml$/, 'pivot'],
+  [/^xl\/tables\/[^/]+\.xml$/, 'table'],
+  [/^xl\/externalLinks\/[^/]+\.xml$/, 'external'],
+  [/^xl\/connections\.xml$/, 'connections'],
+  [/^xl\/usernames\.xml$/, 'usernames'],
+];
+const RELS_RE = /(?:^|\/)_rels\/[^/]+\.rels$/;
+/** Встроенные пакеты (книги диаграмм, OLE) — не части текста: их обрабатывает core/embedded.js. */
+const EMBEDDED_RE = /(?:^|\/)embeddings\//;
 
-/** Ранг части для порядка обхода (FR-25): ячейки → примечания → фигуры и диаграммы → книга (имена листов) → кэш → связи → свойства. */
-export function xlsxPartRank(name) {
-  if (name === SHARED_STRINGS) return 0;
-  if (SHEET_RE.test(name)) return 1;
-  if (COMMENTS_RE.test(name)) return 2;
-  if (THREADED_RE.test(name)) return 3;
-  if (PERSONS_RE.test(name)) return 4;
-  if (DRAWING_RE.test(name)) return 5;
-  if (CHART_RE.test(name)) return 6;
-  if (name === WORKBOOK) return 7;
-  if (PIVOT_RE.test(name)) return 8;
-  if (RELS_RE.test(name)) return 9;
-  return 10; // docProps
+/** Ранг роли для порядка обхода (FR-25): ячейки → примечания → фигуры и диаграммы → книга (имена листов) → кэш → связи → свойства. */
+const RANK = {
+  shared: 0,
+  sheet: 1,
+  comments: 2,
+  vml: 2,
+  threaded: 3,
+  persons: 4,
+  usernames: 4,
+  drawing: 5,
+  chart: 6,
+  table: 6,
+  workbook: 7,
+  pivot: 8,
+  external: 8,
+  connections: 8,
+  rels: 9,
+  meta: 10,
+};
+
+/**
+ * Роль части: по связям пакета, иначе по пути; связи — 'rels', docProps — 'meta'; прочее (стили, тема, бинарные) — null.
+ * @param {string} name
+ * @param {(part: string) => string[]} [typesOf]
+ */
+export function xlsxRole(name, typesOf = () => []) {
+  if (EMBEDDED_RE.test(name)) return null;
+  if (RELS_RE.test(name)) return 'rels';
+  if (META_PART_RE.test(name)) return 'meta';
+  for (const t of typesOf(name)) if (ROLE_BY_TYPE[t] && ROLE_BY_TYPE[t] !== 'styles') return ROLE_BY_TYPE[t];
+  if (name === WORKBOOK) return 'workbook';
+  for (const [re, role] of ROLE_BY_PATH) if (re.test(name)) return role;
+  return null;
 }
 
 /**
- * Части книги с текстом в порядке обхода FR-25.
+ * Части книги с текстом в порядке обхода FR-25 (без связей пакета — по путям).
  * @param {string[]} names
+ * @param {(part: string) => string[]} [typesOf]
  */
-export function xlsxParts(names) {
-  const want = (n) =>
-    n === SHARED_STRINGS ||
-    n === WORKBOOK ||
-    [SHEET_RE, COMMENTS_RE, THREADED_RE, PERSONS_RE, DRAWING_RE, CHART_RE, PIVOT_RE, RELS_RE, META_PART_RE].some((re) => re.test(n));
-  return sortParts(names.filter(want), xlsxPartRank);
+export function xlsxParts(names, typesOf) {
+  const role = (n) => xlsxRole(n, typesOf);
+  return sortParts(
+    names.filter((n) => role(n)),
+    (n) => RANK[/** @type {string} */ (role(n))] ?? 10,
+  );
 }
 
 /** Число в ячейке, похожее на идентификатор: целое из 6–15 цифр (ИНН, СНИЛС, телефон, паспорт, ОГРН; даты и суммы — короче или с дробью). */
-const ID_NUMBER_RE = /^\d{6,15}$/;
-/** Элементы с формулами вне ячеек: условное форматирование, проверка данных (в т.ч. x14), их ссылки на листы переименовываются. */
-const FORMULA_ELEMENTS = new Set(['formula', 'formula1', 'formula2', 'xm:f']);
+const ID_DIGITS_RE = /^\d{6,15}$/;
+/** Элементы с формулами вне ячеек: условное форматирование и x14 — формулы (не меняются); списки проверки данных — константы. */
+const FORMULA_ELEMENTS = new Set(['formula', 'xm:f']);
+const DV_FORMULAS = new Set(['formula1', 'formula2']);
 const HEADER_FOOTER = new Set(['oddHeader', 'oddFooter', 'evenHeader', 'evenFooter', 'firstHeader', 'firstFooter']);
 /** Коды колонтитула Excel: &L &C &R &P &N &D &T &F &A &Z &G &B &I &U &E &S &X &Y &H &K…, &"шрифт", &12 (размер), && — «&». */
 const HF_CODE_RE = /&(?:"[^"]*"|K[0-9A-Fa-f]{6}|K\d\d[+-]\d{3}|\d{1,3}|[LCRPNDTFAZGBIUESXYHlcrpndtfazgbiuesxyh&]|$)/g;
+/** Подсказки проверки данных — текст для пользователя. */
+const DV_ATTRS = new Set(['prompt', 'promptTitle', 'error', 'errorTitle']);
 
 /**
  * Сведения о книге для сериализации и предупреждений (doc.xlsx).
@@ -102,10 +161,16 @@ const HF_CODE_RE = /&(?:"[^"]*"|K[0-9A-Fa-f]{6}|K\d\d[+-]\d{3}|\d{1,3}|[LCRPNDTF
  * @property {{part: string, start: number, end: number, kind: 'formula'|'location'|'sheet'}[]} sites  места с именами листов: формулы, ссылки «#Лист!A1», источник сводной
  * @property {import('./refs.js').RefArea[]} refAreas  на что ссылаются формулы и диаграммы (граф ссылок, грубо)
  * @property {{at: number, attrEnd: number | null, self: boolean} | null} calc  <calcPr> книги (или место вставки) — пересчёт при открытии
+ * @property {string} workbook  главная часть книги
+ * @property {{columnStream: string, headerStream: string | null}[]} tableColumns  заголовок столбца умной таблицы ↔ поток ячейки шапки
+ * @property {Map<string, {part: string, tagStart: number, tagEnd: number, attrStart: number, attrEnd: number}>} pivotItems  sharedItems сводной по потоку
+ * @property {Map<string, {at: number}>} pivotRoots  корень определения сводной (для refreshOnLoad)
+ * @property {{part: string, valueStart: number, valueEnd: number, index: number}[]} externalPaths  пути внешних книг (заменяются всегда)
+ * @property {number} connections  подключений к данным
  */
 
 /**
- * Разбирает .xlsx/.xlsm. Бросает CoreError: NOT_SUPPORTED (не ZIP, нет xl/workbook.xml), ENCRYPTED, PARSE_FAILED.
+ * Разбирает .xlsx/.xlsm. Бросает CoreError: NOT_SUPPORTED (не ZIP, нет книги), ENCRYPTED, PARSE_FAILED.
  * @param {Uint8Array} bytes
  * @returns {import('../ooxml/model.js').DocModel & {xlsx: XlsxInfo, blocks: any[], viewParts: string[]}}
  */
@@ -117,64 +182,104 @@ export function parseXlsx(bytes) {
     throw notSupported(e);
   }
   const byName = new Map(entries.map((e) => [e.name, e]));
-  if (!byName.has(WORKBOOK)) throw new CoreError('NOT_SUPPORTED', 'В архиве нет xl/workbook.xml');
-  // книга и её связи — заранее: имена листов нужны при разборе листов (ссылки без имени листа, таблицы для заголовков)
-  const sheets = readSheets(
-    readXmlEntry(/** @type {any} */ (byName.get(WORKBOOK))),
-    byName.has(WORKBOOK_RELS) ? readXmlEntry(/** @type {any} */ (byName.get(WORKBOOK_RELS))) : '',
-  );
+  const rels = readRelations(entries);
+  // главная часть — по связи officeDocument корня пакета (обычно xl/workbook.xml)
+  const main = rels.from('').find((r) => r.type === 'officeDocument' && byName.has(r.target))?.target || WORKBOOK;
+  // главная часть — книга (а не документ Word или презентация с тем же устройством пакета)
+  if (!byName.has(main) || !/<(?:\w+:)?workbook[\s>]/.test(readXmlEntry(/** @type {any} */ (byName.get(main))).slice(0, 2000)))
+    throw new CoreError('NOT_SUPPORTED', 'В архиве нет книги Excel');
+  const typesOf = (n) => (n === main ? ['officeDocument'] : rels.typesOf(n));
+  // книга, её связи и стили — заранее: имена листов нужны при разборе листов (ссылки, таблицы), стили — для показа чисел
+  const wbRels = rels.from(main);
+  const sheets = readSheets(readXmlEntry(/** @type {any} */ (byName.get(main))), wbRels);
+  const stylesPart = wbRels.find((r) => r.type === 'styles')?.target;
+  const styles = parseStyles(stylesPart && byName.has(stylesPart) ? readXmlEntry(/** @type {any} */ (byName.get(stylesPart))) : '');
   const sheetByPart = new Map(sheets.map((s, i) => [s.part, { ...s, index: i }]).filter(([p]) => p));
   /** @type {XlsxInfo} */
-  const info = { sheets: sheets.map((s) => ({ name: s.name, part: s.part, stream: null })), sites: [], refAreas: [], calc: null };
+  const info = {
+    sheets: sheets.map((s) => ({ name: s.name, part: s.part, stream: null })),
+    sites: [],
+    refAreas: [],
+    calc: null,
+    workbook: main,
+    tableColumns: [],
+    pivotItems: new Map(),
+    pivotRoots: new Map(),
+    externalPaths: [],
+    connections: 0,
+  };
+  /** книги данных диаграмм (удаляются при stripEmbedded) */
+  const chartEmbeds = [];
+  /** лист → его ячейки: «лист!A1» → id потока ячейки (для заголовков умных таблиц) */
+  const cellStream = new Map();
+  /** часть умной таблицы → часть листа (по связям листа) */
+  const tableSheet = new Map();
+  for (const r of rels.all) if (r.type === 'table' && !r.external) tableSheet.set(r.target, r.source);
+  /** части внешних книг — их связи (externalLinkPath) заменяются всегда */
+  const externalParts = new Set(entries.map((e) => e.name).filter((n) => xlsxRole(n, typesOf) === 'external'));
   /** @type {any[]} */
   const blocks = [];
   /** @type {(string | null)[]} */
   let siPids = [];
-  /** ячейки шапок листов — без потока (core/table-blocks.js); общие строки, уже попавшие в данные таблицы */
   let headSeq = 0;
   /** @type {Map<string, string>} pid → «таблица:строка» первого вхождения */
   const seenData = new Map();
-  /** pid абзаца → текст его live-потока (общие и inline-строки) — текст ячейки для таблицы заголовков */
-  /** @type {Map<string, string>} */
+  /** @type {Map<string, string>} pid абзаца → текст его live-потока */
   const textByPid = new Map();
+  /** @type {Map<string, string>} pid абзаца → id его live-потока */
+  const streamByPid = new Map();
   const rememberTexts = (part) => {
-    for (const st of part.streams) if (st.type === 'live' && st.pid) textByPid.set(st.pid, st.text);
+    for (const st of part.streams)
+      if (st.type === 'live' && st.pid) {
+        textByPid.set(st.pid, st.text);
+        streamByPid.set(st.pid, st.id);
+      }
   };
-  /** имена, определённые в книге (кроме служебных _xlnm), и их прямоугольники — для графа ссылок */
   const definedAreas = new Map();
-  /** все формулы (код без литералов) — чтобы понять, какие имена используются */
   const formulaCodes = [];
 
   /** @type {import('../ooxml/model.js').PackageDescription} */
   const desc = {
     kind: 'xlsx',
-    mainPart: WORKBOOK,
-    notFound: { code: 'NOT_SUPPORTED', message: 'В архиве нет xl/workbook.xml' },
-    parts: xlsxParts,
+    mainPart: main,
+    notFound: { code: 'NOT_SUPPORTED', message: 'В архиве нет книги Excel' },
+    parts: (names) => xlsxParts(names, typesOf),
     parsePart(name, xml, ctx) {
-      if (name === SHARED_STRINGS) {
+      const role = xlsxRole(name, typesOf);
+      if (role === 'shared') {
         const part = parseFlowPart(name, xml, ctx, SML);
         siPids = sharedStringPids(xml, ctx, name);
-        markCells(ctx, name);
+        for (const p of ctx.paragraphs) if (p.part === name) p.kind = 'cell';
         rememberTexts(part);
         return part;
       }
-      if (SHEET_RE.test(name)) return parseSheet(name, xml, ctx, sheetByPart.get(name));
-      if (COMMENTS_RE.test(name)) {
+      if (role === 'sheet') return parseSheet(name, xml, ctx, sheetByPart.get(name));
+      if (role === 'comments') {
         const part = parseFlowPart(name, xml, ctx, SML_COMMENT);
         addElementTextStreams(part, ctx, (n) => (n === 'author' ? 'author' : null));
         // заглушка цепочки комментариев: автор «tc={GUID}» — не человек (настоящий автор — в persons/person.xml)
         part.streams = part.streams.filter((x) => !(x.attrKind === 'author' && /^tc=\{/.test(x.text)));
         return part;
       }
-      if (THREADED_RE.test(name)) return parseFlowPart(name, xml, ctx, SML_THREADED);
-      if (PERSONS_RE.test(name)) {
+      if (role === 'vml') {
+        // VML примечаний: Excel обычно не пишет туда текст, но другие инструменты — пишут (<v:textbox><div>…)
+        const part = { name, kind: 'text', xml, streams: [], embeddedRuns: [] };
+        addElementTextStreams(part, ctx, (n, stack) => (stack.some((x) => /(?:^|:)textbox$/.test(x)) ? 'alt' : null));
+        return part;
+      }
+      if (role === 'threaded') return parseFlowPart(name, xml, ctx, SML_THREADED);
+      if (role === 'persons') {
         const part = { name, kind: 'people', xml, streams: [], embeddedRuns: [] };
         linkAuthors(addAttrStreams(part, ctx, { person: { displayName: 'author', userId: 'author-id' } }));
         return part;
       }
-      if (DRAWING_RE.test(name)) return parseDrawingPart(name, xml, ctx);
-      if (CHART_RE.test(name)) {
+      if (role === 'usernames') {
+        const part = { name, kind: 'people', xml, streams: [], embeddedRuns: [] };
+        addAttrStreams(part, ctx, { userInfo: { name: 'author' } });
+        return part;
+      }
+      if (role === 'drawing') return parseDrawingPart(name, xml, ctx);
+      if (role === 'chart') {
         const part = parseDrawingPart(name, xml, ctx);
         // кэш подписей рядов и категорий: <c:strCache><c:pt><c:v>…</c:v>; ссылки <c:f> — в граф и в переименование листов
         addElementTextStreams(part, ctx, (n, stack) => (n === 'c:v' && stack.some((x) => x === 'c:strCache' || x === 'c:lvl') ? 'cell-cache' : null));
@@ -184,26 +289,45 @@ export function parseXlsx(bytes) {
           (n) => n === 'c:f',
           (f) => info.refAreas.push(...formulaRefs(f, '')),
         );
+        const ext = chartExternalData(name, xml, rels.from(name));
+        if (ext) chartEmbeds.push(ext);
         return part;
       }
-      if (name === WORKBOOK) return parseWorkbook(name, xml, ctx);
-      if (PIVOT_RE.test(name)) {
+      if (role === 'table') return parseTable(name, xml, ctx);
+      if (role === 'workbook') return parseWorkbook(name, xml, ctx);
+      if (role === 'pivot') return parsePivot(name, xml, ctx);
+      if (role === 'external') return parseExternal(name, xml, ctx);
+      if (role === 'connections') {
         const part = { name, kind: 'text', xml, streams: [], embeddedRuns: [] };
-        addAttrStreams(part, ctx, { s: { v: 'cell-cache' } });
-        // источник сводной таблицы: <worksheetSource sheet="Лист1"> — имя листа переименовывается вместе с листом
-        tokenize(xml, (t) => {
-          if ((t.type === 'open' || t.type === 'selfclose') && t.name === 'worksheetSource') {
-            const a = getAttr(xml, t.attrStart, t.attrEnd, 'sheet');
-            if (a) info.sites.push({ part: name, start: a.valueStart, end: a.valueEnd, kind: 'sheet' });
-          }
-        });
+        // строка подключения — 'conn-string': логин и пароль в ней (UID=…;PWD=…) снимаются всегда (план адаптера)
+        const spec = { name: 'alt', description: 'alt', connection: 'conn-string', command: 'alt', url: 'alt', sourceFile: 'alt', odcFile: 'alt' };
+        const found = addAttrStreams(part, ctx, { connection: spec, dbPr: spec, olapPr: spec, webPr: spec, textPr: spec });
+        info.connections += new Set(
+          found.filter((x) => x.attr === 'connection' || x.attr === 'command' || x.attr === 'url' || x.attr === 'sourceFile').map((x) => x.el),
+        ).size;
         return part;
       }
-      if (RELS_RE.test(name)) return parseRelsPart(name, xml, ctx);
+      if (role === 'rels') {
+        const part = parseRelsPart(name, xml, ctx);
+        // путь внешней книги (file:///C:/Users/<логин>/…/<ФИО>.xlsx) — не данные ячеек, а след: заменяется всегда
+        const source = name.replace(/_rels\/([^/]+)\.rels$/, '$1');
+        if (externalParts.has(source)) {
+          for (const s of part.streams) {
+            s.attrKind = 'external-path';
+            info.externalPaths.push({
+              part: name,
+              valueStart: /** @type {number} */ (s.valueStart),
+              valueEnd: /** @type {number} */ (s.valueEnd),
+              index: info.externalPaths.length + 1,
+            });
+          }
+        }
+        return part;
+      }
       return parseMetaPart(name, xml, ctx);
     },
     warnings: (list) => embeddedWarning(list, 'xl/'),
-    languageStream: (s) => s.type === 'live' && (s.part === SHARED_STRINGS || SHEET_RE.test(s.part)),
+    languageStream: (s) => s.type === 'live' && (s.part === SHARED_STRINGS || xlsxRole(s.part, typesOf) === 'sheet' || xlsxRole(s.part, typesOf) === 'shared'),
   };
 
   let doc;
@@ -217,10 +341,12 @@ export function parseXlsx(bytes) {
     const re = new RegExp(`(?<![\\p{L}\\p{N}_.])${nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_.(])`, 'iu');
     if (formulaCodes.some((c) => re.test(c))) info.refAreas.push(...areas);
   }
+  const sharedPart = entries.map((e) => e.name).find((n) => xlsxRole(n, typesOf) === 'shared');
   return Object.assign(doc, {
     xlsx: info,
+    chartEmbeds,
     blocks,
-    viewParts: [SHARED_STRINGS, ...info.sheets.map((s) => s.part).filter(Boolean)],
+    viewParts: [...(sharedPart ? [sharedPart] : []), ...info.sheets.map((s) => s.part).filter(Boolean)],
   });
 
   /* ---------- общие строки ---------- */
@@ -241,8 +367,9 @@ export function parseXlsx(bytes) {
 
   /**
    * Лист: inline-строки (абзацы), числа-идентификаторы и кэш строковых формул (потоки-значения со своим абзацем),
-   * литералы формул (поток без правки), колонтитулы (куски текста между кодами), отображаемый текст ссылок; таблица ячеек
-   * для заголовков столбцов; формулы — в граф ссылок и в места переименования листов.
+   * литералы формул (поток без правки), колонтитулы (куски текста между кодами), отображаемый текст ссылок, подсказки и
+   * списки проверки данных, значения фильтров; таблица ячеек для заголовков столбцов; формулы — в граф ссылок и в места
+   * переименования листов.
    */
   function parseSheet(name, xml, ctx, sheet) {
     const firstPara = ctx.paragraphs.length;
@@ -256,8 +383,6 @@ export function parseXlsx(bytes) {
     /** @type {any[]} */
     const cells = [];
     const merges = [];
-    /** @type {import('../table-blocks.js').TableCell[]} */
-    const tableCells = [];
     /** @type {any} */
     let cell = null;
     let fOpen = null;
@@ -275,6 +400,7 @@ export function parseXlsx(bytes) {
             row: pos?.row ?? 0,
             col: pos?.col ?? 0,
             t: attrs.t || 'n',
+            s: attrs.s,
             openStart: t.start,
             openEnd: t.end,
             attrStart: t.attrStart,
@@ -291,13 +417,19 @@ export function parseXlsx(bytes) {
           const r = parseRange(getAttr(xml, t.attrStart, t.attrEnd, 'ref')?.raw);
           if (r) merges.push(r);
         } else if (HEADER_FOOTER.has(nm) && t.type === 'open') hfOpen = { start: t.end, name: nm };
-        else if (FORMULA_ELEMENTS.has(nm) && t.type === 'open') otherFormula = { start: t.end, name: nm };
+        else if ((FORMULA_ELEMENTS.has(nm) || DV_FORMULAS.has(nm)) && t.type === 'open') otherFormula = { start: t.end, name: nm };
         else if (nm === 'hyperlink') {
           for (const a of parseAttrs(xml, t.attrStart, t.attrEnd)) {
             if (!a.raw) continue;
             if (a.name === 'display' || a.name === 'tooltip') addAttrStream(part, ctx, a, 'alt', `hyperlink/@${a.name}`);
             else if (a.name === 'location') info.sites.push({ part: name, start: a.valueStart, end: a.valueEnd, kind: 'location' });
           }
+        } else if (nm === 'dataValidation' || nm === 'x14:dataValidation') {
+          for (const a of parseAttrs(xml, t.attrStart, t.attrEnd))
+            if (a.raw && DV_ATTRS.has(a.name)) addAttrStream(part, ctx, a, 'alt', `dataValidation/@${a.name}`);
+        } else if (nm === 'filter' || nm === 'customFilter') {
+          const a = getAttr(xml, t.attrStart, t.attrEnd, 'val');
+          if (a && a.raw) addAttrStream(part, ctx, a, 'alt', `${nm}/@val`);
         }
       } else if (t.type === 'close') {
         if (nm === 'f' && fOpen) {
@@ -307,68 +439,76 @@ export function parseXlsx(bytes) {
           cell.v = { elStart: vOpen.elStart, elEnd: t.end, start: vOpen.start, end: t.start };
           vOpen = null;
         } else if (nm === 'c' && cell) {
-          cell.closeEnd = t.end;
           cells.push(cell);
           cell = null;
         } else if (hfOpen && nm === hfOpen.name) {
           addHeaderFooter(part, ctx, xml, hfOpen.start, t.start);
           hfOpen = null;
         } else if (otherFormula && nm === otherFormula.name) {
-          addFormula(name, xml, otherFormula.start, t.start, sheetName, null);
+          // список проверки данных («"Иванов И.И.,Петров П.П."») — константа: литералы заменяются; условное форматирование — формула
+          addFormula(name, xml, otherFormula.start, t.start, sheetName, part, ctx, DV_FORMULAS.has(nm) ? 'name-literal' : 'formula-literal');
           otherFormula = null;
         }
       }
     });
 
+    /** @type {import('../table-blocks.js').TableCell[]} */
+    const tableCells = [];
+    /** числа-кандидаты: строятся после шапки (ведущие нули по заголовку столбца) */
+    const numbers = [];
     for (const c of cells) {
       if (c.f && c.f.end > c.f.start) {
-        const refs = addFormula(name, xml, c.f.start, c.f.end, sheetName, part, ctx);
+        const refs = addFormula(name, xml, c.f.start, c.f.end, sheetName, part, ctx, 'formula-literal');
         const range = c.f.attrs.t === 'shared' ? parseRange(c.f.attrs.ref) : null;
         if (range) info.refAreas.push(...spreadShared(refs, range));
         else info.refAreas.push(...refs);
       }
       const raw = c.v ? xml.slice(c.v.start, c.v.end) : '';
       let pid = null;
-      let text = '';
-      if (c.t === 's' && c.v) {
-        pid = siPids[Number(raw)] ?? null;
-      } else if (c.t === 'inlineStr' && c.isPos != null) {
-        pid = isPid.get(c.isPos) ?? null;
-      } else if (c.v && ((c.t === 'n' && ID_NUMBER_RE.test(raw)) || (c.t === 'str' && raw.trim()))) {
-        // число-идентификатор или кэш строковой формулы: поток-значение со своим абзацем (заголовок столбца, вкладка «Текст»)
-        const kind = c.t === 'n' ? 'cell-number' : 'cell-cache';
-        const s = addAttrStream(part, ctx, { raw, valueStart: c.v.start, valueEnd: c.v.end }, kind, 'c/v');
-        const para = { pid: `p${ctx.pidCounter++}`, part: name, depth: 0, pos: c.v.start, streams: { live: s.id }, kind: 'cell' };
-        ctx.paragraphs.push(para);
-        s.pid = para.pid;
-        if (kind === 'cell-number')
-          s.cell = {
-            sheet: sheetName,
-            row: c.row,
-            col: c.col,
-            openStart: c.openStart,
-            openEnd: c.openEnd,
-            attrStart: c.attrStart,
-            attrEnd: c.attrEnd,
-            v: c.v,
-            formula: !!c.f,
-          };
-        pid = para.pid;
-        text = s.text;
+      if (c.t === 's' && c.v) pid = siPids[Number(raw)] ?? null;
+      else if (c.t === 'inlineStr' && c.isPos != null) pid = isPid.get(c.isPos) ?? null;
+      else if (c.v && c.t === 'n') {
+        const digits = intDigits(raw);
+        if (digits && digits.length >= 5 && digits.length <= 15) numbers.push({ c, digits });
+        continue;
+      } else if (c.v && c.t === 'str' && raw.trim()) {
+        // кэш строковой формулы: поток-значение со своим абзацем (заголовок столбца, вкладка «Текст»)
+        pid = valueStream(part, ctx, name, c, unescapeXml(raw), 'cell-cache').pid;
       }
       if (!pid) continue;
-      if (!text) text = textByPid.get(pid) ?? '';
-      tableCells.push({ pid, text, row: c.row, col: c.col });
-      // объединённая ячейка (B1:D1) — тот же текст над каждым столбцом диапазона (заголовок над несколькими столбцами)
-      const m = merges.find((r) => r.r1 === c.row && r.c1 === c.col && r.c2 > r.c1);
-      if (m) for (let col = m.c1 + 1; col <= Math.min(m.c2, m.c1 + 50); col++) tableCells.push({ pid, text, row: c.row, col });
+      pushCell(tableCells, merges, { pid, text: textByPid.get(pid) ?? '', row: c.row, col: c.col });
+      const sid = streamByPid.get(pid);
+      if (sid) cellStream.set(`${name}!${c.row}:${c.col}`, sid);
+    }
+    // шапка листа — по текстовым ячейкам; числа под ней получают ведущие нули по заголовку столбца
+    const head = headerRow(tableCells, 2);
+    const headerText = new Map(head === null ? [] : tableCells.filter((x) => x.row === head).map((x) => [x.col, x.text]));
+    for (const { c, digits } of numbers) {
+      const shown = renderDigits(digits, formatOf(styles, c.s));
+      const text = shown ?? (head !== null && c.row > head ? padByHeader(digits, headerText.get(c.col)) : digits);
+      if (!ID_DIGITS_RE.test(text.replace(/\D/g, ''))) continue;
+      const s = valueStream(part, ctx, name, c, text, 'cell-number');
+      s.cell = {
+        sheet: sheetName,
+        row: c.row,
+        col: c.col,
+        openStart: c.openStart,
+        openEnd: c.openEnd,
+        attrStart: c.attrStart,
+        attrEnd: c.attrEnd,
+        v: c.v,
+        formula: !!c.f,
+        tag: 'c',
+      };
+      pushCell(tableCells, merges, { pid: s.pid, text, row: c.row, col: c.col });
+      cellStream.set(`${name}!${c.row}:${c.col}`, s.id);
     }
     // таблица листа для заголовков столбцов (core/table-blocks.js): шапка, заголовок листа над ней; общая строка в данных —
     // по первому вхождению (у одной строки в разных столбцах заголовок был бы неоднозначным)
-    for (const b of tableBlocks(tableCells, { index: tableIndex, fakePid: () => `h${headSeq++}` })) {
+    for (const b of tableBlocks(tableCells, { index: tableIndex, minHeader: 2, fakePid: () => `h${headSeq++}` })) {
       const at = `${b.table.index}:${b.table.row}`;
       const first = seenData.get(b.pid);
-      if (first !== undefined && first !== at) continue; // та же строка ниже — уже есть (повтор в объединённой ячейке — та же строка)
+      if (first !== undefined && first !== at) continue;
       seenData.set(b.pid, at);
       blocks.push(b);
     }
@@ -376,6 +516,38 @@ export function parseXlsx(bytes) {
     const tail = ctx.paragraphs.splice(firstPara).sort((a, b) => a.pos - b.pos);
     ctx.paragraphs.push(...tail);
     return part;
+  }
+
+  /** Ячейка в таблицу заголовков; объединённая ячейка (B1:D1) — над каждым столбцом диапазона. */
+  function pushCell(list, merges, x) {
+    list.push(x);
+    const m = merges.find((r) => r.r1 === x.row && r.c1 === x.col && r.c2 > r.c1);
+    if (m) for (let col = m.c1 + 1; col <= Math.min(m.c2, m.c1 + 50); col++) list.push({ ...x, col });
+  }
+
+  /** Поток-значение ячейки (`<v>`) со своим абзацем: текст — показанный (число — по формату), правка — планом адаптера. */
+  function valueStream(part, ctx, name, c, text, kind) {
+    /** @type {any} */
+    const s = {
+      id: `a${ctx.attrCounter++}`,
+      part: name,
+      pid: null,
+      type: 'attr',
+      attrKind: kind,
+      xpath: 'c/v',
+      text,
+      pos: c.v.start,
+      order: 0,
+      valueStart: c.v.start,
+      valueEnd: c.v.end,
+    };
+    part.streams.push(s);
+    const para = { pid: `p${ctx.pidCounter++}`, part: name, depth: 0, pos: c.v.start, streams: { live: s.id }, kind: 'cell' };
+    ctx.paragraphs.push(para);
+    s.pid = para.pid;
+    textByPid.set(para.pid, text);
+    streamByPid.set(para.pid, s.id);
+    return s;
   }
 
   /** Формулы-ссылки вне листов (<c:f> диаграмм): место переименования листов и граф ссылок. */
@@ -392,32 +564,33 @@ export function parseXlsx(bytes) {
   }
 
   /**
-   * Формула: место переименования листов, ссылки — в граф; строковые литералы длиннее двух символов — потоки `formula-literal`
-   * (поиск сущностей; сама формула не меняется — предупреждение). Возвращает ссылки формулы.
+   * Формула: место переименования листов, ссылки — в граф; строковые литералы длиннее двух символов — потоки:
+   * `formula-literal` (формула ячейки или условного формата — не меняется, предупреждение) или `name-literal` (константа имени
+   * книги, список проверки данных — литерал заменяется). Возвращает ссылки формулы.
    */
-  function addFormula(name, xml, start, end, sheetName, part, ctx) {
+  function addFormula(name, xml, start, end, sheetName, part, ctx, kind) {
     info.sites.push({ part: name, start, end, kind: 'formula' });
-    const f = unescapeXml(xml.slice(start, end));
+    const raw = xml.slice(start, end);
+    const { text: f, map } = unescapeWithMap(raw);
     const { strings, code } = scanFormula(f);
     formulaCodes.push(code);
-    if (part && ctx) {
-      for (const s of strings) {
-        const text = f.slice(s.start, s.end).replace(/""/g, '"');
-        if (text.trim().length < 3) continue;
-        part.streams.push({
-          id: `a${ctx.attrCounter++}`,
-          part: name,
-          pid: null,
-          type: 'attr',
-          attrKind: 'formula-literal',
-          xpath: 'c/f',
-          text,
-          pos: start,
-          order: 0,
-          valueStart: start,
-          valueEnd: end,
-        });
-      }
+    for (const s of strings) {
+      const text = f.slice(s.start, s.end).replace(/""/g, '"');
+      if (text.trim().length < 3) continue;
+      part.streams.push({
+        id: `a${ctx.attrCounter++}`,
+        part: name,
+        pid: null,
+        type: 'attr',
+        attrKind: kind,
+        xpath: 'f',
+        text,
+        pos: start + map[s.start],
+        order: 0,
+        // для константы — сырой диапазон литерала (без кавычек) в XML части
+        valueStart: start + map[s.start],
+        valueEnd: start + map[s.end],
+      });
     }
     return formulaRefs(f, sheetName);
   }
@@ -442,9 +615,126 @@ export function parseXlsx(bytes) {
     }
   }
 
-  /** Отметить абзацы общих строк как ячейки (вид блока для фильтров NER, К10 0.4). */
-  function markCells(ctx, name) {
-    for (const p of ctx.paragraphs) if (p.part === name) p.kind = 'cell';
+  /* ---------- умная таблица ---------- */
+
+  /**
+   * Умная таблица (ListObject): заголовок столбца `tableColumn/@name` обязан совпадать с текстом ячейки шапки — поток
+   * `table-column`, связанный с потоком ячейки (план адаптера держит их одинаковыми); значения автофильтра — `alt`.
+   */
+  function parseTable(name, xml, ctx) {
+    const part = { name, kind: 'text', xml, streams: [], embeddedRuns: [] };
+    const sheetPart = tableSheet.get(name);
+    let range = null;
+    let col = 0;
+    let headerRows = 1;
+    tokenize(xml, (t) => {
+      if (t.type !== 'open' && t.type !== 'selfclose') return;
+      if (t.name === 'table') {
+        const a = attrMap(xml, t);
+        range = parseRange(a.ref);
+        headerRows = a.headerRowCount === '0' ? 0 : 1;
+      } else if (t.name === 'tableColumn') {
+        const a = getAttr(xml, t.attrStart, t.attrEnd, 'name');
+        if (a && a.raw) {
+          const s = addAttrStream(part, ctx, a, 'table-column', 'tableColumn/@name');
+          const headerStream = range && headerRows && sheetPart ? cellStream.get(`${sheetPart}!${range.r1}:${range.c1 + col}`) || null : null;
+          info.tableColumns.push({ columnStream: s.id, headerStream });
+        }
+        col++;
+      } else if (t.name === 'filter' || t.name === 'customFilter') {
+        const a = getAttr(xml, t.attrStart, t.attrEnd, 'val');
+        if (a && a.raw) addAttrStream(part, ctx, a, 'alt', `${t.name}/@val`);
+      }
+    });
+    return part;
+  }
+
+  /* ---------- сводная таблица ---------- */
+
+  /**
+   * Кэш сводной таблицы: строки `<s v>` — `cell-cache`; числа-идентификаторы `<n v>` — `pivot-number` (станут строками),
+   * `minValue`/`maxValue` — `pivot-minmax` (удаляются вместе с признаками типов набора), `refreshedBy` — автор.
+   */
+  function parsePivot(name, xml, ctx) {
+    const part = { name, kind: 'text', xml, streams: [], embeddedRuns: [] };
+    let items = null;
+    tokenize(xml, (t) => {
+      if (t.type === 'close') {
+        if (t.name === 'sharedItems') items = null;
+        return;
+      }
+      if (t.type !== 'open' && t.type !== 'selfclose') return;
+      const nm = t.name;
+      if (nm === 'pivotCacheDefinition') {
+        info.pivotRoots.set(name, { at: t.attrEnd });
+        const a = getAttr(xml, t.attrStart, t.attrEnd, 'refreshedBy');
+        if (a && a.raw) addAttrStream(part, ctx, a, 'author', 'pivotCacheDefinition/@refreshedBy');
+      } else if (nm === 'worksheetSource') {
+        // источник сводной таблицы: <worksheetSource sheet="Лист1"> — имя листа переименовывается вместе с листом
+        const a = getAttr(xml, t.attrStart, t.attrEnd, 'sheet');
+        if (a) info.sites.push({ part: name, start: a.valueStart, end: a.valueEnd, kind: 'sheet' });
+      } else if (nm === 'sharedItems') {
+        const tag = { part: name, tagStart: t.start, tagEnd: t.end, attrStart: t.attrStart, attrEnd: t.attrEnd };
+        items = t.type === 'open' ? tag : null;
+        for (const a of parseAttrs(xml, t.attrStart, t.attrEnd)) {
+          if ((a.name === 'minValue' || a.name === 'maxValue') && ID_DIGITS_RE.test(intDigits(a.raw) || '')) {
+            const s = addAttrStream(part, ctx, { ...a, raw: /** @type {string} */ (intDigits(a.raw)) }, 'pivot-minmax', `sharedItems/@${a.name}`);
+            info.pivotItems.set(s.id, tag);
+          }
+        }
+      } else if (nm === 's') {
+        const a = getAttr(xml, t.attrStart, t.attrEnd, 'v');
+        if (a && a.raw) addAttrStream(part, ctx, a, 'cell-cache', 's/@v');
+      } else if (nm === 'n' && t.type === 'selfclose') {
+        const a = getAttr(xml, t.attrStart, t.attrEnd, 'v');
+        const digits = a ? intDigits(a.raw) : null;
+        if (a && digits && ID_DIGITS_RE.test(digits)) {
+          const s = addAttrStream(part, ctx, { ...a, raw: digits }, 'pivot-number', 'n/@v');
+          s.el = { start: t.start, end: t.end, attrStart: t.attrStart, attrEnd: t.attrEnd };
+          if (items) info.pivotItems.set(s.id, items);
+        }
+      }
+    });
+    return part;
+  }
+
+  /* ---------- внешняя книга ---------- */
+
+  /** Кэш значений внешней книги: имена листов, строки и числа-идентификаторы ячеек (путь к файлу — в связях, заменяется всегда). */
+  function parseExternal(name, xml, ctx) {
+    const part = { name, kind: 'text', xml, streams: [], embeddedRuns: [] };
+    addAttrStreams(part, ctx, { sheetName: { val: 'alt' }, definedName: { name: 'alt' } });
+    let cell = null;
+    let vOpen = null;
+    tokenize(xml, (t) => {
+      if ((t.type === 'open' || t.type === 'selfclose') && t.name === 'cell') {
+        cell = t.type === 'open' ? { ...attrMap(xml, t), openStart: t.start, openEnd: t.end, attrStart: t.attrStart, attrEnd: t.attrEnd } : null;
+      } else if (t.type === 'open' && t.name === 'v' && cell) vOpen = { elStart: t.start, start: t.end };
+      else if (t.type === 'close' && t.name === 'v' && cell && vOpen) {
+        const v = { elStart: vOpen.elStart, elEnd: t.end, start: vOpen.start, end: t.start };
+        const raw = xml.slice(v.start, v.end);
+        const digits = !cell.t || cell.t === 'n' ? intDigits(raw) : null;
+        if (digits && ID_DIGITS_RE.test(digits)) {
+          const s = addAttrStream(part, ctx, { raw: digits, valueStart: v.start, valueEnd: v.end }, 'cell-number', 'cell/v');
+          s.cell = {
+            sheet: '',
+            row: 0,
+            col: 0,
+            openStart: cell.openStart,
+            openEnd: cell.openEnd,
+            attrStart: cell.attrStart,
+            attrEnd: cell.attrEnd,
+            v,
+            formula: true,
+            tag: 'cell',
+          };
+        } else if (raw.trim() && cell.t && cell.t !== 'n' && cell.t !== 'b' && cell.t !== 'e') {
+          addAttrStream(part, ctx, { raw, valueStart: v.start, valueEnd: v.end }, 'cell-cache', 'cell/v');
+        }
+        vOpen = null;
+      } else if (t.type === 'close' && t.name === 'cell') cell = null;
+    });
+    return part;
   }
 
   /* ---------- книга ---------- */
@@ -464,6 +754,9 @@ export function parseXlsx(bytes) {
         } else if (t.name === 'fileSharing') {
           const a = getAttr(xml, t.attrStart, t.attrEnd, 'userName');
           if (a && a.raw) addAttrStream(part, ctx, a, 'author', 'fileSharing/@userName');
+        } else if (t.name === 'customWorkbookView') {
+          const a = getAttr(xml, t.attrStart, t.attrEnd, 'name');
+          if (a && a.raw) addAttrStream(part, ctx, a, 'alt', 'customWorkbookView/@name');
         } else if (t.name === 'definedName' && t.type === 'open') {
           dn = { start: t.end, name: getAttr(xml, t.attrStart, t.attrEnd, 'name')?.raw || '' };
         } else if (t.name === 'calcPr') {
@@ -471,8 +764,9 @@ export function parseXlsx(bytes) {
         }
       } else if (t.type === 'close') {
         if (t.name === 'definedName' && dn) {
-          info.sites.push({ part: name, start: dn.start, end: t.start, kind: 'formula' });
-          if (dn.name && !/^_xlnm\./i.test(dn.name)) definedAreas.set(dn.name, formulaRefs(unescapeXml(xml.slice(dn.start, t.start)), ''));
+          // имя книги: ссылки — в граф и переименование листов; строковая константа («"Иванов И.И."») — заменяется
+          const areas = addFormula(name, xml, dn.start, t.start, '', part, ctx, 'name-literal');
+          if (dn.name && !/^_xlnm\./i.test(dn.name)) definedAreas.set(dn.name, areas);
           dn = null;
         }
         // <calcPr> вставляется после последнего из этих блоков (порядок схемы CT_Workbook)
@@ -486,23 +780,17 @@ export function parseXlsx(bytes) {
 
 /**
  * Листы книги по порядку: имя и часть листа (по связям книги). Лист-диаграмма и битые связи — без части.
- * @param {string} xml  xl/workbook.xml
- * @param {string} rels xl/_rels/workbook.xml.rels
+ * @param {string} xml  главная часть книги
+ * @param {import('../ooxml/dml.js').Relation[]} rels  связи книги
  */
 export function readSheets(xml, rels) {
-  const targets = new Map();
-  tokenize(rels, (t) => {
-    if ((t.type === 'open' || t.type === 'selfclose') && t.name === 'Relationship') {
-      const a = attrMap(rels, t);
-      if (a.Id && a.Target && a.TargetMode !== 'External') targets.set(a.Id, resolveTarget('xl/', a.Target));
-    }
-  });
+  const targets = new Map(rels.filter((r) => !r.external).map((r) => [r.id, r]));
   const out = [];
   tokenize(xml, (t) => {
     if ((t.type === 'open' || t.type === 'selfclose') && t.name === 'sheet') {
       const a = attrMap(xml, t);
-      const target = targets.get(a['r:id']) || null;
-      out.push({ name: unescapeXml(a.name || ''), part: target && SHEET_RE.test(target) ? target : null, state: a.state || 'visible' });
+      const rel = targets.get(a['r:id']);
+      out.push({ name: unescapeXml(a.name || ''), part: rel && rel.type === 'worksheet' ? rel.target : null, state: a.state || 'visible' });
     }
   });
   return out;

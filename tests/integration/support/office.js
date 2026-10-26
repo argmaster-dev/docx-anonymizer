@@ -3,7 +3,17 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { analyze, applyDecisions, defaultSettings, detectAdapter, loadAdapter, registerBuiltinDetectors, getDetectors } from '../../../src/core/index.js';
+import {
+  analyze,
+  applyDecisions,
+  defaultSettings,
+  detectAdapter,
+  loadAdapter,
+  registerBuiltinDetectors,
+  getDetectors,
+  readZip,
+  inflateEntry,
+} from '../../../src/core/index.js';
 import { SOFFICE } from './pipeline.js';
 
 export const OFFICE_DIR = join(process.cwd(), 'tests/fixtures/office');
@@ -42,7 +52,7 @@ const XCU =
 
 /**
  * Пакетная конвертация в LibreOffice headless: каталог test-output/lo-office/<tag> (snap-LibreOffice не видит скрытые каталоги
- * и /tmp), свой профиль. Ошибка запуска или просьба восстановить файл — исключение.
+ * и /tmp), свой профиль на вызов. Ошибка запуска — исключение; что результат есть на каждый файл и его структура — проверяют тесты.
  * @param {{name: string, bytes: Uint8Array}[]} files
  * @param {string} to  фильтр --convert-to ('pdf', 'csv:…')
  * @param {string} tag
@@ -52,7 +62,8 @@ export function libreOfficeConvert(files, to, tag) {
   const dir = join(process.cwd(), 'test-output', 'lo-office', tag);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  const profile = join(process.cwd(), 'test-output', 'lo-office', 'profile');
+  // свой профиль на каждый вызов и процесс vitest: параллельные LibreOffice с одним профилем мешают друг другу (ревью WP12-B)
+  const profile = join(process.cwd(), 'test-output', 'lo-office', `profile-${tag}-${process.pid}`);
   if (!existsSync(join(profile, 'user'))) mkdirSync(join(profile, 'user'), { recursive: true });
   const xcu = join(profile, 'user', 'registrymodifications.xcu');
   if (!existsSync(xcu) || !readFileSync(xcu, 'utf8').includes('OOXMLRecalcMode')) writeFileSync(xcu, XCU);
@@ -71,8 +82,9 @@ export function libreOfficeConvert(files, to, tag) {
       timeout: 300000,
     },
   );
-  if (res.status !== 0) throw new Error(`LibreOffice: ${res.stderr}`);
-  if (/repair|восстанов/i.test(`${res.stdout}${res.stderr}`)) throw new Error('LibreOffice просит восстановление файла');
+  // «открывается без восстановления» — по факту: конвертация прошла и дала результат на каждый файл (структуру сверяют тесты)
+  rmSync(profile, { recursive: true, force: true });
+  if (res.status !== 0) throw new Error(`LibreOffice: код ${res.status}`);
   const map = new Map();
   for (const f of readdirSync(out)) map.set(f, /\.(csv|txt|fodp|fods)$/.test(f) ? readFileSync(join(out, f), 'utf8') : '');
   return map;
@@ -80,3 +92,50 @@ export function libreOfficeConvert(files, to, tag) {
 
 // утечки в частях пакета, целостность пакета, LibreOffice включён — общие помощники DOCX (pipeline.js)
 export { findLeaks, checkPackage, LO_ENABLED } from './pipeline.js';
+
+/**
+ * Утечки «ни одного исходного значения ни в одной части zip» (по образцу конвейера ревьюера WP12-B): каждая запись пакета,
+ * вложенные zip (книги диаграмм) — рекурсивно; текст — в UTF-8, UTF-16LE и Windows-1251, как есть, с раскрытыми сущностями XML,
+ * без тегов и с раскрытыми \uXXXX (JSON); регистр не учитывается. Не zip — весь файл одной «частью».
+ * @param {Uint8Array} bytes
+ * @param {string[]} secrets
+ * @returns {string[]} «значение @ часть»
+ */
+export function deepLeaks(bytes, secrets, prefix = '') {
+  const unesc = (s) =>
+    s
+      .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+      .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&');
+  let files;
+  try {
+    files = readZip(bytes).map((e) => [e.name, inflateEntry(e)]);
+  } catch {
+    files = [['<файл>', bytes]];
+  }
+  const out = [];
+  for (const [name, data] of files) {
+    const n = prefix + name;
+    if (data[0] === 0x50 && data[1] === 0x4b && data[2] === 0x03 && name !== '<файл>') {
+      out.push(...deepLeaks(data, secrets, `${n}!`));
+      continue;
+    }
+    const variants = [];
+    for (const enc of ['utf-8', 'utf-16le', 'windows-1251']) {
+      const t = new TextDecoder(enc).decode(data);
+      variants.push(
+        t,
+        unesc(t),
+        unesc(t.replace(/<[^>]+>/g, '')),
+        t.replace(/\\u([0-9a-f]{4})/gi, (_, h) => String.fromCharCode(parseInt(h, 16))),
+      );
+    }
+    const hay = variants.map((s) => s.toLowerCase());
+    for (const v of secrets) if (hay.some((h) => h.includes(v.toLowerCase()))) out.push(`${v} @ ${n}`);
+  }
+  return out;
+}

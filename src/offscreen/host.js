@@ -9,6 +9,8 @@ import { isPdf } from '../core/pdf/sniff.js';
 import { analyze } from '../core/detect/runner.js';
 import { applyDecisions } from '../core/apply.js';
 import { adapterForKind, detectAdapter, loadAdapter } from '../core/adapters.js';
+import { attachEmbeddedBooks } from '../core/embedded.js';
+import { addFileNameStream } from '../core/file-name.js';
 import { mergeDecisions } from '../core/contracts/entity.js';
 import { summarizeSession } from '../core/contracts/session.js';
 import { deanonymize } from '../core/deanon.js';
@@ -189,8 +191,12 @@ export function createHost(env) {
       progress('unzip', 0);
       adapter = await loadFormat(entry);
       doc = adapter.parse(bytes, name);
+      // встроенные книги Excel (данные диаграмм, OLE) — тем же анализом и общей картой меток (core/embedded.js, ревью WP12-B)
+      await attachEmbeddedBooks(doc, loadFormat);
       progress('parse', 100);
     }
+    // имя файла — тоже данные: найденное в нём заменяется в имени результата (core/file-name.js)
+    addFileNameStream(doc, name);
     const allocator = msg.batchId ? batches.get(msg.batchId) : undefined;
     const dictWarnings = await ensureDicts();
     const analysis = await analyze(doc, settings, { nerProvider: providerFor(settings), allocator, onProgress: progress });
@@ -253,17 +259,20 @@ export function createHost(env) {
     const textFormat = settings.pdfMode === 'text' ? 'txt' : 'md';
     // книга или презентация без расширения в имени (распознана по содержимому) — расширение формата, а не .docx (WP12-B)
     const ext = s.kind === 'pdf' ? `.${textFormat}` : (s.kind === 'xlsx' || s.kind === 'pptx') && !RESULT_EXT_RE.test(s.name || '') ? `.${s.kind}` : '';
-    const resultName = makeResultName(s.name, settings.outputSuffix, ext ? { ext } : {});
+    const document = { name: s.name, sha256: s.sha256, resultName: '' };
     const r = applyDecisions(s.doc, s.groups, {
       mode: msg.mode || settings.mode,
       placeholderLanguage: s.analysis.placeholderLanguage,
       language: s.analysis.language,
       keepMetadata: opts.keepMetadata ?? settings.keepMetadata,
       stripEmbedded: opts.stripEmbedded ?? settings.stripEmbedded,
-      document: { name: s.name, sha256: s.sha256, resultName },
+      document,
       toolVersion: env.toolVersion,
       textFormat,
     });
+    // имя результата — по имени файла с метками вместо найденного в нём (если нашлось); карта получает его же
+    const resultName = makeResultName(r.fileName || s.name, settings.outputSuffix, ext ? { ext } : {});
+    document.resultName = resultName;
     s.lastMapping = r.mapping;
     progress('zip', 100);
     postChunked(post, { requestId, kind: 'RESULT', bytes: r.bytes, meta: { name: resultName, docId: s.docId, mime: r.mime } });

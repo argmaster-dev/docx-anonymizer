@@ -3,8 +3,9 @@
 // <*:cNvPr descr/title>, кэш строк диаграмм <c:v> и элементы с текстом без ранов (автор примечания, текст комментария
 // PowerPoint) — потоки, правка которых пересобирает значение целиком (§6.3 п.6). Используют xlsx/ и pptx/ (модули по требованию).
 import { tokenize, parseAttrs } from './xml.js';
-import { addAttrStream } from './model.js';
+import { addAttrStream, readXmlEntry } from './model.js';
 import { parseFlowPart } from './flow.js';
+import { relsBaseDir, resolveTarget } from './opc.js';
 
 /**
  * DrawingML: абзац <a:p>, раны <a:r>, поле <a:fld> (номер слайда, дата) — тоже текст, разрыв строки <a:br> стоит между ранами
@@ -49,6 +50,10 @@ export function parseDrawingPart(name, xml, ctx, extra = {}) {
           if (!a.raw) continue;
           if (a.name === 'descr' || a.name === 'title' || (pic && a.name === 'name')) addAttrStream(part, ctx, a, 'alt', `${t.name}/@${a.name}`);
         }
+      } else if (t.name === 'a:hlinkClick' || t.name === 'a:hlinkHover') {
+        // всплывающая подсказка ссылки («Написать Иванову») — тоже текст документа
+        const a = parseAttrs(xml, t.attrStart, t.attrEnd).find((x) => x.name === 'tooltip');
+        if (a && a.raw) addAttrStream(part, ctx, a, 'alt', `${t.name}/@tooltip`);
       }
       extra.onElement?.(t, parent, para, part);
     },
@@ -147,4 +152,79 @@ export function embeddedWarning(entries, root) {
   }
   const n = counts.embeddings + counts.media;
   return n ? [{ code: 'EMBEDDED_NOT_PROCESSED', count: n, details: counts }] : [];
+}
+
+/**
+ * Связь пакета OPC.
+ * @typedef {{source: string, id: string, type: string, target: string, external: boolean}} Relation
+ */
+
+/**
+ * Все связи пакета (ревью WP12-B: части Excel и PowerPoint находятся по типу связи, а не по шаблону пути — openpyxl пишет
+ * примечания в xl/comments/comment1.xml, LibreOffice и другие инструменты — свои имена). `type` — последнее звено URI типа
+ * («comments», «threadedComment», «worksheet», «package»…); источник «_rels/.rels» — пустая строка.
+ * @param {import('./zip.js').ZipEntry[]} entries
+ * @returns {{all: Relation[], typesOf: (part: string) => string[], from: (source: string) => Relation[]}}
+ */
+export function readRelations(entries) {
+  /** @type {Relation[]} */
+  const all = [];
+  for (const e of entries) {
+    if (!/(?:^|\/)_rels\/[^/]*\.rels$/.test(e.name)) continue;
+    let xml;
+    try {
+      xml = readXmlEntry(e);
+    } catch {
+      continue;
+    }
+    const base = relsBaseDir(e.name);
+    const source = base + e.name.slice(e.name.lastIndexOf('/') + 1).replace(/\.rels$/, '');
+    tokenize(xml, (t) => {
+      if ((t.type !== 'open' && t.type !== 'selfclose') || t.name !== 'Relationship') return;
+      const a = Object.fromEntries(parseAttrs(xml, t.attrStart, t.attrEnd).map((x) => [x.name, x.raw]));
+      const external = a.TargetMode === 'External';
+      const type = String(a.Type || '').replace(/^.*\//, '');
+      all.push({
+        source: source === base ? '' : source,
+        id: a.Id || '',
+        type,
+        target: external ? a.Target || '' : resolveTarget(base, a.Target || ''),
+        external,
+      });
+    });
+  }
+  const byTarget = new Map();
+  for (const r of all) {
+    if (r.external) continue;
+    if (!byTarget.has(r.target)) byTarget.set(r.target, []);
+    byTarget.get(r.target).push(r.type);
+  }
+  return { all, typesOf: (part) => byTarget.get(part) || [], from: (source) => all.filter((r) => r.source === source) };
+}
+
+/**
+ * Встроенная книга данных диаграммы (`<c:externalData r:id>` → ../embeddings/*.xlsx): что удалить при «Удалять встроенные
+ * объекты» — запись книги (связи и тип содержимого чистит общий сериализатор) и сам элемент в диаграмме (диаграмма остаётся
+ * с кэшем значений, но без книги для правки данных).
+ * @param {string} name  часть диаграммы
+ * @param {string} xml
+ * @param {Relation[]} rels  связи этой диаграммы
+ * @returns {{chart: string, embed: string, start: number, end: number} | null}
+ */
+export function chartExternalData(name, xml, rels) {
+  let open = null;
+  let out = null;
+  tokenize(xml, (t) => {
+    if (out) return;
+    if ((t.type === 'open' || t.type === 'selfclose') && t.name === 'c:externalData') {
+      const id = parseAttrs(xml, t.attrStart, t.attrEnd).find((a) => a.name === 'r:id')?.raw;
+      const rel = rels.find((r) => r.id === id && !r.external);
+      if (!rel) return;
+      if (t.type === 'selfclose') out = { chart: name, embed: rel.target, start: t.start, end: t.end };
+      else open = { embed: rel.target, start: t.start };
+    } else if (t.type === 'close' && t.name === 'c:externalData' && open) {
+      out = { chart: name, embed: open.embed, start: open.start, end: t.end };
+    }
+  });
+  return out;
 }

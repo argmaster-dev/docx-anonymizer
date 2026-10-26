@@ -1190,8 +1190,8 @@ bytes, name ──► detectAdapter: проход 1 — только содер�
 во всех формулах (`<f>`, `definedName`, `<c:f>` диаграмм, `formula`/`formula1`/`formula2`/`xm:f`), ссылке `hyperlink/@location` и `worksheetSource/@sheet`
 переименовываются согласованно (`refs.js renameSheets`: имя всегда в апострофах, литералы и другие книги `[1]Лист!` — нет); литерал формулы не меняется;
 колонтитул — «&» нового текста удваивается; после правки ячеек или имени листа — `calcPr fullCalcOnLoad="1"` (Excel и LibreOffice с пересчётом при
-открытии получают значения формул от новых ячеек). Встроенные объекты (`xl/embeddings`, `xl/media`) — предупреждение `EMBEDDED_NOT_PROCESSED`,
-`stripEmbedded` их не удаляет (на них ссылаются листы; у PowerPoint — так же). Предупреждения `analysisWarnings`: `XLSX_CELL_REFERENCED {count}` —
+открытии получают значения формул от новых ячеек). Встроенные объекты (`xl/embeddings`, `xl/media`) — предупреждение `EMBEDDED_NOT_PROCESSED`
+без разобранных книг Excel (см. «Доработка по ревью» ниже: книги обезличиваются, книги диаграмм удаляются при `stripEmbedded`). Предупреждения `analysisWarnings`: `XLSX_CELL_REFERENCED {count}` —
 число с сущностью в ячейке, на которую ссылаются формулы или диаграммы (граф ссылок `refs.js`: A1-ссылки вне литералов, столбцы и строки целиком,
 общая формула — прямоугольником на весь диапазон, имена книги — если имя встречается в формулах; грубо), `XLSX_FORMULA_LITERAL {count}`, `XLSX_SHEET_RENAMED {count}`.
 
@@ -1223,7 +1223,38 @@ bytes, name ──► detectAdapter: проход 1 — только содер�
 и `nfr.spec.js` (модули форматов — только `chrome-extension://`, один раз). LibreOffice (локально, `SKIP_LIBREOFFICE`): книги и презентации открываются
 без восстановления; книги — с пересчётом формул при открытии (`OOXMLRecalcMode = 0` в профиле теста) без `#REF!`.
 
-**Не сделано / ограничения**: упоминания `@Имя` в цепочке комментариев Excel (`<mention startIndex length>`) не пересчитываются; столбцы умных таблиц
-(`xl/tables/*.xml tableColumn/@name`) не меняются — сущность в заголовке умной таблицы рассогласует его с ячейкой; подключения (`connections.xml`),
-внешние книги (`externalLinks` — кэш значений) и `chartEx` не разбираются; удаление встроенных объектов (`stripEmbedded`) для Excel и PowerPoint не делается;
-скрытые листы, строки и слайды обрабатываются как обычные (счётчики и удаление — WP12-D).
+**Доработка по ревью WP12-B** (файлы openpyxl, pandas, python-pptx, LibreOffice; принцип — лишнее маскирование дешевле утечки):
+- **Части — по связям пакета** (`ooxml/dml.js readRelations`: все `*.rels`, тип — последнее звено URI): Excel — `worksheet`, `sharedStrings`, `comments`
+  (openpyxl пишет `xl/comments/comment1.xml`), `threadedComment`, `person`, `vmlDrawing` (текст в `<v:textbox>`), `drawing`, `chart`, `table`,
+  `pivotCacheDefinition|Records`, `externalLink`, `connections`, `usernames`; PowerPoint — `slide`, `notesSlide`, `comments` (вид — по корню:
+  `p188:cmLst` или `p:cmLst`), `commentAuthors`, `authors`, `diagramData|Drawing`, `chart`, макеты и образцы. Главная часть — по связи `officeDocument`
+  корня (корень проверяется: `workbook`/`presentation`). Путь — запасной вариант (`xlsxRole`, `pptxRole`).
+- **Числа ячеек** (`xlsx/numfmt.js`): запись целого — и «7.728168971E9», «74951234567.0»; поток числа — показанный текст: формат из цифр и литералов
+  («000000000000» → 027409876579, «000-000-000 00», «+0 (000) 000-00-00»), без формата — ведущие нули по заголовку столбца (ИНН 9/11 → 10/12, СНИЛС → 11,
+  БИК и КПП → 9, паспорт → 10). Шапка листа и таблицы слайда — от двух столбцов (`minHeader: 2`).
+- **Константы** (`name-literal`): строковые литералы в `definedName` и в списках проверки данных (`formula1/2`) заменяются (предупреждение
+  `XLSX_FORMULA_LITERAL` считает и их); подсказки проверки (`prompt`, `promptTitle`, `error`, `errorTitle`), значения фильтров (`filter/@val`) — `alt`.
+- **Умные таблицы**: `tableColumn/@name` (`table-column`) связан с потоком ячейки шапки — правка одного становится правкой другого (`XlsxInfo.tableColumns`).
+- **Сводные**: `<n v>` из 6–15 цифр (`pivot-number`) → `<s v="метка">`, у набора `sharedItems` снимаются признаки типов и `minValue`/`maxValue`,
+  у определения — `refreshOnLoad="1"`; `refreshedBy` — автор.
+- **Внешние книги**: кэш (`sheetName/@val`, строки и числа ячеек `<cell>`) — потоки; путь `externalLinkPath` (`file:///C:/Users/…`) заменяется всегда
+  на `external-link-N.xlsx` (`XLSX_EXTERNAL_LINKS`). **Подключения**: имя, описание, команда — `alt`; строка подключения (`conn-string`) — найденное
+  метками, `UID=`/`PWD=`/`User ID=`/`Password=` → `***` всегда (`XLSX_CONNECTIONS`). `usernames.xml userInfo/@name` — автор,
+  `customWorkbookView/@name` — `alt`. PowerPoint: `a:hlinkClick|hlinkHover/@tooltip`, `p:cSld/@name`, `p14:section/@name`, `p:custShow/@name` — `alt`.
+- **Встроенные книги** (`core/embedded.js`): `*/embeddings/*.xls[xm]` (данные диаграмм, OLE-книги) разбираются адаптером Excel и входят в модель
+  документа (id с префиксом `e<N>/`, абзацы — с частью `<запись>#<часть>`): один анализ — одна карта меток; `serializePackage` отдаёт правки книги её
+  сериализатору и подменяет запись (`doc.embedded = [{entry, doc, serialize}]`). Excel и PowerPoint делают это в своём `parse` (синхронно —
+  адаптер PowerPoint импортирует адаптер Excel, общий модуль по требованию), Word — хост (`attachEmbeddedBooks` после разбора, модуль Excel грузится
+  по требованию). `restoreDocument` восстанавливает и книги внутри. «Удалять встроенные объекты» для Excel и PowerPoint: книга данных диаграммы
+  удаляется вместе с `<c:externalData>` (`chartExternalData`) и связями; OLE-объекты слайдов и листов — нет (предупреждение).
+- **Имя файла** (`core/file-name.js`): имя без расширения — поток `file-name` (часть `#file-name`, «_» и «.» — пробелы); `applyDecisions` возвращает
+  `fileName` с метками вместо найденного, хост строит из него `RESULT_BEGIN.name` и `mapping.documents[].resultName`; `content/flow.js` берёт имя
+  хоста, если сессия — этого же файла. Восстановление имени не делается.
+- **JSON**: любое целое из 6–20 цифр — поток (ключ — только метка; `keyLabel` по словам: `clientInn`, `snils_number`); ключи — потоки (`jsonKey`, язык
+  документа по ним не считается), найденное в ключе — меткой; совпадение с другим ключом объекта — суффикс « (2)». **UTF-16 без BOM** — по доле нулевых
+  байтов, записывается так же.
+- **Хук плана** `plan(doc, byStream, pushRaw, {options, remove})`: `remove(name)` — удалить запись пакета со ссылками.
+
+**Не сделано / ограничения**: упоминания `@Имя` в цепочке комментариев Excel (`<mention startIndex length>`) не пересчитываются; `chartEx` и OLE-объекты
+(кроме книг Excel) не разбираются и не удаляются (предупреждение `EMBEDDED_NOT_PROCESSED`); `docProps/custom.xml` при «Сохранять метаданные» не меняется
+(как в DOCX); скрытые листы, строки и слайды обрабатываются как обычные (счётчики и удаление — WP12-D).

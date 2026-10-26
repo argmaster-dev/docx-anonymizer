@@ -17,20 +17,27 @@
  * @returns {TableBlock[]}
  */
 export function tableBlocks(cells, o) {
-  const minHeader = o.minHeader ?? 3;
-  const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => a - b);
-  let header = null;
-  for (const r of rows.slice(0, o.scanRows ?? 10)) {
-    const rc = cells.filter((c) => c.row === r && c.text.trim());
-    if (new Set(rc.map((c) => c.col)).size >= minHeader && rc.every((c) => !/\d/.test(c.text))) {
-      header = r;
-      break;
-    }
-  }
+  const header = headerRow(cells, o.minHeader ?? 3, o.scanRows ?? 10);
   const block = (c, index, pid = c.pid) => ({ pid, kind: /** @type {const} */ ('cell'), text: c.text, table: { index, row: c.row, col: c.col } });
   return cells.map((c) => {
     if (header === null || c.row > header) return block(c, o.index);
     if (c.row < header) return block(c, `title${o.index}`); // без «:» — detect/tables.js делит ключ «таблица:столбец» по нему
     return block(c, o.index, o.fakePid());
   });
+}
+
+/**
+ * Строка шапки: первая (из первых `scanRows`) строка, где ≥ `minHeader` столбцов с текстом и ни в одной ячейке нет цифр; нет — null.
+ * @param {{text: string, row: number, col: number}[]} cells
+ * @param {number} [minHeader]
+ * @param {number} [scanRows]
+ * @returns {number | null}
+ */
+export function headerRow(cells, minHeader = 3, scanRows = 10) {
+  const rows = [...new Set(cells.map((c) => c.row))].sort((a, b) => a - b);
+  for (const r of rows.slice(0, scanRows)) {
+    const rc = cells.filter((c) => c.row === r && c.text.trim());
+    if (new Set(rc.map((c) => c.col)).size >= minHeader && rc.every((c) => !/\d/.test(c.text))) return r;
+  }
+  return null;
 }

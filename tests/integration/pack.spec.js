@@ -64,7 +64,8 @@ describe('архив релиза', () => {
     expect(m.permissions).toEqual(expect.arrayContaining(['scripting', 'activeTab']));
   });
 
-  it('модель NER (WP8): unlimitedStorage, wasm ORT в vendor/, worker — ES-модуль; worker.js без ORT ≤ 400 КиБ, словарей в нём нет (К14 0.5)', () => {
+  // лимит кода — 512 КиБ (решение владельца 26.10.2026, концепция 0.5 К14: сторож от раздувания, не цель; код не минифицируется)
+  it('модель NER (WP8): unlimitedStorage, wasm ORT в vendor/, worker — ES-модуль; worker.js без ORT ≤ 512 КиБ, словарей в нём нет (К14 0.5)', () => {
     const m = JSON.parse(strFromU8(zip['manifest.json']));
     expect(m.permissions).toContain('unlimitedStorage');
     const wasm = zip['vendor/ort-wasm-simd-threaded.wasm'];
@@ -91,7 +92,7 @@ describe('архив релиза', () => {
     );
     expect(ortBytes, 'ORT встроен в worker.js (bundle-вариант, glue без внешнего .mjs)').toBeGreaterThan(50 * 1024);
     expect(dictData, 'словари ФИО в коде воркера').toBe(0);
-    expect(total - ortBytes, 'код worker.js без ORT').toBeLessThanOrEqual(400 * 1024);
+    expect(total - ortBytes, 'код worker.js без ORT').toBeLessThanOrEqual(512 * 1024);
     expect(Object.keys(zip).filter((n) => /ort-wasm.*\.mjs$/.test(n))).toEqual([]);
   });
 
@@ -159,7 +160,13 @@ describe('архив релиза', () => {
         .join(', ')}`,
     );
     // свой бюджет модулей форматов (вместе с общим DrawingML) — 120 КиБ
-    expect(Object.values(sizes).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(120 * 1024);
+    // все модули по требованию, кроме разбора PDF: записи форматов и их общие куски (DrawingML и Excel — общий модуль PowerPoint и Excel)
+    const staticSet = new Set(statics);
+    const formatBytes = Object.keys(zip)
+      .filter((n) => /^offscreen\/chunks\/.*\.js$/.test(n) && !staticSet.has(n) && !/\/extract-[^/]+\.js$/.test(n))
+      .reduce((a, n) => a + zip[n].length, 0);
+    console.log(`модули форматов вместе с общими кусками: ${formatBytes} байт`);
+    expect(formatBytes).toBeLessThanOrEqual(120 * 1024);
   });
 
   it('pdf.js (версия 0.3, К8): vendor/pdfjs/ с CMaps и шрифтами ≤ 6 МБ, не в worker.js; архив ≤ 12 МБ', () => {

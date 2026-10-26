@@ -41,6 +41,16 @@ export function decodeText(bytes) {
     return { text: new TextDecoder('utf-8').decode(bytes.subarray(3)), encoding: 'utf-8', bom: true };
   if (bytes[0] === 0xff && bytes[1] === 0xfe) return { text: new TextDecoder('utf-16le').decode(bytes.subarray(2)), encoding: 'utf-16le', bom: true };
   if (bytes[0] === 0xfe && bytes[1] === 0xff) return { text: new TextDecoder('utf-16be').decode(bytes.subarray(2)), encoding: 'utf-16be', bom: true };
+  // UTF-16 без BOM (ревью WP12-B, п. 13): у текста на кириллице и латинице каждый второй байт часто нулевой
+  const sample = bytes.subarray(0, 4096 - (Math.min(bytes.length, 4096) % 2));
+  if (sample.length >= 4) {
+    let even = 0;
+    let odd = 0;
+    for (let i = 0; i < sample.length; i++) if (!sample[i]) i % 2 ? odd++ : even++;
+    const half = sample.length / 2;
+    if (odd / half > 0.3 && even / half < 0.05) return { text: new TextDecoder('utf-16le').decode(bytes), encoding: 'utf-16le', bom: false };
+    if (even / half > 0.3 && odd / half < 0.05) return { text: new TextDecoder('utf-16be').decode(bytes), encoding: 'utf-16be', bom: false };
+  }
   try {
     return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), encoding: 'utf-8', bom: false };
   } catch {
@@ -70,13 +80,14 @@ export function encodeText(text, enc) {
   }
   const le = enc.encoding === 'utf-16le';
   const out = new Uint8Array(2 + text.length * 2);
-  out.set(le ? [0xff, 0xfe] : [0xfe, 0xff]);
+  const off = enc.bom ? 2 : 0;
+  if (enc.bom) out.set(le ? [0xff, 0xfe] : [0xfe, 0xff]);
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
-    out[2 + i * 2] = le ? c & 0xff : c >> 8;
-    out[3 + i * 2] = le ? c >> 8 : c & 0xff;
+    out[off + i * 2] = le ? c & 0xff : c >> 8;
+    out[off + 1 + i * 2] = le ? c >> 8 : c & 0xff;
   }
-  return out;
+  return off ? out : out.subarray(0, text.length * 2);
 }
 
 /* ---------- разбор ---------- */
@@ -243,17 +254,24 @@ const KEY_LABELS = [
  * @returns {{label: string, numeric: boolean}}
  */
 export function keyLabel(key) {
-  const k = String(key || '')
+  const raw = String(key || '');
+  // ключ целиком («phonenumber») и по словам: camelCase, snake_case, kebab-case («clientInn», «snils_number», «phone_mobile»)
+  const words = raw
+    .replace(/([\p{Ll}\d])(\p{Lu})/gu, '$1 $2')
     .toLowerCase()
-    .replace(/[\s_\-.]/g, '');
-  for (const [re, label, numeric] of KEY_LABELS) if (re.test(k)) return { label: /** @type {string} */ (label), numeric: /** @type {boolean} */ (numeric) };
-  return { label: String(key || ''), numeric: false };
+    .split(/[\s_\-.]+/)
+    .filter(Boolean);
+  const candidates = [words.join(''), ...words];
+  for (const k of candidates)
+    for (const [re, label, numeric] of KEY_LABELS) if (re.test(k)) return { label: /** @type {string} */ (label), numeric: /** @type {boolean} */ (numeric) };
+  return { label: raw, numeric: false };
 }
 
 /**
- * Строковые значения и числа JSON с позициями (ключи — нет). Ошибка синтаксиса — исключение.
+ * Ключи, строковые значения и числа JSON с позициями (у ключа — номер объекта: замена ключа не должна дать два одинаковых
+ * ключа в одном объекте). Ошибка синтаксиса — исключение.
  * @param {string} text
- * @returns {{kind: 'string'|'number', start: number, end: number, value: string, key: string}[]}
+ * @returns {{kind: 'key'|'string'|'number', start: number, end: number, value: string, key: string, obj?: number}[]}
  */
 export function scanJson(text) {
   const out = [];
@@ -273,6 +291,7 @@ export function scanJson(text) {
     i++;
     return { start, end: i, value: /** @type {string} */ (JSON.parse(text.slice(start, i))) };
   };
+  let objects = 0;
   const value = (key) => {
     ws();
     const c = text[i];
@@ -280,10 +299,13 @@ export function scanJson(text) {
       i++;
       ws();
       if (text[i] === '}') return void i++;
+      const obj = objects++;
       for (;;) {
         ws();
         if (text[i] !== '"') fail();
-        const k = str().value;
+        const ks = str();
+        const k = ks.value;
+        out.push({ kind: 'key', key: k, obj, ...ks });
         ws();
         if (text[i] !== ':') fail();
         i++;
@@ -322,8 +344,15 @@ function jsonBlocks(text) {
   const out = [];
   let t = 0;
   for (const v of scanJson(text)) {
-    const { label, numeric } = keyLabel(v.key);
-    if (v.kind === 'number' && !(numeric && /^\d{6,20}$/.test(v.value))) continue;
+    // ключ — тоже текст (ревью WP12-B, п. 14): «{"Иванов Иван": {...}}» — поток; при замене ключа дубли не создаются
+    if (v.kind === 'key') {
+      if (/\p{L}{2}|\d{5}/u.test(v.value))
+        out.push({ kind: 'p', text: v.value, start: v.start, end: v.end, write: 'json', key: true, obj: v.obj, stream: true });
+      continue;
+    }
+    const { label } = keyLabel(v.key);
+    // любое целое из 6–20 цифр — поток (ключ — только метка): «clientInn», «contactPhone», «id» с ИНН — закроются по формату
+    if (v.kind === 'number' && !/^\d{6,20}$/.test(v.value)) continue;
     if (v.kind === 'string' && !v.value.trim()) continue;
     // ключ и значение — строка таблицы «ключ | значение»: ключ становится меткой строки (rowHeader, detect/tables.js)
     const index = t++;
@@ -388,7 +417,7 @@ export function parsePlain(bytes, name) {
     streams.push(
       b.number
         ? { id, part: MAIN, pid, type: 'attr', attrKind: 'json-number', text: b.text, pos: b.start, order: n - 1 }
-        : { id, part: MAIN, pid, type: 'live', text: b.text, pos: b.start, order: n - 1 },
+        : { id, part: MAIN, pid, type: 'live', text: b.text, pos: b.start, order: n - 1, ...(b.key ? { jsonKey: true } : {}) },
     );
     paragraphs.push({ pid, part: MAIN, depth: b.kind === 'cell' ? 1 : 0, pos: b.start, streams: { live: id }, kind: b.kind });
   }
@@ -414,7 +443,8 @@ export function parsePlain(bytes, name) {
     blocks: tables,
     plain: { text, encoding: enc.encoding, bom: enc.bom, delimiter, items: blocks.filter((b) => b.stream) },
     warnings,
-    language: detectLanguage(streams, (s) => s.type === 'live'),
+    // язык — по значениям: латинские ключи JSON («fio», «phone») не делают русскую выгрузку английской
+    language: detectLanguage(streams, (s) => s.type === 'live' && !s.jsonKey),
     size: bytes.length,
   };
 }
@@ -440,6 +470,10 @@ export function serializePlain(doc, edits) {
   const byPid = new Map(doc.plain.items.map((b) => [b.pid, b]));
   const delim = doc.plain.delimiter || ',';
   const raw = [];
+  // ключи JSON по объектам: новый ключ не должен совпасть с другим ключом того же объекта (иначе JSON с дублем)
+  /** @type {Map<number, Set<string>>} */
+  const keysOf = new Map();
+  for (const b of doc.plain.items) if (b.key) (keysOf.get(b.obj) || keysOf.set(b.obj, new Set()).get(b.obj)).add(b.text);
   for (const [id, list] of byStream) {
     list.sort((a, b) => a.start - b.start || a.end - b.end);
     for (let i = 1; i < list.length; i++) if (list[i].start < list[i - 1].end) throw new CoreError('INTERNAL', `Пересекающиеся правки в потоке ${id}`);
@@ -452,6 +486,13 @@ export function serializePlain(doc, edits) {
     } else if (b.write === 'csv') {
       const needQuote = b.quoted || t.includes(delim) || /["\r\n]/.test(t);
       raw.push({ from: b.start, to: b.end, text: needQuote ? `"${t.replace(/"/g, '""')}"` : t });
+    } else if (b.key) {
+      const keys = /** @type {Set<string>} */ (keysOf.get(b.obj));
+      keys.delete(s.text);
+      let k = t;
+      for (let n = 2; keys.has(k); n++) k = `${t} (${n})`;
+      keys.add(k);
+      raw.push({ from: b.start, to: b.end, text: JSON.stringify(k) });
     } else raw.push({ from: b.start, to: b.end, text: JSON.stringify(t) });
   }
   raw.sort((a, b) => a.from - b.from);

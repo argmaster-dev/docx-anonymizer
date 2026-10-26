@@ -80,7 +80,8 @@ export const OPTIONS_DICT = {
     keep_metadata: 'Сохранять метаданные документа',
     keep_metadata_hint: 'Автор, организация, даты в свойствах файла. По умолчанию очищаются.',
     strip_embedded: 'Удалять встроенные объекты',
-    strip_embedded_hint: 'Вложенные файлы и диаграммы, которые расширение не может обезличить.',
+    strip_embedded_hint:
+      'Word: вложенные файлы и диаграммы. Excel и PowerPoint: книги данных диаграмм (диаграмма остаётся, без книги для правки). Встроенные книги Excel обезличиваются и без этого; прочие вложения (OLE) не удаляются — панель о них предупреждает.',
     gov_entities: 'Не обезличивать госорганы и банки из списка',
     dict_names: 'Искать ФИО по словарю имён и фамилий',
     dict_names_hint: 'Находит имена третьих лиц в тексте без подписи «в лице». Не зависит от нейросетевого распознавания.',
@@ -306,7 +307,8 @@ export const OPTIONS_DICT = {
     keep_metadata: 'Keep document metadata',
     keep_metadata_hint: 'Author, organization, dates in file properties. Cleared by default.',
     strip_embedded: 'Remove embedded objects',
-    strip_embedded_hint: 'Attached files and charts the extension cannot anonymize.',
+    strip_embedded_hint:
+      'Word: embedded files and charts. Excel and PowerPoint: chart data workbooks (the chart stays, without its workbook for editing). Embedded Excel workbooks are anonymized anyway; other embedded (OLE) objects are not removed — the panel warns about them.',
     gov_entities: 'Do not anonymize listed government bodies and banks',
     dict_names: 'Find names using the first-name and surname dictionary',
     dict_names_hint: 'Finds names of third persons in the text without a “represented by” label. Does not depend on neural recognition.',

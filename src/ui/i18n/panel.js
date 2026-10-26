@@ -19,7 +19,10 @@ export const panel = {
       'Словари имён не загрузились — имена ищутся правилами и моделью, часть редких фамилий может быть пропущена. Перезапустите браузер и обработайте файл снова',
     // 0.5 (WP12-B): Excel и JSON
     warnXlsxCellReferenced: 'На заменённые числа ссылаются формулы ({n}): ячейки станут текстом, формулы покажут ошибку значения',
-    warnXlsxFormulaLiteral: 'Данные внутри формул ({n}) не заменяются — формулы остаются как есть. Проверьте формулы вручную',
+    warnXlsxFormulaLiteral:
+      'Данные в формулах ({n}): в формулах ячеек они не заменяются — проверьте формулы вручную; в именах книги и списках проверки данных заменены метками',
+    warnXlsxExternalLinks: 'Связи с внешними книгами ({n}): путь к файлу заменён, данные из них — обезличены в кэше',
+    warnXlsxConnections: 'Подключения к данным ({n}): найденное заменено, логин и пароль в строке подключения убраны — для обновления введите их заново',
     warnXlsxSheetRenamed: 'Листы с данными в названии ({n}) будут переименованы, ссылки на них в формулах — тоже',
     warnJsonNumber: 'Числа-идентификаторы в JSON ({n}) станут строками с метками',
     warnJsonInvalid: 'Файл не разобран как JSON — обработан как обычный текст по строкам',
@@ -91,7 +94,10 @@ export const panel = {
     warnDictFailed:
       'The name dictionaries did not load — names are found by rules and the model, some rare surnames may be missed. Restart the browser and process the file again',
     warnXlsxCellReferenced: 'Formulas refer to replaced numbers ({n}): the cells become text and the formulas will show a value error',
-    warnXlsxFormulaLiteral: 'Data inside formulas ({n}) is not replaced — formulas stay as they are. Check the formulas manually',
+    warnXlsxFormulaLiteral:
+      'Data in formulas ({n}): in cell formulas it is not replaced — check the formulas manually; in workbook names and validation lists it is replaced with placeholders',
+    warnXlsxExternalLinks: 'Links to external workbooks ({n}): the file path was replaced, their cached data is anonymized',
+    warnXlsxConnections: 'Data connections ({n}): findings replaced, login and password removed from the connection string — enter them again to refresh',
     warnXlsxSheetRenamed: 'Sheets with data in their names ({n}) will be renamed, and so will the references to them in formulas',
     warnJsonNumber: 'Identifier numbers in the JSON ({n}) will become strings with placeholders',
     warnJsonInvalid: 'The file could not be parsed as JSON — it was processed as plain text, line by line',
