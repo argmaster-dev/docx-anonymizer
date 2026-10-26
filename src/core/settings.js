@@ -3,7 +3,7 @@
 import { ALWAYS_ON_IDS, BUILTIN_CATEGORIES } from './categories.js';
 
 export const SETTINGS_KEY = 'settings';
-export const SETTINGS_SCHEMA_VERSION = 3;
+export const SETTINGS_SCHEMA_VERSION = 4;
 
 export const DEFAULT_ALLOWLIST = Object.freeze([
   'https://chatgpt.com',
@@ -30,6 +30,14 @@ const PROFILE_FIELDS = [
 /** Категории групп `pii`/`ids` всегда `true` (политика 0.4, К1); `commercial` — по `defaultOn` внутри группы. */
 function defaultCategories() {
   return Object.fromEntries(BUILTIN_CATEGORIES.map((c) => [c.id, ALWAYS_ON_IDS.includes(c.id) || c.defaultOn]));
+}
+
+/**
+ * Дополняет объект категорий встроенными категориями, которых в нём нет (миграция 3 → 4, версия 0.5): `pii`/`ids` — `true`,
+ * `commercial` — `defaultOn` (действует при включённом переключателе группы). Заданные значения не трогает.
+ */
+function addMissingCategories(categories) {
+  return { ...defaultCategories(), ...categories };
 }
 
 /** Включает категории `pii`/`ids` в объекте категорий (миграция 2 → 3 и импорт старых конфигураций). */
@@ -196,6 +204,22 @@ export const MIGRATIONS = {
       out.profiles = s.profiles.map((p) =>
         isPlainObject(p) && isPlainObject(p.values) && isPlainObject(p.values.categories)
           ? { ...p, values: { ...p.values, categories: forceAlwaysOn(p.values.categories) } }
+          : p,
+      );
+    }
+    return out;
+  },
+  // 3 → 4 (0.5, WP12-C): новые встроенные категории (части паспорта, документы, транспорт, сеть, суды, недвижимость,
+  // коммерческие номера) — в настройках и в сохранённых профилях по правилам групп; `pii`/`ids` всё равно всегда включены
+  // (`isCategoryEnabled`), а у `commercial` значение по умолчанию начинает действовать при включённом переключателе группы.
+  // Частичный объект без `categories` (патч импорта) — только версия.
+  3: (s) => {
+    const out = { ...s, schemaVersion: 4 };
+    if (isPlainObject(s.categories)) out.categories = addMissingCategories(s.categories);
+    if (Array.isArray(s.profiles)) {
+      out.profiles = s.profiles.map((p) =>
+        isPlainObject(p) && isPlainObject(p.values) && isPlainObject(p.values.categories)
+          ? { ...p, values: { ...p.values, categories: addMissingCategories(p.values.categories) } }
           : p,
       );
     }

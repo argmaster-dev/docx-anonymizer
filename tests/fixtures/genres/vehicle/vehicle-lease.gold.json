@@ -1,0 +1,113 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "VIN",
+      "value": "XTAYHY035CX020254"
+    },
+    {
+      "key": "e2",
+      "category": "PLATE",
+      "value": "В143ЕХ52"
+    },
+    {
+      "key": "e3",
+      "category": "VEHICLE_DOC",
+      "value": "52 ХХ 336408"
+    },
+    {
+      "key": "e4",
+      "category": "VEHICLE_DOC",
+      "value": "52 80 687788"
+    },
+    {
+      "key": "e5",
+      "category": "INN",
+      "value": "5242875184"
+    },
+    {
+      "key": "e6",
+      "category": "OGRN",
+      "value": "1235254686600"
+    },
+    {
+      "key": "e7",
+      "category": "COMPANY",
+      "value": "Альтаир-М",
+      "opf": true
+    },
+    {
+      "key": "e8",
+      "category": "ADDRESS",
+      "value": "603887, г. Нижний Новгород, ул. Большая Покровская, д. 107, офис 352"
+    },
+    {
+      "key": "e9",
+      "category": "PERSON",
+      "value": "Комаров Роман Алексеевич",
+      "surname": "Комаров"
+    },
+    {
+      "key": "e10",
+      "category": "PASSPORT",
+      "value": "5224 279432"
+    },
+    {
+      "key": "e11",
+      "category": "PASSPORT_ISSUER",
+      "value": "Отделом УФМС России по Лесному району г. Энска"
+    },
+    {
+      "key": "e12",
+      "category": "PASSPORT_DATE",
+      "value": "02.06.2019"
+    },
+    {
+      "key": "e13",
+      "category": "PASSPORT_DEPT",
+      "value": "523-011"
+    },
+    {
+      "key": "e14",
+      "category": "DRIVER_LICENSE",
+      "value": "52 89 177449"
+    },
+    {
+      "key": "e15",
+      "category": "PERSON",
+      "value": "Комаров Р.А.",
+      "surname": "Комаров"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "Лада Веста",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "объём двигателя 1,6 л",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "п. 2.4",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "ДОГОВОР АРЕНДЫ ТРАНСПОРТНОГО СРЕДСТВА",
+      "category": "COMPANY"
+    },
+    {
+      "value": "год выпуска 2019",
+      "category": "VIN",
+      "rules": true
+    },
+    {
+      "value": "пробег 45 000 км",
+      "category": "PLATE",
+      "rules": true
+    }
+  ]
+}

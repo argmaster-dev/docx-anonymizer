@@ -1,0 +1,131 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "PERSON",
+      "value": "Морозов Андрей Викторович",
+      "surname": "Морозов"
+    },
+    {
+      "key": "e2",
+      "category": "BIRTHDATE",
+      "value": "07.02.1990"
+    },
+    {
+      "key": "e3",
+      "category": "PASSPORT",
+      "value": "5412 765313"
+    },
+    {
+      "key": "e4",
+      "category": "PASSPORT_ISSUER",
+      "value": "ГУ МВД России по Северной области"
+    },
+    {
+      "key": "e5",
+      "category": "PASSPORT_DATE",
+      "value": "26.01.2021"
+    },
+    {
+      "key": "e6",
+      "category": "PASSPORT_DEPT",
+      "value": "547-076"
+    },
+    {
+      "key": "e7",
+      "category": "SNILS",
+      "value": "180-734-111 51"
+    },
+    {
+      "key": "e8",
+      "category": "INN",
+      "value": "545293945706"
+    },
+    {
+      "key": "e9",
+      "category": "OMS",
+      "value": "2746765818656517"
+    },
+    {
+      "key": "e10",
+      "category": "ADDRESS",
+      "value": "630828, г. Новосибирск, Красный пр-т, д. 29, кв. 99"
+    },
+    {
+      "key": "e11",
+      "category": "PHONE",
+      "value": "+7 (999) 007-04-45"
+    },
+    {
+      "key": "e12",
+      "category": "EMAIL",
+      "value": "a.morozov@mail.example"
+    },
+    {
+      "key": "e13",
+      "category": "DRIVER_LICENSE",
+      "value": "54 57 642592"
+    },
+    {
+      "key": "e14",
+      "category": "MILITARY_ID",
+      "value": "ЯО 1853063"
+    },
+    {
+      "key": "e15",
+      "category": "INTL_PASSPORT",
+      "value": "77 7484390"
+    },
+    {
+      "key": "e16",
+      "category": "CIVIL_CERT",
+      "value": "IV-ВЯ № 984932"
+    },
+    {
+      "key": "e17",
+      "category": "SPECIAL",
+      "value": "не имеет"
+    },
+    {
+      "key": "e18",
+      "category": "NICKNAME",
+      "value": "@a_morozov"
+    },
+    {
+      "key": "e19",
+      "category": "PERSON",
+      "value": "Морозов А.В.",
+      "surname": "Морозов"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "15.10.2026",
+      "category": "BIRTHDATE",
+      "rules": true
+    },
+    {
+      "value": "12 лет",
+      "category": "PASSPORT",
+      "rules": true
+    },
+    {
+      "value": "Категория B",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "АНКЕТА",
+      "category": "COMPANY"
+    },
+    {
+      "value": "Личные данные",
+      "category": "COMPANY"
+    },
+    {
+      "value": "Семейное положение",
+      "category": "COMPANY",
+      "rules": true
+    }
+  ]
+}

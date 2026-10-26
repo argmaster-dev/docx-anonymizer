@@ -1,0 +1,109 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "CADASTRAL",
+      "value": "52:30:5111785:2504"
+    },
+    {
+      "key": "e2",
+      "category": "PERSON",
+      "value": "Тихонова Елена Игоревна",
+      "surname": "Тихонова"
+    },
+    {
+      "key": "e3",
+      "category": "PASSPORT",
+      "value": "5213 933969"
+    },
+    {
+      "key": "e4",
+      "category": "PASSPORT_ISSUER",
+      "value": "Отделом УФМС России по Лесному району г. Энска"
+    },
+    {
+      "key": "e5",
+      "category": "PASSPORT_DATE",
+      "value": "08.09.2009"
+    },
+    {
+      "key": "e6",
+      "category": "PASSPORT_DEPT",
+      "value": "525-047"
+    },
+    {
+      "key": "e7",
+      "category": "ADDRESS",
+      "value": "603646, г. Нижний Новгород, ул. Белинского, д. 24, кв. 340"
+    },
+    {
+      "key": "e8",
+      "category": "PERSON",
+      "value": "Кузнецова Ольга Владимировна",
+      "surname": "Кузнецова"
+    },
+    {
+      "key": "e9",
+      "category": "PASSPORT",
+      "value": "5212 242172"
+    },
+    {
+      "key": "e10",
+      "category": "PASSPORT_ISSUER",
+      "value": "Отделом УФМС России по Северной области"
+    },
+    {
+      "key": "e11",
+      "category": "PASSPORT_DATE",
+      "value": "24.09.2013"
+    },
+    {
+      "key": "e12",
+      "category": "PASSPORT_DEPT",
+      "value": "522-061"
+    },
+    {
+      "key": "e13",
+      "category": "EGRN_RECORD",
+      "value": "52:30:5111785:2504-52/701/2026-12"
+    },
+    {
+      "key": "e14",
+      "category": "PERSON",
+      "value": "Тихонова Е.И.",
+      "surname": "Тихонова"
+    },
+    {
+      "key": "e15",
+      "category": "PERSON",
+      "value": "Кузнецова О.В.",
+      "surname": "Кузнецова"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "п. 3.2",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "ДОГОВОР АРЕНДЫ КВАРТИРЫ",
+      "category": "COMPANY"
+    },
+    {
+      "value": "45,6 кв. м",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "этаж 5 из 9",
+      "category": "CADASTRAL",
+      "rules": true
+    },
+    {
+      "value": "2 комнаты",
+      "category": "CADASTRAL",
+      "rules": true
+    }
+  ]
+}

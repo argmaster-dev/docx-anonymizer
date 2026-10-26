@@ -31,6 +31,16 @@
     },
     {
       "key": "e6",
+      "category": "INVOICE_NO",
+      "value": "140"
+    },
+    {
+      "key": "e7",
+      "category": "INVOICE_NO",
+      "value": "554"
+    },
+    {
+      "key": "e8",
       "category": "PERSON",
       "value": "Кузнецова О.В.",
       "surname": "Кузнецова"

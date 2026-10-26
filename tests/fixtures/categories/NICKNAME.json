@@ -1,0 +1,128 @@
+{
+  "category": "NICKNAME",
+  "description": "К5 (версия 0.5, WP12-C): позитивные и негативные примеры; expect — все сущности этой категории по порядку (после FR-20). Данные вымышленные.",
+  "positive": [
+    {
+      "text": "Telegram: @ivan_petrov",
+      "expect": [
+        {
+          "text": "@ivan_petrov",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "пишите в телеграм @sokolova_d",
+      "expect": [
+        {
+          "text": "@sokolova_d",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "https://t.me/ivan_petrov",
+      "expect": [
+        {
+          "text": "https://t.me/ivan_petrov",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "профиль vk.com/id123456",
+      "expect": [
+        {
+          "text": "vk.com/id123456",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "Instagram: @masha.flowers",
+      "expect": [
+        {
+          "text": "@masha.flowers",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "ник @Mirage_77 (tg)",
+      "expect": [
+        {
+          "text": "@Mirage_77",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "ТГ @belov_igor, почта i.belov@example.ru",
+      "expect": [
+        {
+          "text": "@belov_igor",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "www.instagram.com/olga.kuz",
+      "expect": [
+        {
+          "text": "www.instagram.com/olga.kuz",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "ВК: @dark_knight",
+      "expect": [
+        {
+          "text": "@dark_knight",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "канал t.me/lunopark_news",
+      "expect": [
+        {
+          "text": "t.me/lunopark_news",
+          "level": "validated"
+        }
+      ]
+    }
+  ],
+  "negative": [
+    {
+      "text": "i.belov@example.ru"
+    },
+    {
+      "text": "@media print"
+    },
+    {
+      "text": "см. @Override"
+    },
+    {
+      "text": "https://example.com/ivan"
+    },
+    {
+      "text": "ivan@mail.ru"
+    },
+    {
+      "text": "встреча в 10:00 @ офис"
+    },
+    {
+      "text": "Telegram-бот готов"
+    },
+    {
+      "text": "@everyone, привет"
+    },
+    {
+      "text": "почта: user@t.me.example"
+    },
+    {
+      "text": "мой ник не скажу"
+    }
+  ]
+}

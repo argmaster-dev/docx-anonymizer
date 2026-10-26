@@ -1,6 +1,7 @@
-// Документные идентификаторы: PASSPORT, BIRTHDATE, CONTRACT, AMOUNT.
+// Документные идентификаторы: PASSPORT (и его части, 0.5), BIRTHDATE, CONTRACT, AMOUNT.
 import { passport, birthdate } from '../../validators.js';
-import { NB, NA, labelState, scan } from './labels.js';
+import { NB, NA, labelState, labelsOf, scan } from './labels.js';
+import { docContext } from './papers.js';
 
 const NBSP = '\\u00a0';
 const cand = (start, end, confidence, validator, extra) => ({ start, end, confidence, ...(validator ? { validator } : {}), ...(extra || {}) });
@@ -10,66 +11,103 @@ const EN_MONTHS = 'jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|ju
 const MONTH = `(?:${RU_MONTHS}|${EN_MONTHS})\\.?`;
 
 /* ---------- ПАСПОРТ ---------- */
+// С 0.5 (WP12-C, К6, §8.7) части паспорта — разные категории: серия и номер (PASSPORT), кем выдан (PASSPORT_ISSUER),
+// дата выдачи (PASSPORT_DATE), код подразделения (PASSPORT_DEPT) — у каждой своя метка, восстановление подставляет в каждое
+// место своё значение. Загранпаспорт — INTL_PASSPORT (papers.js); номер берётся, только если ближе всех назван паспорт.
 const NUM_MARK = `(?:[ ${NBSP}]*(?:№|N|No\\.?|номер)[ ${NBSP}:]*|[ ${NBSP}]?)`;
 // серия+номер РФ: 45 05 123456 | 4505 123456 | 4505123456 | 4505 № 123456
 const PASSPORT_RU_RE = new RegExp(`${NB}\\d{2}[ ${NBSP}]?\\d{2}${NUM_MARK}\\d{6}${NA}`, 'giu');
-// загранпаспорт РФ: 71 1234567
+// 9 цифр «71 1234567» (загранпаспорт РФ под общей меткой «паспорт»)
 const PASSPORT_FOREIGN_RF_RE = new RegExp(`${NB}\\d{2}[ ${NBSP}]?\\d{7}${NA}`, 'gu');
 // иностранный: буквы/цифры 6–12 с хотя бы одной цифрой
 const PASSPORT_ALNUM_RE = new RegExp(`(?<![\\p{L}\\p{N}])(?=[A-Z0-9]*\\d)[A-Z0-9]{6,12}(?![\\p{L}\\p{N}])`, 'gu');
 const ISSUED_RE = new RegExp(`^[,;.)\\s]*(?:кем[ ${NBSP}]+выдан|выдан[аы]?|issued[ ${NBSP}]+by)[ ${NBSP}:]*`, 'iu');
 const DATE_IN_TEXT_RE = new RegExp(`\\d{1,2}[./]\\d{1,2}[./]\\d{2,4}|\\d{1,2}[ ${NBSP}]+(?:${MONTH})[ ${NBSP}]+\\d{4}`, 'iu');
-const DEPT_CODE_RE = new RegExp(`(?<![\\p{L}\\p{N}])(?:код[ ${NBSP}]+подразделения|код[ ${NBSP}]+подр\\.?|к\\/п)[ ${NBSP}:]*(\\d{3}[- ]\\d{3})(?!\\d)`, 'giu');
+const DATE_FIRST_RE = new RegExp(`^(?:${DATE_IN_TEXT_RE.source})(?:[ ${NBSP}]*(?:г\\.|года))?[ ${NBSP},]*`, 'iu');
+const DEPT_RE = new RegExp(`${NB}\\d{3}[- ]\\d{3}${NA}`, 'gu');
+/** Конец органа выдачи: «, код подразделения», «, дата выдачи». */
+const ISSUER_END_RE = /[,;]?[ \t\u00a0]*(?:код[ \t\u00a0]+подр|к\/п|дата[ \t\u00a0]+выдачи)/iu;
+const passportDoc = (text, start, ctx) => {
+  const d = docContext(text, start, ctx);
+  return !d || d === 'PASSPORT';
+};
+let lastScan = { text: null, ctx: null, parts: [] };
 
-export function detectPassport(text, ctx) {
-  const out = [];
-  const nums = []; // {start, end, key}
-  const taken = [];
-  const free = (a, b) => !taken.some((t) => a < t[1] && t[0] < b);
-  const add = (c, key) => {
-    taken.push([c.start, c.end]);
-    nums.push({ start: c.start, end: c.end, key });
-    out.push(cand(c.start, c.end, 'labeled', 'passport'));
-  };
-  const keyOf = (s) => s.replace(/[^\p{L}\p{N}]/gu, '').toUpperCase();
-  for (const c of scan(text, PASSPORT_RU_RE)) {
-    if (labelState(text, c.start, ctx, 'PASSPORT').mine && passport(c.text.replace(/[^\d]/g, ''))) add(c, keyOf(c.text));
+/**
+ * Серия и номер, орган выдачи, дата выдачи и код подразделения одного потока (кэш на один поток: четыре детектора
+ * вызываются подряд с тем же текстом).
+ * @returns {{cat: string, start: number, end: number}[]}
+ */
+function passportParts(text, ctx) {
+  if (lastScan.text === text && lastScan.ctx === ctx?.stream) return lastScan.parts;
+  const parts = [];
+  lastScan = { text, ctx: ctx?.stream, parts };
+  // все части — только по метке: поток без меток паспорта (и не ячейка таблицы) не сканируется
+  const has = (id) => labelsOf(id, text, ctx).length > 0;
+  const cell = !!(ctx?.stream?.rowHeader || ctx?.stream?.columnHeader);
+  if (!cell && !['PASSPORT', 'PASSPORT_ISSUER', 'PASSPORT_DATE', 'PASSPORT_DEPT'].some(has)) return parts;
+  const free = (a, b) => !parts.some((t) => a < t.end && t.start < b);
+  const add = (cat, start, end) => free(start, end) && end > start && parts.push({ cat, start, end });
+  const nums = [];
+  const own = (c) => labelState(text, c.start, ctx, 'PASSPORT').mine && passportDoc(text, c.start, ctx);
+  for (const re of [PASSPORT_RU_RE, PASSPORT_FOREIGN_RF_RE, PASSPORT_ALNUM_RE]) {
+    for (const c of scan(text, re)) {
+      if (re === PASSPORT_ALNUM_RE && !/[A-Z]/.test(c.text)) continue;
+      if (free(c.start, c.end) && own(c) && passport(c.text.replace(re === PASSPORT_RU_RE ? /[^\d]/g : /[\s\u00a0]/g, ''))) {
+        add('PASSPORT', c.start, c.end);
+        nums.push(c.end);
+      }
+    }
   }
-  for (const c of scan(text, PASSPORT_FOREIGN_RF_RE)) {
-    if (free(c.start, c.end) && labelState(text, c.start, ctx, 'PASSPORT').mine && passport(c.text)) add(c, keyOf(c.text));
-  }
-  for (const c of scan(text, PASSPORT_ALNUM_RE)) {
-    if (free(c.start, c.end) && /[A-Z]/.test(c.text) && labelState(text, c.start, ctx, 'PASSPORT').mine && passport(c.text)) add(c, keyOf(c.text));
-  }
-  // орган выдачи после номера — вхождение той же сущности (canonical)
-  for (const n of nums) {
-    const m = ISSUED_RE.exec(text.slice(n.end, n.end + 60));
-    if (!m) continue;
-    const orgStart = n.end + m[0].length;
-    const line = text.slice(orgStart, orgStart + 200).split('\n')[0];
+  /** Орган выдачи с позиции `at` до даты, «код подразделения» или запятой; дата в той же строке — дата выдачи. */
+  const issuer = (at) => {
+    let line = text.slice(at, at + 200).split('\n')[0];
+    const df = DATE_FIRST_RE.exec(line);
+    if (df) {
+      const d = DATE_IN_TEXT_RE.exec(line);
+      add('PASSPORT_DATE', at + d.index, at + d.index + d[0].length);
+      at += df[0].length;
+      line = line.slice(df[0].length);
+    }
     const d = DATE_IN_TEXT_RE.exec(line);
+    const e = ISSUER_END_RE.exec(line);
     let org;
-    if (d && d.index > 0) org = line.slice(0, d.index);
+    if (d && d.index > 0 && (!e || d.index < e.index)) org = line.slice(0, d.index);
+    else if (e) org = line.slice(0, e.index);
     else {
       const cut = line.search(/[,;]/);
       org = cut >= 0 ? line.slice(0, cut) : line;
     }
     org = org.replace(/[\s,;]+$/, '');
-    if (org.length >= 3 && free(orgStart, orgStart + org.length)) {
-      taken.push([orgStart, orgStart + org.length]);
-      out.push(cand(orgStart, orgStart + org.length, 'labeled', undefined, { canonical: n.key }));
-    }
+    if (org.length >= 3 && /\p{L}/u.test(org)) add('PASSPORT_ISSUER', at, at + org.length);
+    if (d && d.index > 0 && !df) add('PASSPORT_DATE', at + d.index, at + d.index + d[0].length);
+  };
+  // «…, выдан ОВД … 12.03.2005» сразу после номера
+  for (const end of nums) {
+    const m = ISSUED_RE.exec(text.slice(end, end + 60));
+    if (m) issuer(end + m[0].length);
   }
-  // код подразделения
-  for (const c of scan(text, DEPT_CODE_RE)) {
-    const start = c.end - c.m[1].length;
-    const prev = [...nums].reverse().find((n) => n.end <= start);
-    if (!free(start, c.end)) continue;
-    taken.push([start, c.end]);
-    out.push(cand(start, c.end, 'labeled', undefined, prev ? { canonical: prev.key } : undefined));
-  }
-  return out.sort((a, b) => a.start - b.start);
+  // «Кем выдан: …» и «Дата выдачи: …» по метке — в тексте и в ячейке таблицы
+  for (const [at, end] of labelsOf('PASSPORT_ISSUER', text, ctx))
+    if (passportDoc(text, at, ctx)) issuer(end + /^[ \u00a0:–—-]*/u.exec(text.slice(end))[0].length);
+  const s0 = text.search(/\S/u);
+  if (s0 >= 0 && labelState(text, s0, ctx, 'PASSPORT_ISSUER').mine && passportDoc(text, s0, ctx)) issuer(s0);
+  for (const c of scan(text, DATE_RE))
+    if (labelState(text, c.start, ctx, 'PASSPORT_DATE').mine === 'strict' && passportDoc(text, c.start, ctx)) add('PASSPORT_DATE', c.start, c.end);
+  for (const c of scan(text, DEPT_RE)) if (labelState(text, c.start, ctx, 'PASSPORT_DEPT').mine) add('PASSPORT_DEPT', c.start, c.end);
+  return parts;
 }
+
+/** Детектор части паспорта `cat` (все уровни — `labeled`). */
+const passportPart = (cat) => (text, ctx) =>
+  passportParts(text, ctx)
+    .filter((p) => p.cat === cat)
+    .map((p) => cand(p.start, p.end, 'labeled', cat === 'PASSPORT' ? 'passport' : undefined));
+
+export const detectPassport = passportPart('PASSPORT');
+export const detectPassportIssuer = passportPart('PASSPORT_ISSUER');
+export const detectPassportDate = passportPart('PASSPORT_DATE');
+export const detectPassportDept = passportPart('PASSPORT_DEPT');
 
 /* ---------- ДАТА РОЖДЕНИЯ ---------- */
 const DATE_RE = new RegExp(

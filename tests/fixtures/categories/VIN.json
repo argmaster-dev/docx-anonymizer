@@ -1,0 +1,128 @@
+{
+  "category": "VIN",
+  "description": "К5 (версия 0.5, WP12-C): позитивные и негативные примеры; expect — все сущности этой категории по порядку (после FR-20). Данные вымышленные.",
+  "positive": [
+    {
+      "text": "VIN: 1HGCM82633A004352",
+      "expect": [
+        {
+          "text": "1HGCM82633A004352",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "VIN 4T1BF1FK8CU512345",
+      "expect": [
+        {
+          "text": "4T1BF1FK8CU512345",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "идентификационный номер (VIN) JTDKB20U293123456",
+      "expect": [
+        {
+          "text": "JTDKB20U293123456",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "VIN-код XTA210990Y1234567",
+      "expect": [
+        {
+          "text": "XTA210990Y1234567",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "Автомобиль, кузов седан, 1HGCM82633A004352",
+      "expect": [
+        {
+          "text": "1HGCM82633A004352",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "VIN WVWZZZ1JZXW000001",
+      "expect": [
+        {
+          "text": "WVWZZZ1JZXW000001",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "Марка: Лада, VIN XTA217030C0123456",
+      "expect": [
+        {
+          "text": "XTA217030C0123456",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "VIN 4T1BF1FK8CU512345, госномер А123ВС77",
+      "expect": [
+        {
+          "text": "4T1BF1FK8CU512345",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "Идентификационный номер ТС: Z94CB41AAER123456",
+      "expect": [
+        {
+          "text": "Z94CB41AAER123456",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "WBA3A5C51DF123456 — VIN автомобиля",
+      "expect": [
+        {
+          "text": "WBA3A5C51DF123456",
+          "level": "validated"
+        }
+      ]
+    }
+  ],
+  "negative": [
+    {
+      "text": "ABCDEFGHJKLMNPRST"
+    },
+    {
+      "text": "VIN: XTA21099O12345678"
+    },
+    {
+      "text": "VIN XTA2109901234567"
+    },
+    {
+      "text": "серийный номер 12345678901234567"
+    },
+    {
+      "text": "ИНН 7736050003"
+    },
+    {
+      "text": "артикул AB12345678"
+    },
+    {
+      "text": "хеш 3f2a9c1b7e8d4a5f6b7c8d9e0f1a2b3c"
+    },
+    {
+      "text": "VIN XTA21099Q12345678"
+    },
+    {
+      "text": "VIN неизвестен"
+    },
+    {
+      "text": "код QWERTYUIOPASDFGHJ"
+    }
+  ]
+}

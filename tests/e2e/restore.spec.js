@@ -144,9 +144,9 @@ test('.anon.docx из конвейера + сессия по ?docId= → дог�
   await expect(page.getByTestId('restore-stat')).toHaveText(new RegExp(`^Заменено: ${n}(\\s|$)`));
   await expect(page.getByTestId('restore-unresolved')).toContainText('Все метки восстановлены');
   await expect(page.getByTestId('restore-copy')).toBeDisabled();
-  // паспорт: под [ПАСПОРТ_1] в исходнике были ещё орган выдачи и код подразделения — предупреждение (FR-36а)
-  await expect(page.getByTestId('restore-warning')).toHaveCount(1);
-  await expect(page.getByTestId('restore-warning')).toContainText('[ПАСПОРТ_1]');
+  // паспорт по частям (0.5, К6): у серии и номера, органа выдачи, даты выдачи и кода подразделения свои метки —
+  // предупреждения 0.3 «под [ПАСПОРТ_1] были и другие значения» больше нет, каждое место получает своё значение
+  await expect(page.getByTestId('restore-warning')).toHaveCount(0);
   const [dl] = await Promise.all([page.waitForEvent('download'), page.getByTestId('restore-download').click()]);
   expect(dl.suggestedFilename()).toBe('договор.restored.docx');
   const restored = parseDocx(readFileSync(await dl.path()));
@@ -154,6 +154,7 @@ test('.anon.docx из конвейера + сессия по ?docId= → дог�
   for (const v of [gold.person1, gold.company1, gold.inn1, gold.inn2, gold.email1, gold.email2, gold.email3, gold.phone1, gold.url1])
     expect(text, v).toContain(v);
   expect(text).not.toContain('[EMAIL_');
+  for (const v of [gold.passport, 'ОВД района Арбат г. Москвы', '12.03.2005', '770-001']) expect(text, v).toContain(v);
   expect(text).not.toMatch(new RegExp(TOKEN_RE.source, 'u'));
   await page.screenshot({ path: join(resolve('test-output'), 'restore-docx.png'), fullPage: true });
   expect(externalRequests(await net.stop()), 'NFR-01: сетевые запросы').toEqual([]);

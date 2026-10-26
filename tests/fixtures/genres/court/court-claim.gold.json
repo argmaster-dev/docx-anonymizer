@@ -1,0 +1,119 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "INN",
+      "value": "7730137240"
+    },
+    {
+      "key": "e2",
+      "category": "OGRN",
+      "value": "1257786386527"
+    },
+    {
+      "key": "e3",
+      "category": "COURT_CASE",
+      "value": "А11-57031/2026"
+    },
+    {
+      "key": "e4",
+      "category": "COMPANY",
+      "value": "Полярная Звезда",
+      "opf": true
+    },
+    {
+      "key": "e5",
+      "category": "ADDRESS",
+      "value": "123839, г. Москва, ул. Профсоюзная, д. 104, офис 101"
+    },
+    {
+      "key": "e6",
+      "category": "PERSON",
+      "value": "Комаров Роман Алексеевич",
+      "surname": "Комаров"
+    },
+    {
+      "key": "e7",
+      "category": "INN",
+      "value": "775910071260"
+    },
+    {
+      "key": "e8",
+      "category": "INVOICE_NO",
+      "value": "528"
+    },
+    {
+      "key": "e9",
+      "category": "TENDER",
+      "value": "0373100093276335412"
+    },
+    {
+      "key": "e10",
+      "category": "IP",
+      "value": "95.144.74.183"
+    },
+    {
+      "key": "e11",
+      "category": "MAC",
+      "value": "E1:96:7E:43:59:18"
+    },
+    {
+      "key": "e12",
+      "category": "ORDER_NO",
+      "value": "ЗК-2976"
+    },
+    {
+      "key": "e13",
+      "category": "CLIENT_NO",
+      "value": "980015"
+    },
+    {
+      "key": "e14",
+      "category": "IP_REG",
+      "value": "681612"
+    },
+    {
+      "key": "e15",
+      "category": "PERSON",
+      "value": "Полякова Вера Константиновна",
+      "surname": "Полякова"
+    },
+    {
+      "key": "e16",
+      "category": "POA",
+      "value": "77 АА 9047894"
+    },
+    {
+      "key": "e17",
+      "category": "NOTARY_REG",
+      "value": "77/54-н/77-2026-9-899"
+    },
+    {
+      "key": "e18",
+      "category": "PERSON",
+      "value": "Полякова В.К.",
+      "surname": "Полякова"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "ИСКОВОЕ ЗАЯВЛЕНИЕ",
+      "category": "COMPANY"
+    },
+    {
+      "value": "ст. 395 ГК РФ",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "п. 2.1",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "копия претензии на 2 л.",
+      "category": "POA",
+      "rules": true
+    }
+  ]
+}

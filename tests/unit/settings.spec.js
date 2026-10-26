@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { BUILTIN_CATEGORIES } from '../../src/core/categories.js';
 import {
   defaultSettings,
   migrateSettings,
@@ -45,7 +46,7 @@ describe('settings', () => {
   });
   it('nerThreshold (WP9): по умолчанию 0.7 = recommendedThreshold пакета; миграция 1 → 2 меняет только прежний дефолт 0.6', () => {
     expect(defaultSettings().nerThreshold).toBe(0.7);
-    expect(SETTINGS_SCHEMA_VERSION).toBe(3);
+    expect(SETTINGS_SCHEMA_VERSION).toBe(4); // 0.5: миграция 3 → 4 (новые категории)
     expect(migrateSettings({ schemaVersion: 1, nerThreshold: 0.6 }).settings.nerThreshold).toBe(0.7);
     expect(migrateSettings({ schemaVersion: 1, nerThreshold: 0.45 }).settings.nerThreshold).toBe(0.45);
     expect(migrateSettings({ nerThreshold: 0.6 }).settings.nerThreshold).toBe(0.7); // v0 → 1 → 2
@@ -66,11 +67,12 @@ describe('settings', () => {
     expect(parseConfigFile(file({ schemaVersion: 99 }, { nerThreshold: 0.6 })).patch).toEqual({ nerThreshold: 0.6 });
     // общая функция чистая: вход не меняется, частичный объект остаётся частичным
     const patch = { nerThreshold: 0.6 };
-    expect(applyMigrations(patch, 1)).toEqual({ nerThreshold: 0.7, schemaVersion: 3 });
+    expect(applyMigrations(patch, 1)).toEqual({ nerThreshold: 0.7, schemaVersion: 4 });
     expect(patch).toEqual({ nerThreshold: 0.6 });
-    expect(applyMigrations({ nerThreshold: 0.6 })).toEqual({ nerThreshold: 0.7, schemaVersion: 3 });
-    expect(applyMigrations({ nerThreshold: 0.6 }, 2)).toEqual({ nerThreshold: 0.6, schemaVersion: 3 });
-    expect(applyMigrations({ nerThreshold: 0.6 }, 3)).toEqual({ nerThreshold: 0.6 });
+    expect(applyMigrations({ nerThreshold: 0.6 })).toEqual({ nerThreshold: 0.7, schemaVersion: 4 });
+    expect(applyMigrations({ nerThreshold: 0.6 }, 2)).toEqual({ nerThreshold: 0.6, schemaVersion: 4 });
+    expect(applyMigrations({ nerThreshold: 0.6 }, 3)).toEqual({ nerThreshold: 0.6, schemaVersion: 4 });
+    expect(applyMigrations({ nerThreshold: 0.6 }, 4)).toEqual({ nerThreshold: 0.6 });
   });
   it('миграция 2 → 3 (политика 0.4, К1): pii/ids включаются в настройках и профилях, commercial выключен у всех, подсказка один раз', async () => {
     const stored = {
@@ -83,7 +85,7 @@ describe('settings', () => {
     delete stored.orgPolicyHintPending;
     const { settings, changed } = migrateSettings(stored);
     expect(changed).toBe(true);
-    expect(settings.schemaVersion).toBe(3);
+    expect(settings.schemaVersion).toBe(4); // 2 → 3 → 4
     expect(settings.categories).toMatchObject({ PERSON: true, INN: true, COMPANY: true, AMOUNT: true });
     expect(settings.commercial).toBe(false);
     expect(settings.orgPolicyHintPending).toBe(true);
@@ -91,7 +93,7 @@ describe('settings', () => {
     // у текущей версии подсказка не возвращается
     expect(migrateSettings({ ...settings, orgPolicyHintPending: false }).settings.orgPolicyHintPending).toBe(false);
     // частичный объект без categories (патч импорта) — только версия
-    expect(applyMigrations({ mode: 'mask' }, 2)).toEqual({ mode: 'mask', schemaVersion: 3 });
+    expect(applyMigrations({ mode: 'mask' }, 2)).toEqual({ mode: 'mask', schemaVersion: 4 });
     // импорт старого конфига: pii/ids включены, подсказка (состояние браузера) не импортируется
     const { parseConfigFile, CONFIG_KIND, NOT_EXPORTED } = await import('../../src/options/config-io.js');
     const r = parseConfigFile(JSON.stringify({ kind: CONFIG_KIND, version: 1, schemaVersion: 2, settings: { categories: { INN: false } } }));
@@ -100,6 +102,44 @@ describe('settings', () => {
     expect(NOT_EXPORTED.has('orgPolicyHintPending')).toBe(true);
     expect(NOT_EXPORTED.has('commercial')).toBe(false);
     expect(NOT_EXPORTED.has('maskedCompanies')).toBe(false);
+  });
+  it('миграция 3 → 4 (0.5, WP12-C): новые категории — в настройках и профилях по правилам групп; экспорт/импорт их сохраняет', async () => {
+    const OLD = ['PASSPORT', 'SNILS', 'INN', 'OGRN', 'ACCOUNT', 'CARD', 'IBAN', 'SWIFT', 'BIK', 'KPP', 'SSN', 'TAXID', 'EMAIL', 'URL', 'PHONE'];
+    OLD.push('BIRTHDATE', 'PERSON', 'COMPANY', 'ADDRESS', 'CONTRACT', 'AMOUNT');
+    const v3 = Object.fromEntries(OLD.map((id) => [id, ['CONTRACT', 'AMOUNT'].includes(id) ? false : true]));
+    const stored = {
+      ...defaultSettings(),
+      schemaVersion: 3,
+      commercial: true,
+      categories: { ...v3, COMPANY: false },
+      profiles: [
+        { id: 'llm', name: { ru: 'Для LLM', en: 'For LLM' }, builtin: true, values: {} },
+        { id: 'external', name: { ru: 'Внешн.', en: 'Ext.' }, builtin: true, values: { categories: Object.fromEntries(OLD.map((id) => [id, true])) } },
+        { id: 'p1', name: { ru: 'П', en: 'P' }, builtin: false, values: { categories: { CONTRACT: true } } },
+      ],
+    };
+    const { settings, changed } = migrateSettings(stored);
+    expect(changed).toBe(true);
+    expect(settings.schemaVersion).toBe(4);
+    // прежние значения не тронуты; новые pii/ids — true, новые commercial — defaultOn
+    expect(settings.categories).toMatchObject({ COMPANY: false, CONTRACT: false, PASSPORT_DEPT: true, VIN: true, COURT_CASE: true, CADASTRAL: true });
+    expect(settings.categories).toMatchObject({ TENDER: true, ORDER_NO: true, INVOICE_NO: true, CLIENT_NO: true, IP_REG: true });
+    expect(settings.commercial).toBe(true);
+    expect(settings.profiles[0].values).toEqual({});
+    expect(settings.profiles[1].values.categories).toMatchObject({ PASSPORT_ISSUER: true, HEALTH: true, POA: true, ORDER_NO: true });
+    expect(settings.profiles[2].values.categories).toMatchObject({ CONTRACT: true, OMS: true, NOTARY_REG: true, IP_REG: true });
+    for (const id of BUILTIN_CATEGORIES.map((c) => c.id)) expect(typeof settings.categories[id], id).toBe('boolean');
+    // повторно — без изменений
+    expect(migrateSettings(settings).changed).toBe(false);
+    // импорт конфигурации 0.4 (схема 3): новые категории дополняются; файл 0.5 переносит выключенные коммерческие
+    const { parseConfigFile, CONFIG_KIND, NOT_EXPORTED } = await import('../../src/options/config-io.js');
+    const old = parseConfigFile(JSON.stringify({ kind: CONFIG_KIND, version: 1, schemaVersion: 3, settings: { categories: { CONTRACT: true } } }));
+    expect(old.patch.categories).toMatchObject({ CONTRACT: true, DRIVER_LICENSE: true, ORDER_NO: true });
+    const src = { ...settings, categories: { ...settings.categories, ORDER_NO: false, IP_REG: false } };
+    const exported = Object.fromEntries(Object.entries(src).filter(([k]) => !NOT_EXPORTED.has(k)));
+    const r = parseConfigFile(JSON.stringify({ kind: CONFIG_KIND, version: 1, schemaVersion: SETTINGS_SCHEMA_VERSION, settings: exported }));
+    expect(r.skipped).toEqual([]);
+    expect(r.patch.categories).toMatchObject({ ORDER_NO: false, IP_REG: false, TENDER: true, PLATE: true });
   });
   it('новые поля 0.4: валидаторы commercial, maskedCompanies, nerThresholdOrg, nerStoplist; commercial и nerThresholdOrg — в профилях', () => {
     expect(validateSettingsPatch({ commercial: true, maskedCompanies: [{ name: 'Ромашка' }, { name: 'Вектор', aliases: ['Vector'] }] })).toEqual([]);

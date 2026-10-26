@@ -1,0 +1,132 @@
+{
+  "category": "MAC",
+  "description": "К5 (версия 0.5, WP12-C): позитивные и негативные примеры; expect — все сущности этой категории по порядку (после FR-20). Данные вымышленные.",
+  "positive": [
+    {
+      "text": "MAC 00:1A:2B:3C:4D:5E",
+      "expect": [
+        {
+          "text": "00:1A:2B:3C:4D:5E",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "MAC-адрес: 00-1A-2B-3C-4D-5E",
+      "expect": [
+        {
+          "text": "00-1A-2B-3C-4D-5E",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "адрес устройства a4:5e:60:c2:11:9f",
+      "expect": [
+        {
+          "text": "a4:5e:60:c2:11:9f",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "Cisco 001a.2b3c.4d5e",
+      "expect": [
+        {
+          "text": "001a.2b3c.4d5e",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "mac address 3C:22:FB:01:02:03",
+      "expect": [
+        {
+          "text": "3C:22:FB:01:02:03",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "MAC: 11-22-33-44-55-66",
+      "expect": [
+        {
+          "text": "11-22-33-44-55-66",
+          "level": "labeled"
+        }
+      ]
+    },
+    {
+      "text": "Wi-Fi F0:18:98:AB:CD:EF, Ethernet F0:18:98:AB:CD:F0",
+      "expect": [
+        {
+          "text": "F0:18:98:AB:CD:EF",
+          "level": "validated"
+        },
+        {
+          "text": "F0:18:98:AB:CD:F0",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "ноутбук (MAC 00:50:56:C0:00:08)",
+      "expect": [
+        {
+          "text": "00:50:56:C0:00:08",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "мак-адрес не важен, есть 10:20:30:40:50:60",
+      "expect": [
+        {
+          "text": "10:20:30:40:50:60",
+          "level": "validated"
+        }
+      ]
+    },
+    {
+      "text": "MAC-адрес 08-00-27-AA-BB-CC",
+      "expect": [
+        {
+          "text": "08-00-27-AA-BB-CC",
+          "level": "validated"
+        }
+      ]
+    }
+  ],
+  "negative": [
+    {
+      "text": "11-22-33-44-55-66"
+    },
+    {
+      "text": "12:30:45"
+    },
+    {
+      "text": "IBAN DE89 3704 0044 0532 0130 00"
+    },
+    {
+      "text": "ИНН 7736050003"
+    },
+    {
+      "text": "00:1A:2B:3C:4D"
+    },
+    {
+      "text": "00:1A:2B:3C:4D:5E:6F"
+    },
+    {
+      "text": "тел. 8-912-345-67-89"
+    },
+    {
+      "text": "1234.5678.9012"
+    },
+    {
+      "text": "00:1A-2B:3C-4D:5E"
+    },
+    {
+      "text": "дата 12-03-20"
+    }
+  ]
+}

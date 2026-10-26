@@ -49,39 +49,44 @@
     },
     {
       "key": "e10",
+      "category": "INVOICE_NO",
+      "value": "530"
+    },
+    {
+      "key": "e11",
       "category": "ADDRESS",
       "value": "603905, г. Нижний Новгород, ул. Белинского, д. 35, офис 343"
     },
     {
-      "key": "e11",
+      "key": "e12",
       "category": "PHONE",
       "value": "+7 (831) 059-75-23"
     },
     {
-      "key": "e12",
+      "key": "e13",
       "category": "COMPANY",
       "value": "Альтаир-М",
       "opf": true
     },
     {
-      "key": "e13",
+      "key": "e14",
       "category": "ADDRESS",
       "value": "620633, г. Екатеринбург, ул. Малышева, д. 108, офис 388"
     },
     {
-      "key": "e14",
+      "key": "e15",
       "category": "PERSON",
       "value": "Новиков А.И.",
       "surname": "Новиков"
     },
     {
-      "key": "e15",
+      "key": "e16",
       "category": "PERSON",
       "value": "Воронина С.Д.",
       "surname": "Воронина"
     },
     {
-      "key": "e16",
+      "key": "e17",
       "category": "PERSON",
       "value": "Воронина Светлана Дмитриевна",
       "surname": "Воронина",
@@ -99,10 +104,6 @@
     },
     {
       "value": "НДС",
-      "category": "COMPANY"
-    },
-    {
-      "value": "Счёт на оплату № 530 от 15 октября 2026 г.",
       "category": "COMPANY"
     },
     {

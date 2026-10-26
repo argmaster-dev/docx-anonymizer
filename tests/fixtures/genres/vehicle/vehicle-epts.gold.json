@@ -1,0 +1,123 @@
+{
+  "entities": [
+    {
+      "key": "e1",
+      "category": "VIN",
+      "value": "XTA2MXNG0H5UJ2424"
+    },
+    {
+      "key": "e2",
+      "category": "PLATE",
+      "value": "Р982ТО54"
+    },
+    {
+      "key": "e3",
+      "category": "VEHICLE_DOC",
+      "value": "164301099803199"
+    },
+    {
+      "key": "e4",
+      "category": "VEHICLE_DOC",
+      "value": "54 70 805861"
+    },
+    {
+      "key": "e5",
+      "category": "PERSON",
+      "value": "Фролова Анна Михайловна",
+      "surname": "Фролова"
+    },
+    {
+      "key": "e6",
+      "category": "PASSPORT",
+      "value": "5413 601805"
+    },
+    {
+      "key": "e7",
+      "category": "PASSPORT_ISSUER",
+      "value": "УМВД России по Энской области"
+    },
+    {
+      "key": "e8",
+      "category": "PASSPORT_DATE",
+      "value": "03.09.2014"
+    },
+    {
+      "key": "e9",
+      "category": "PASSPORT_DEPT",
+      "value": "543-054"
+    },
+    {
+      "key": "e10",
+      "category": "PHONE",
+      "value": "+7 (999) 001-68-48"
+    },
+    {
+      "key": "e11",
+      "category": "PERSON",
+      "value": "Григорьев Денис Олегович",
+      "surname": "Григорьев"
+    },
+    {
+      "key": "e12",
+      "category": "PASSPORT",
+      "value": "5416 184805"
+    },
+    {
+      "key": "e13",
+      "category": "PASSPORT_ISSUER",
+      "value": "Отделом УФМС России по Заречному району г. Энска"
+    },
+    {
+      "key": "e14",
+      "category": "PASSPORT_DATE",
+      "value": "21.05.2012"
+    },
+    {
+      "key": "e15",
+      "category": "PASSPORT_DEPT",
+      "value": "545-038"
+    },
+    {
+      "key": "e16",
+      "category": "DRIVER_LICENSE",
+      "value": "54 65 228836"
+    },
+    {
+      "key": "e17",
+      "category": "PERSON",
+      "value": "Григорьев Д.О.",
+      "surname": "Григорьев"
+    }
+  ],
+  "negatives": [
+    {
+      "value": "Лада Веста",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "объём двигателя 1,6 л",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "п. 2.4",
+      "category": "COMPANY",
+      "rules": true
+    },
+    {
+      "value": "ДОГОВОР КУПЛИ-ПРОДАЖИ АВТОМОБИЛЯ",
+      "category": "COMPANY"
+    },
+    {
+      "value": "год выпуска 2019",
+      "category": "VIN",
+      "rules": true
+    },
+    {
+      "value": "пробег 45 000 км",
+      "category": "PLATE",
+      "rules": true
+    }
+  ]
+}

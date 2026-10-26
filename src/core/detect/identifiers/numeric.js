@@ -2,6 +2,7 @@
 // Уровни: validated — контрольная сумма/структура пройдена; labeled — рядом лейбл (§4.3). Границы — NB/NA (labels.js).
 import { inn, kpp, ogrn, bik, account, accountKeyOk, luhn, mod97, swift, snils, ssn, taxid, IBAN_LENGTHS } from '../../validators.js';
 import { NB, NA, labelState, scan, goodsCodeContext } from './labels.js';
+import { docSeriesTail } from './papers.js';
 
 const cand = (start, end, confidence, validator) => (validator ? { start, end, confidence, validator } : { start, end, confidence });
 
@@ -15,7 +16,9 @@ export function detectInn(text, ctx) {
     const { mine, foreign } = labelState(text, c.start, ctx, 'INN');
     if (mine) out.push(cand(c.start, c.end, valid ? 'validated' : 'labeled', valid ? 'inn' : undefined));
     // код ТН ВЭД / ОКПД2 / артикул в окне слева или в заголовке столбца — не ИНН (WP11-D)
-    else if (valid && !foreign && !goodsCodeContext(text, c.start, c.end, ctx)) out.push(cand(c.start, c.end, 'validated', 'inn'));
+    // номер после серии документа («патент на работу 77 № 1900012345», 0.5) — тоже не ИНН
+    else if (valid && !foreign && !goodsCodeContext(text, c.start, c.end, ctx) && !docSeriesTail(text, c.start, ctx))
+      out.push(cand(c.start, c.end, 'validated', 'inn'));
   }
   return out;
 }

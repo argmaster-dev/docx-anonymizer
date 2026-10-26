@@ -31,12 +31,22 @@
     },
     {
       "key": "e6",
+      "category": "INVOICE_NO",
+      "value": "174"
+    },
+    {
+      "key": "e7",
+      "category": "INVOICE_NO",
+      "value": "555"
+    },
+    {
+      "key": "e8",
       "category": "PERSON",
       "value": "Тихонова Е.И.",
       "surname": "Тихонова"
     },
     {
-      "key": "e7",
+      "key": "e9",
       "category": "PERSON",
       "value": "Полякова В.К.",
       "surname": "Полякова"
