@@ -52,11 +52,17 @@ export function packRelease({ outDir = join(root, 'release'), modelZip = null } 
   return { lite, full };
 }
 
-/** @returns {PackResult} */
-function packOne({ outDir, name, version, buildArgs }) {
+/**
+ * Один архив: сборка во временный каталог, необязательная доводка каталога (prepare — так pack-store.mjs убирает key
+ * из манифеста пакета для магазинов, версия 0.5, WP12-F, К15) и детерминированный zip.
+ * @param {{outDir: string, name: string, version: string, buildArgs: string[], prepare?: (stage: string) => void}} opts
+ * @returns {PackResult}
+ */
+export function packOne({ outDir, name, version, buildArgs, prepare }) {
   const stage = mkdtempSync(join(tmpdir(), 'docx-anon-pack-'));
   try {
     execFileSync(process.execPath, [join(root, 'scripts/build.mjs'), `--dist=${stage}`, ...buildArgs], { cwd: root, stdio: 'pipe' });
+    if (prepare) prepare(stage);
     const entries = {};
     for (const file of walk(stage)) {
       const rel = relative(stage, file).split(sep).join('/');

@@ -28,9 +28,9 @@ export const OPTIONS_DICT = {
     site_all_warn:
       'Перехват на всех сайтах затронет и почту, CRM и другие сервисы: везде, куда вы прикладываете документы, появится окно обезличивания. Включить?',
     allowlist: 'Список разрешённых сайтов',
-    allowlist_hint: 'При добавлении сайта Chrome спросит разрешение на доступ к нему — без этого перехват там не заработает.',
-    access_denied_hint: 'Сайт сохранён, но Chrome не выдал доступ — перехват на нём не заработает. Разрешите доступ в меню расширения на этом сайте.',
-    site_all_denied: 'Chrome не выдал доступ ко всем сайтам — режим не изменён.',
+    allowlist_hint: 'При добавлении сайта браузер спросит разрешение на доступ к нему — без этого перехват там не заработает.',
+    access_denied_hint: 'Сайт сохранён, но браузер не выдал доступ — перехват на нём не заработает. Разрешите доступ в меню расширения на этом сайте.',
+    site_all_denied: 'Браузер не выдал доступ ко всем сайтам — режим не изменён.',
     blocklist: 'Список заблокированных сайтов',
     origin_placeholder: 'https://example.com или https://*.example.com',
     origin_bad: 'Нужен адрес вида https://example.com (можно с *. для поддоменов)',
@@ -258,10 +258,10 @@ export const OPTIONS_DICT = {
     site_all_warn:
       'Intercepting on all sites also affects mail, CRM and other services: the anonymization window will appear wherever you attach a document. Enable?',
     allowlist: 'Allowed sites',
-    allowlist_hint: 'When you add a site, Chrome will ask for permission to access it — interception does not work there without it.',
+    allowlist_hint: 'When you add a site, the browser will ask for permission to access it — interception does not work there without it.',
     access_denied_hint:
-      'The site is saved, but Chrome did not grant access — interception will not work there. Allow access from the extension menu on that site.',
-    site_all_denied: 'Chrome did not grant access to all sites — the mode was not changed.',
+      'The site is saved, but the browser did not grant access — interception will not work there. Allow access from the extension menu on that site.',
+    site_all_denied: 'The browser did not grant access to all sites — the mode was not changed.',
     blocklist: 'Blocked sites',
     origin_placeholder: 'https://example.com or https://*.example.com',
     origin_bad: 'Use an address like https://example.com (optionally *. for subdomains)',

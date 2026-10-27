@@ -17,7 +17,7 @@ export const HELP_DICT = {
       'В сервис уходит обезличенный файл того же формата: форматирование, таблицы, листы, формулы, слайды, заметки, колонтитулы сохранены, метаданные файла очищены; из PDF — его текст с плейсхолдерами. Ответ ИИ — текстом или файлом — можно вернуть обратно с настоящими названиями и именами.',
     how_h: 'Как пользоваться',
     how_1:
-      'Откройте меню расширения на сайте чата и включите «Перехват загрузки». Если сайта нет в списке, нажмите «Добавить …» и подтвердите запрос Chrome на доступ к сайту; для сайтов из списка по умолчанию нажмите «Разрешить доступ». По умолчанию перехват выключен, а доступа к сайтам у расширения нет.',
+      'Откройте меню расширения на сайте чата и включите «Перехват загрузки». Если сайта нет в списке, нажмите «Добавить …» и подтвердите запрос браузера на доступ к сайту; для сайтов из списка по умолчанию нажмите «Разрешить доступ». По умолчанию перехват выключен, а доступа к сайтам у расширения нет.',
     how_2: 'Приложите файл в чате: кнопкой, перетаскиванием или вставкой. Расширение остановит файл и покажет панель: что найдено и где.',
     how_3:
       'Снимите лишние галочки и нажмите «Анонимизировать и загрузить» — в чат уйдёт файл того же формата (имя.anon.docx, имя.anon.xlsx, имя.anon.csv…), а для PDF — имя.anon.md. Имя файла тоже проверяется: «Иванов_Иван_Иванович.docx» уйдёт как «[ФИО_1].anon.docx» с той же меткой, что в тексте; имя файла при восстановлении не возвращается.',
@@ -66,7 +66,7 @@ export const HELP_DICT = {
       'The service receives an anonymized file of the same format: formatting, tables, sheets, formulas, slides, notes and headers are kept, file metadata is cleared; for a PDF it receives the PDF text with placeholders. The AI answer — text or a file — can be turned back into real names and titles.',
     how_h: 'How to use it',
     how_1:
-      'Open the extension menu on the chat site and turn on "Upload interception". If the site is not listed, press "Add …" and accept Chrome\'s request for access to the site; for sites listed by default, press "Allow access". Interception is off by default and the extension has no access to sites until you allow it.',
+      'Open the extension menu on the chat site and turn on "Upload interception". If the site is not listed, press "Add …" and accept the browser\'s request for access to the site; for sites listed by default, press "Allow access". Interception is off by default and the extension has no access to sites until you allow it.',
     how_2:
       'Attach a file in the chat: with the button, by drag and drop or by pasting. The extension holds the file and shows a panel with what was found and where.',
     how_3:

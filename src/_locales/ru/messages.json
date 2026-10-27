@@ -1,5 +1,7 @@
 {
   "extName": { "message": "DOCX Anonymizer" },
-  "extDescription": { "message": "Локально обезличивает .docx и PDF перед загрузкой в ChatGPT, Claude и другие сервисы. Без сетевых запросов." },
+  "extDescription": {
+    "message": "Локально обезличивает документы Word, Excel, PowerPoint, PDF и текстовые файлы перед загрузкой в ИИ-чаты. Без сетевых запросов."
+  },
   "actionTitle": { "message": "DOCX Anonymizer" }
 }

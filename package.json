@@ -1,7 +1,7 @@
 {
   "name": "docx-anonymizer",
-  "version": "0.4.1",
-  "description": "Браузерное расширение: локальная анонимизация .docx и PDF перед загрузкой в LLM-сервисы",
+  "version": "0.5.0",
+  "description": "Браузерное расширение: локальная анонимизация документов Word, Excel, PowerPoint, PDF и текстовых файлов перед загрузкой в LLM-сервисы",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -14,6 +14,8 @@
     "build:e2e": "node scripts/build.mjs --e2e",
     "pack": "node scripts/pack.mjs",
     "pack:model": "node scripts/pack-model.mjs",
+    "pack:store": "node scripts/pack-store.mjs",
+    "store:shots": "node scripts/store-shots.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "node scripts/build.mjs --e2e && playwright test",

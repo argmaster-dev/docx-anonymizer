@@ -239,7 +239,8 @@ export function createPreview(opts) {
     const color = catColor(item.category);
     const n = item.occurrences.length;
     const active = n - item.excluded.size;
-    const ctx = (item.occurrences[0]?.context || '').replace(/[⟦⟧]/g, '');
+    // U+FFFC — место объекта (рисунок, поле, якорь комментария) в тексте модели: в строке контекста — пробел, а не «квадрат» (WP12-F)
+    const ctx = (item.occurrences[0]?.context || '').replace(/[⟦⟧]/g, '').replace(/￼/g, ' ');
     const check = h('input', {
       type: 'checkbox',
       class: 'pv-check',
