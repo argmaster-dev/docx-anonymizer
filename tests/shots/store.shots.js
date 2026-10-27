@@ -152,11 +152,18 @@ for (const lang of ['ru', 'en']) {
     await rp.getByTestId('restore-run').click();
     await expect(rp.getByTestId('restore-output')).not.toBeEmpty();
     await expect(rp.getByTestId('restore-error')).toHaveText('');
-    // кадр — от карточки «2. Откуда взять карту замен» до результата
+    // кадр — от шага 1 (ответ ИИ с метками) до результата: поле ввода — по высоте текста, страница при необходимости
+    // уменьшается CSS zoom, чтобы оба шага поместились в 1280×800
     await rp.evaluate(() => {
-      const card = document.querySelector('[data-testid="session-radio"]').closest('section, .card, fieldset') || document.body;
-      document.body.style.paddingBottom = '600px'; // чтобы прокрутка дошла до карточки и на коротком (en) тексте
-      window.scrollTo(0, card.getBoundingClientRect().top + window.scrollY - 28);
+      const card = (testid) => document.querySelector(`[data-testid="${testid}"]`).closest('section, .card, fieldset') || document.body;
+      const input = /** @type {HTMLTextAreaElement} */ (document.querySelector('[data-testid="restore-input"]'));
+      input.style.height = `${input.scrollHeight + 4}px`;
+      document.body.style.paddingBottom = '600px';
+      const span = () => card('restore-output').getBoundingClientRect().bottom - card('restore-input').getBoundingClientRect().top;
+      const zoom = Math.min(1, 752 / span());
+      document.documentElement.style.zoom = String(zoom);
+      window.scrollTo(0, 0);
+      window.scrollTo(0, card('restore-input').getBoundingClientRect().top - 10);
     });
     await rp.waitForTimeout(300);
     await shot(rp, join(dir, '05-restore.png'));

@@ -79,7 +79,7 @@ The name recognition model was trained, among other data, on open corpora whose 
 
 ```
 No account or server is needed. To test:
-1. Open any page with a file upload field (for example a local HTML page with <input type="file">).
+1. Open any https page with a file upload field, or a local page served over http (e.g. python3 -m http.server in a folder with an HTML page containing <input type="file">); file:// pages are not supported.
 2. Click the extension icon, turn on "Upload interception" and press "Add <site>" — the browser asks for access to this one site (optional_host_permissions).
 3. Attach a .docx/.xlsx/.pptx/.pdf/.csv file with names, phone numbers or tax IDs. The extension panel shows the findings; "Anonymize and upload" passes an anonymized copy to the page.
 4. "Restore text" in the extension menu restores an answer with markers.

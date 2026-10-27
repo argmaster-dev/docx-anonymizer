@@ -19,11 +19,13 @@ DOCX Anonymizer — браузерное расширение, которое о
 | Файл, который вы прикладываете на сайте, и его текст | Память браузера (изолированная страница расширения и её Web Worker), пока открыт браузер | Найти и заменить персональные данные и реквизиты |
 | Найденные значения и карта замен («ключ восстановления»: метка → настоящее значение) | Только память браузера; список недавних обработок исчезает при закрытии браузера | Показать находки в панели и вернуть настоящие значения в ответ ИИ |
 | Файл ключа восстановления `.mapping.json` | На вашем диске — только если вы сами нажали «Сохранить ключ восстановления»; по желанию шифруется вашим паролем (PBKDF2-SHA-256, AES-GCM-256) | Восстановить ответ ИИ позже. Пароль нигде не сохраняется |
-| Настройки: включён ли перехват, список сайтов, исключения, свои категории и словари, список компаний для маскирования, порог и стоп-слова модели, выбор переключателей | `chrome.storage.local` этого профиля браузера, пока вы их не измените или не удалите расширение | Работа расширения так, как вы его настроили |
+| Настройки: включён ли перехват, режим и списки разрешённых и заблокированных сайтов, свои категории и словари, порог и стоп-слова модели, выбор переключателей (в том числе удаления скрытых данных), служебные отметки (показана ли подсказка) | `chrome.storage.local` этого профиля браузера, пока вы их не измените, не сбросите настройки или не удалите расширение | Работа расширения так, как вы его настроили |
+| **Отдельные значения из документов — только по вашей команде:** значение, для которого вы нажали «Больше не предлагать» (список «Исключения»); название организации, для которого вы нажали «Маскировать всегда» или отметили «запомнить» в «Анонимизировать как → Организация» (список «Компании для маскирования») | `chrome.storage.local`, в открытом виде, пока вы не удалите запись; видны и удаляются на странице настроек — разделы «Исключения» и «Компании для маскирования» (кнопка «×» у записи) | Не предлагать это значение / маскировать эту организацию в следующих документах |
+| Адреса сайтов (origin, например `https://example.com`): сайт, на котором вы нажали «Отключить на этом сайте» (список заблокированных); сайт, на котором вы передвинули панель, — вместе с её положением на экране | `chrome.storage.local`; заблокированные сайты видны и удаляются в настройках, раздел «Перехват»; положения панели в интерфейсе не показываются и удаляются кнопкой «Сбросить все настройки» | Не перехватывать на этом сайте; открывать панель там, где вы её оставили |
 | Пакет модели распознавания имён (веса нейросети, без ваших данных) | Хранилище браузера этого расширения (OPFS), пока вы не удалите модель или расширение | Находить имена без меток |
-| Адрес текущей вкладки | Читается, только когда вы открываете меню расширения или включаете перехват на сайте; не сохраняется, кроме сайтов, которые вы сами добавили в список | Показать, работает ли перехват на этом сайте, и добавить сайт по вашей команде |
+| Адрес текущей вкладки | Читается, только когда вы открываете меню расширения или включаете перехват на сайте; сохраняется только как запись в списке сайтов или положение панели (строки выше), и только после вашего действия | Показать, работает ли перехват на этом сайте, и добавить сайт по вашей команде |
 
-Документы, найденные значения и карта замен **никогда** не записываются в хранилище браузера и не попадают в журналы.
+Документы, их текст и карта замен **никогда** не записываются в хранилище браузера и не попадают в журналы. Найденные значения тоже не записываются — кроме отдельных значений, которые вы сами внесли в «Исключения» или «Компании для маскирования» (строка выше). Перед экспортом настроек в файл («Данные» → «Экспорт настроек») помните, что эти списки входят в него.
 
 ## Что получает сайт
 
@@ -40,7 +42,8 @@ DOCX Anonymizer — браузерное расширение, которое о
 ## Как удалить данные
 
 - **Недавние обработки и карты замен** — закройте браузер: они хранятся только в памяти.
-- **Настройки** — на странице настроек, раздел «Данные» → «Сбросить все настройки».
+- **Исключения и компании для маскирования** — на странице настроек, разделы «Исключения» и «Компании для маскирования», кнопка «×» у записи.
+- **Все настройки**, включая списки сайтов, исключения, компании и положения панели, — на странице настроек, раздел «Данные» → «Сбросить все настройки» (модель при этом остаётся).
 - **Модель распознавания имён** — на странице настроек, карточка «Модель NER» → «Удалить модель».
 - **Всё сразу** — удалите расширение: браузер стирает его настройки и хранилище.
 - **Сохранённые вами файлы** (обезличенные копии, `.mapping.json`) лежат на вашем диске — удаляйте их как обычные файлы.
@@ -78,11 +81,13 @@ DOCX Anonymizer is a browser extension that anonymizes documents before you uplo
 | The file you attach on a website and its text | Browser memory (the extension's isolated page and its Web Worker) while the browser is open | To find and replace personal data and identifiers |
 | Values found and the replacement map (the "recovery key": marker → real value) | Browser memory only; the list of recent runs disappears when the browser is closed | To show findings in the panel and put the real values back into the AI's answer |
 | The recovery key file `.mapping.json` | Your disk — only if you press "Save the recovery key"; optionally encrypted with your password (PBKDF2-SHA-256, AES-GCM-256) | To restore an AI answer later. The password is never stored |
-| Settings: interception on/off, site list, exclusions, custom categories and dictionaries, the list of companies to mask, model threshold and stop words, switch choices | `chrome.storage.local` of this browser profile, until you change them or remove the extension | To work the way you configured it |
+| Settings: interception on/off, site mode and the allowed and blocked site lists, custom categories and dictionaries, model threshold and stop words, switch choices (including hidden-content removal), service flags (whether a hint was shown) | `chrome.storage.local` of this browser profile, until you change them, reset the settings or remove the extension | To work the way you configured it |
+| **Individual values from documents — only on your command:** a value for which you pressed "Stop suggesting" (the "Exclusions" list); a company name for which you pressed "Always mask" or ticked "remember" in "Anonymize as → Company" (the "Companies to mask" list) | `chrome.storage.local`, in plain text, until you delete the entry; shown and deleted on the settings page — "Exclusions" and "Companies to mask" sections ("×" next to an entry) | To stop suggesting that value / to mask that company in later documents |
+| Site addresses (origin, e.g. `https://example.com`): a site where you pressed "Turn off on this site" (the blocked list); a site where you moved the panel, together with its position on screen | `chrome.storage.local`; blocked sites are shown and deleted in the settings, "Interception" section; panel positions are not shown in the interface and are deleted with "Reset all settings" | Not to intercept on that site; to open the panel where you left it |
 | The name recognition model package (neural network weights, none of your data) | The extension's browser storage (OPFS), until you remove the model or the extension | To find names without labels |
-| The current tab's address | Read only when you open the extension menu or turn interception on for a site; not stored, except sites you add to the list yourself | To show whether interception works on this site and to add the site at your request |
+| The current tab's address | Read only when you open the extension menu or turn interception on for a site; stored only as a site list entry or a panel position (rows above), and only after your action | To show whether interception works on this site and to add the site at your request |
 
-Documents, values found and the replacement map are **never** written to browser storage or to logs.
+Documents, their text and the replacement map are **never** written to browser storage or to logs. Values found are not written either — except individual values you added yourself to "Exclusions" or "Companies to mask" (row above). Keep in mind that these lists are included when you export the settings to a file ("Data" → "Export settings").
 
 ## What the website receives
 
@@ -99,7 +104,8 @@ The menu and the extension's pages link to the help page, the project's releases
 ## How to delete data
 
 - **Recent runs and replacement maps** — close the browser: they live only in memory.
-- **Settings** — settings page, "Data" → "Reset all settings".
+- **Exclusions and companies to mask** — settings page, "Exclusions" and "Companies to mask" sections, "×" next to an entry.
+- **All settings**, including site lists, exclusions, companies and panel positions — settings page, "Data" → "Reset all settings" (the model stays).
 - **The name recognition model** — settings page, "NER model" card → "Remove model".
 - **Everything at once** — remove the extension: the browser erases its settings and storage.
 - **Files you saved** (anonymized copies, `.mapping.json`) are on your disk — delete them like any other file.

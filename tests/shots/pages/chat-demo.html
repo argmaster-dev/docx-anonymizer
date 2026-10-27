@@ -91,10 +91,6 @@
         background: #f4f5f8;
         align-self: flex-start;
       }
-      .me {
-        background: #e5edff;
-        align-self: flex-end;
-      }
       .chip {
         display: inline-flex;
         align-items: center;
@@ -166,7 +162,6 @@
       <header data-i18n="title">Ассистент</header>
       <div class="feed" id="feed">
         <div class="msg bot" data-i18n="hello">Здравствуйте! Прикрепите документ — помогу разобрать условия, найти риски и подготовить ответ.</div>
-        <div class="msg me" data-i18n="ask">Проверь договор: какие условия невыгодны поставщику?</div>
       </div>
       <div class="composer">
         <div id="attachments"></div>
@@ -196,7 +191,6 @@
         h4: 'Letter to a partner',
         title: 'Assistant',
         hello: 'Hi! Attach a document and I will help you review the terms, spot risks and draft a reply.',
-        ask: 'Please review the contract: which terms are unfavourable to the supplier?',
         ph: 'Write a message…',
       };
       const lang = new URLSearchParams(location.search).get('lang') === 'en' ? 'en' : 'ru';
