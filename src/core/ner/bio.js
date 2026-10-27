@@ -304,57 +304,40 @@ function onlyTemplateWords(value) {
   return words.every((w) => ROLE_WORDS.has(lowerE(w)) || EXTRA_TEMPLATE_WORDS.has(w.toLowerCase()) || isStopWord(w));
 }
 
-/** Промежуток из одних пробелов (без пунктуации, табуляции и переноса строки: табуляция — граница ячейки или столбца). */
-const GAP_SPACES_RE = /^[ \u00a0]+$/;
+/** Промежуток из одних пробелов и табуляций (без пунктуации и переноса строки). */
+const GAP_SPACES_RE = /^[ \t\u00a0]+$/;
 /** Промежуток PER из одних инициалов с точкой («А.» в «А.|А.|Иванов», когда модель пропустила средний инициал). */
-const GAP_INITIALS_RE = /^(?:[ \u00a0]*\p{Lu}\.)+[ \u00a0]*$/u;
-/** Граница внутри спана, которую сущность не пересекает: табуляция (ячейка, столбец), перенос строки, разрыв страницы. */
-const BREAK_RE = /[\t\n\r\v\f\u2028\u2029\uFFFC]+/u;
+const GAP_INITIALS_RE = /^(?:[ \t\u00a0]*\p{Lu}\.)+[ \t\u00a0]*$/u;
 const SURNAME_SRC = '\\p{Lu}\\p{Ll}+(?:-\\p{Lu}\\p{Ll}+)?';
 const INITIALS_SRC = '\\p{Lu}\\.(?:[ \\u00a0]*\\p{Lu}\\.)?';
 /** Полное ФИО с инициалами: «Котова А.Б.» (фамилия впереди) и «А.Б. Котова» (инициалы впереди). Голая фамилия последней не
- * отделяется: «John A. Smith», «Комаров Р. А. Петрович» — один человек. */
+ * отделяется: «John A. Smith», «Комаров Р. А. Петрович» — один человек. Между ФИО — пробелы, табуляция или ничего. */
 const FULL_NAME_FORMS = [`${SURNAME_SRC}[ \\u00a0]*${INITIALS_SRC}`, `${INITIALS_SRC}[ \\u00a0]*${SURNAME_SRC}`].map((one) => ({
-  all: new RegExp(`^${one}(?:[ \\u00a0]*${one})+$`, 'u'),
+  all: new RegExp(`^${one}(?:[ \\t\\u00a0]*${one})+$`, 'u'),
   each: new RegExp(one, 'gu'),
 }));
 
 /**
- * Части спана PER, если это несколько полных ФИО одного вида подряд — «Котова А.Б.Лебедев В.Г.», «А.Б. Котова В.Г. Лебедев»
- * (доработка 0.5 по прогону КП: модель ставит I на второе ФИО строки подписей, `joinAdjacent` склеивал их через пробел и
- * вплотную; §5.2 NLP, `docs/contracts.md` §6.7 шаг 8). Иначе — null.
- * @param {string} part  текст спана без краевых пробелов
- * @returns {{start: number, end: number}[] | null}  позиции внутри `part`
- */
-function fullNames(part) {
-  for (const f of FULL_NAME_FORMS) {
-    if (!f.all.test(part)) continue;
-    return [...part.matchAll(f.each)].map((m) => ({ start: /** @type {number} */ (m.index), end: /** @type {number} */ (m.index) + m[0].length }));
-  }
-  return null;
-}
-
-/**
- * Спан по границам: табуляция и перенос строки делят любой спан (две ячейки — две сущности; спан с переносом строки раннер
- * отбросил бы целиком), PER — ещё и между полными ФИО с инициалами подряд.
+ * Спан PER из нескольких полных ФИО с инициалами одного вида подряд — по людям: «Котова А.Б.Лебедев В.Г.», «Котова А.Б.\tЛебедев
+ * В.Г.», «А.Б. Котова В.Г. Лебедев» (доработка 0.5 по прогону КП: модель ставит I на второе ФИО строки подписей, `joinAdjacent`
+ * склеивал их через пробел, табуляцию и вплотную; §5.2 NLP, `docs/contracts.md` §6.7 шаг 8). Остальные спаны — как есть:
+ * по ревью доработки табуляция сама по себе спан не делит — «Takahashi\tJun», «Мороз\tИван Петрович» в ячейках строки,
+ * разделённые на одиночные слова, теряли бы признаки имени и могли уйти открытыми.
  * @param {import('../contracts/ner.js').NerSpan} sp @param {string} text
  * @returns {import('../contracts/ner.js').NerSpan[]}
  */
 function splitSpan(sp, text) {
-  const out = [];
-  const raw = text.slice(sp.start, sp.end);
-  let pos = 0;
-  for (const seg of raw.split(BREAK_RE)) {
-    const at = raw.indexOf(seg, pos);
-    pos = at + seg.length;
-    const lead = seg.length - seg.trimStart().length;
-    const part = seg.trim();
-    if (!/\p{L}/u.test(part)) continue;
-    const base = sp.start + at + lead;
-    const names = sp.label === 'PER' ? fullNames(part) : null;
-    for (const r of names || [{ start: 0, end: part.length }]) out.push({ ...sp, start: base + r.start, end: base + r.end });
+  if (sp.label !== 'PER') return [sp];
+  const part = text.slice(sp.start, sp.end);
+  for (const f of FULL_NAME_FORMS) {
+    if (!f.all.test(part)) continue;
+    return [...part.matchAll(f.each)].map((m) => ({
+      ...sp,
+      start: sp.start + /** @type {number} */ (m.index),
+      end: sp.start + /** @type {number} */ (m.index) + m[0].length,
+    }));
   }
-  return out.length ? out : [sp];
+  return [sp];
 }
 
 /**

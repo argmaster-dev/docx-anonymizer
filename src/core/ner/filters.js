@@ -72,8 +72,9 @@ export function isCapsLine(text) {
   return all >= 3 && up / all >= 0.9;
 }
 
-/** Два слова с заглавной подряд: «Вера Лукина», «Лукина Вера». */
-const PAIR_RE = /(?<![\p{L}\p{N}])(\p{Lu}\p{Ll}+)[ \u00a0](?=(\p{Lu}\p{Ll}+)(?![\p{L}\p{N}]))/gu;
+/** Два слова с заглавной подряд: «Вера Лукина», «Лукина Вера», и через табуляцию. */
+// через пробел или табуляцию: «Мороз\tИван Петрович» — фамилия и имя в соседних ячейках строки (ревью доработки 0.5)
+const PAIR_RE = /(?<![\p{L}\p{N}])(\p{Lu}\p{Ll}+)[ \t\u00a0](?=(\p{Lu}\p{Ll}+)(?![\p{L}\p{N}]))/gu;
 
 /** Основы слова для сравнения падежных форм: само слово и, для кириллицы ≥ 5 букв, без 1–`cut` последних букв (не короче 4). */
 function stems(word, cut) {
@@ -118,16 +119,16 @@ function docxCellTexts(doc) {
  * - `properStems` — основы слов, которые в обычном тексте (не капс-строка, не заголовок) хоть раз написаны с заглавной
  *   не в начале предложения (правило 3);
  * - `cellTexts` — тексты абзацев в таблицах DOCX (правило 1; у текстовой модели PDF вид ячейки приходит в `blockKind`);
- * - `commonStems` — основы слов (≥ 4 букв), которые в обычном тексте хоть раз написаны со строчной: нарицательное
- *   («анонимайзер»), а не имя (фильтр PER, `isCommonInDoc`; доработка 0.5 по прогону КП).
+ * - `toolWords` — слова с суффиксом названия программы-инструмента («-айзер», «-изатор», «-атор»…), хоть раз написанные в
+ *   обычном тексте со строчной, точной словоформой («анонимайзер»): фильтр PER, `isToolWordInDoc` (доработка 0.5 по прогону КП).
  * @param {import('../docx/model.js').DocModel} doc
  * @param {object} settings  эффективные настройки (`nerStoplist` — пользовательское дополнение стоп-списка)
- * @returns {{stoplist: Set<string>, properStems: Set<string>, cellTexts: Set<string>, pairedWords: Set<string>, commonStems: Set<string>}}
+ * @returns {{stoplist: Set<string>, properStems: Set<string>, cellTexts: Set<string>, pairedWords: Set<string>, toolWords: Set<string>}}
  */
 export function createOrgFilterContext(doc, settings) {
   const kindByPid = new Map((doc?.paragraphs || []).map((p) => [p.pid, p.kind]));
   const properStems = new Set();
-  const commonStems = new Set();
+  const toolWords = new Set();
   for (const s of doc?.streams || []) {
     if (s.type !== 'live' || !s.text) continue;
     if (HEADING_KINDS.has(kindByPid.get(s.pid) || '') || isCapsLine(s.text)) continue;
@@ -136,7 +137,7 @@ export function createOrgFilterContext(doc, settings) {
       const first = w[0];
       if (!LETTER_RE.test(first)) continue;
       if (first === first.toLowerCase()) {
-        if (first !== first.toUpperCase() && w.length >= 4) for (const st of stems(w, 3)) commonStems.add(st);
+        if (first !== first.toUpperCase() && TOOL_SUFFIX_RE.test(lowerE(w))) toolWords.add(lowerE(w));
         continue;
       }
       // начало потока или предложения: «Входит в стоимость…» — не имя собственное
@@ -155,17 +156,24 @@ export function createOrgFilterContext(doc, settings) {
       pairedWords.add(lowerE(m[2]));
     }
   }
-  return { stoplist: buildStoplist(settings?.nerStoplist), properStems, cellTexts: docxCellTexts(doc || {}), pairedWords, commonStems };
+  return { stoplist: buildStoplist(settings?.nerStoplist), properStems, cellTexts: docxCellTexts(doc || {}), pairedWords, toolWords };
 }
 
 /**
- * Слово (≥ 4 букв) в документе пишется и со строчной буквы — нарицательное («Анонимайзер» в начале фразы и «анонимайзер
- * документов» в тексте). Без контекста документа — нет.
- * @param {string} word
- * @param {Set<string>} [commonStems]  из `createOrgFilterContext`
+ * Суффикс названия программы-инструмента в любом падеже: «анонимайзер», «конвертер» — нет (фамилии на «-ер» бывают),
+ * «анализатор», «валидатор», «агрегатор», «редактор»; основа ≥ 3 букв. Фамилий с такими суффиксами в словарях нет, а
+ * слово из словаря имён правило и не проверяет (`nameLike`). Ревью доработки 0.5: основы и общие нарицательные («Мороз» +
+ * «мороз», «Кузнец» + «кузнец», «Лебедь» + «лебёдка») открывали одиночные фамилии — правило сужено до этого суффикса.
  */
-export function isCommonInDoc(word, commonStems) {
-  return !!commonStems && word.length >= 4 && stems(word, 2).some((st) => commonStems.has(st));
+const TOOL_SUFFIX_RE = /^\p{Ll}{3,}(?:айзер|изатор|ератор|атор|итор|ктор|ометр)(?:а|у|ом|е|ы|ов|ам|ами|ах)?$/u;
+/**
+ * Слово с суффиксом программы-инструмента в документе пишется и со строчной буквы той же словоформой («Анонимайзер» в начале
+ * фразы и «анонимайзер документов» в тексте). Без контекста документа — нет.
+ * @param {string} word
+ * @param {Set<string>} [toolWords]  из `createOrgFilterContext`
+ */
+export function isToolWordInDoc(word, toolWords) {
+  return !!toolWords && toolWords.has(lowerE(word));
 }
 
 /** ОПФ в спане или вплотную к нему («ООО «Ромашка»», «Northwind Systems Ltd.»). */

@@ -39,7 +39,7 @@ Google|Гугл|Google Docs|Google Drive|Google Sheets|Google Meet|Gmail|Chrome|
 Tilda|Тильда|WordPress|Photoshop|Illustrator|Acrobat|Adobe Acrobat|Adobe|Canva|ChatGPT|GPT|Claude|GigaChat
 YandexGPT|Контур.Диадок|Диадок|Контур.Эльба|СБИС|Сбис|Госуслуги|Честный знак
 Power BI|Tableau|Looker|Metabase|Grafana|Qlik|Excel-таблица|PDF-файл|Word-файл|GitHub|GitLab|Docker|Kubernetes|PostgreSQL|MySQL|Python|JavaScript|Postman`),
-  ...wordList(`DeepSeek|Дипсик|Qwen|Gemini|Copilot|GitHub Copilot|Microsoft Copilot|Perplexity|Grok|Midjourney|Kandinsky|Шедеврум|ГигаЧат
+  ...wordList(`DeepSeek|Дипсик|Qwen|Gemini|Copilot|GitHub Copilot|Microsoft Copilot|Perplexity|Grok|Midjourney|Шедеврум|ГигаЧат
 Яндекс GPT|Yandex GPT|GPT-4|GPT-4o|GPT-5|Яндекс Алиса|Яндекс.Алиса|Яндекс Станция|Яндекс.Станция|SaluteSpeech|Сбер Салют`),
 ];
 

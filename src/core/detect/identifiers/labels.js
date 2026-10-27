@@ -414,6 +414,11 @@ const DOC_SHAPE = {
   PASSPORT_DEPT: /^\d{3}[-\s\u2010-\u2013]\d{3}$/u,
 };
 const LABELS_05 = new Set(Object.keys(EXTRA_RX));
+/**
+ * Метки реквизитов, которые делают значение «чужим», только если оно похоже на их номер (ревью доработки 0.5 по прогону КП:
+ * «КПП/ ИНН 773601001/7736050003», «ИНН, КПП 7736050003, 773601001» — метка «КПП» последней перед 10-значным ИНН).
+ */
+const REQUISITE_SHAPE = { KPP: /^\d{4}[0-9A-Z]{2}\d{3}$/u, OGRN: /^(?:\d{13}|\d{15})$/u };
 /** Есть ли прямо перед значением (strict) метка другой категории, которая его «забирает». */
 export const foreignHit = (hits, own, value) =>
   [...hits].some(
@@ -421,6 +426,7 @@ export const foreignHit = (hits, own, value) =>
       c !== own &&
       k === 'strict' &&
       !NOT_FOREIGN.has(c) &&
+      (!REQUISITE_SHAPE[c] || value === undefined || REQUISITE_SHAPE[c].test(String(value).trim())) &&
       (!LABELS_05.has(c) || (DOC_SHAPE[c] && (value === undefined || DOC_SHAPE[c].test(String(value).trim())))),
   );
 /** Категории, чьи метки начинаются в позиции `p` потока (для HEALTH/SPECIAL: своя метка или чужая). */

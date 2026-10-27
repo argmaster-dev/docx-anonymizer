@@ -15,6 +15,7 @@ import {
   wordList,
 } from './lexicon.js';
 import { patronymicInfo, firstNameInfo, lemmaCandidates } from './morph.js';
+import { productContext } from '../../ner/product-context.js';
 
 // prettier-ignore
 export const PERSON_LABELS_RU = [
@@ -77,6 +78,16 @@ export function latinOrgContext(text, start, end) {
 
 const isFirstRu = (w) => firstNameInfo(w).length > 0 && !AMBIGUOUS_NAMES_RU.has(lowerE(w));
 const isFirstEn = (w) => FIRST_NAMES_EN.has(lowerE(w));
+
+/**
+ * «Яндекс Алиса», «Яндекс Алису» — голосовой помощник, а не пара «фамилия + имя»: последнее слово пары — имя помощника в контексте
+ * продукта (`ner/product-context.js`; за ним глагол — «Яндекс Алиса подтвердила» — человек). Доработка 0.5 по прогону КП.
+ */
+function assistantPair(text, s) {
+  if (!s.parse || s.parse.kind !== 'pair' || s.labeled) return false;
+  const m = /(\p{L}+)$/u.exec(text.slice(s.start, s.end));
+  return !!m && productContext(text, s.end - m[1].length, s.end);
+}
 
 /** «Иван Купала», «Ивана Купалы», «Лада Веста» — устойчивые сочетания, не лица (WP7, NON_PERSON_PAIRS). */
 function nonPersonPair(span) {
@@ -209,6 +220,9 @@ export function findPersons(text, opts = {}) {
   // латинская пара только по имени — не часть названия фирмы («Raymond James Financial» нет в списке, но «… & Co.» — да)
   return pickNonOverlapping(spans, (s) => (s.labeled ? 1 : 0)).filter(
     (s) =>
-      !TOPONYM_BEFORE_RE.test(text.slice(Math.max(0, s.start - 14), s.start)) && !nonPersonPair(s) && !(s.nameOnly && latinOrgContext(text, s.start, s.end)),
+      !TOPONYM_BEFORE_RE.test(text.slice(Math.max(0, s.start - 14), s.start)) &&
+      !nonPersonPair(s) &&
+      !(s.nameOnly && latinOrgContext(text, s.start, s.end)) &&
+      !assistantPair(text, s),
   );
 }

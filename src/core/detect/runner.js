@@ -12,21 +12,30 @@ import { PlaceholderAllocator, resolvePlaceholderLanguage } from '../placeholder
 const BOUNDARY_RE = /[\n\uFFFC]/;
 const AUTHOR_KINDS = new Set(['author', 'initials', 'author-id']);
 /**
- * Метка-заглушка в двойных квадратных скобках — пример замены в тексте («⟦ORG_1.ACC⟧», «⟦AMT_1⟧», «⟦ФИО_2⟧»), а не значение:
- * без пробелов, с буквой; заглавные, цифры и «_ . -» или «…_число…» (доработка 0.5 по прогону КП: модель делала из «ORG» и «ACC»
- * организации). Обычный текст в таких скобках («⟦Иванов⟧») под правило не подпадает — при сомнении значение маскируется.
+ * Метка-заглушка в двойных квадратных скобках — пример замены в тексте, а не значение: «⟦ORG_1⟧», «⟦ORG_1.ACC⟧», «⟦ФИО_2⟧»,
+ * «⟦AMT_1⟧». Только код категории — префикс плейсхолдера каталога (ru/en, и пользовательских категорий) или общий код меток
+ * (`LABEL_CODES`) — заглавными, «_», номер и, может быть, «.ПОЛЕ» (доработка 0.5 по прогону КП: модель делала из «ORG» и «ACC»
+ * организации). «⟦ИВАНОВ⟧», «⟦IVANOV_1⟧», «⟦Петров_2⟧», «⟦А123ВС77⟧» — не заглушки: маскируются (ревью доработки).
+ * `text-view.js` оборачивает в «⟦…⟧» само значение в строке контекста — такая строка, вставленная в документ, тоже не заглушка.
  */
-const LABEL_TOKEN_RE = /⟦(?=[^⟧\s]*\p{L})(?:[\p{Lu}\p{N}_.-]+|[\p{L}\p{N}.-]*_\p{N}+[\p{L}\p{N}_.-]*)⟧/gu;
-/** @type {WeakMap<object, [number, number][]>} */
-const labelTokenCache = new WeakMap();
-/** Кандидат целиком внутри метки-заглушки «⟦…⟧» потока (FR-60, FR-61: такие спаны не становятся сущностью ни у правил, ни у модели). */
-function insideLabelToken(stream, start, end) {
-  let spans = labelTokenCache.get(stream);
-  if (!spans) {
-    spans = stream.text.includes('⟦') ? [...stream.text.matchAll(LABEL_TOKEN_RE)].map((m) => [m.index, m.index + m[0].length]) : [];
-    labelTokenCache.set(stream, spans);
+const LABEL_CODES = ['ORG', 'PER', 'PERSON', 'LOC', 'ADDR', 'AMT', 'ACC', 'MISC', 'NAME', 'DATE', 'PHONE', 'EMAIL', 'INN', 'KPP'];
+const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** Регулярка меток-заглушек для каталога (кэш на каталог). @type {WeakMap<object, RegExp>} */
+const labelTokenRes = new WeakMap();
+function labelTokenRe(catalog) {
+  let re = labelTokenRes.get(catalog);
+  if (!re) {
+    const codes = new Set(LABEL_CODES);
+    for (const c of catalog.byId.values())
+      for (const p of [c.placeholderPrefix?.ru, c.placeholderPrefix?.en]) if (p && /^[\p{Lu}\p{N}_]+$/u.test(p)) codes.add(p);
+    const alt = [...codes]
+      .sort((x, y) => y.length - x.length)
+      .map(escRe)
+      .join('|');
+    re = new RegExp(`⟦(?:${alt})_\\d+(?:\\.[\\p{Lu}_]+)?⟧`, 'gu');
+    labelTokenRes.set(catalog, re);
   }
-  return spans.some(([a, b]) => start >= a && end <= b);
+  return re;
 }
 
 /**
@@ -62,6 +71,20 @@ export async function analyze(doc, settings, opts = {}) {
     return !!c && isCategoryEnabled(c, settings);
   };
   const warnings = [...doc.warnings];
+  const tokenRe = labelTokenRe(catalog);
+  /** @type {Map<string, [number, number][]>} */
+  const tokenSpans = new Map();
+  /** Кандидат целиком внутри метки-заглушки «⟦…⟧» потока (FR-60, FR-61). */
+  const insideLabelToken = (stream, start, end) => {
+    let spans = tokenSpans.get(stream.id);
+    if (!spans) {
+      spans = stream.text.includes('⟦')
+        ? [...stream.text.matchAll(tokenRe)].map((m) => [/** @type {number} */ (m.index), /** @type {number} */ (m.index) + m[0].length])
+        : [];
+      tokenSpans.set(stream.id, spans);
+    }
+    return spans.some(([a, b]) => start >= a && end <= b);
+  };
   /** @type {import('../contracts/entity.js').Entity[]} */
   const raw = [];
   let seq = 0;
@@ -75,7 +98,8 @@ export async function analyze(doc, settings, opts = {}) {
     const explicit = source === 'user' || source === 'list';
     if (!explicit && !isEnabled(category)) return;
     if (!explicit && !cat.allowedLevels.includes(cand.confidence)) return;
-    if (!explicit && insideLabelToken(stream, cand.start, cand.end)) return;
+    // находка модели внутри метки-заглушки «⟦ORG_1.ACC⟧» — не сущность (правила идентификаторов не трогаются)
+    if (source === 'ner' && insideLabelToken(stream, cand.start, cand.end)) return;
     if (!Number.isInteger(cand.start) || !Number.isInteger(cand.end) || cand.start < 0 || cand.end > stream.text.length || cand.end <= cand.start) return;
     const text = stream.text.slice(cand.start, cand.end);
     if (BOUNDARY_RE.test(text)) return;

@@ -6,6 +6,53 @@ import { docSeriesTail } from './papers.js';
 
 const cand = (start, end, confidence, validator) => (validator ? { start, end, confidence, validator } : { start, end, confidence });
 
+/* ---------- составная подпись реквизитов ---------- */
+// «ИНН/КПП X/Y», «КПП/ ИНН Y/X», «ИНН, КПП X, Y», «ИНН\КПП X\Y», «ИНН / КПП / ОГРН X/Y/Z»: метки через «/», «\» или «,», значения —
+// в том же порядке через тот же набор разделителей; между метками и значениями — до двух слов («ИНН/КПП покупателя:»).
+// Значение получает категорию своей метки по позиции, если подходит по виду (ИНН 10/12, КПП 9, ОГРН 13/15 знаков); уровень —
+// validated при верной контрольной сумме, иначе labeled (fail-closed). WP11-D (только «ИНН/КПП»), ревью доработки 0.5 по прогону КП.
+const REQ_LABEL = '(?:ИНН|INN|КПП|KPP|ОГРНИП|ОГРН|OGRNIP|OGRN)';
+const REQ_SEP = '[ \\t\\u00a0]*[/\\\\,][ \\t\\u00a0]*';
+const REQ_VALUE = '(?:\\d{15}|\\d{13}|\\d{12}|\\d{10}|\\d{4}[0-9A-Z]{2}\\d{3})';
+const REQ_RE = new RegExp(
+  `(?<![\\p{L}\\p{N}])(${REQ_LABEL}(?:${REQ_SEP}${REQ_LABEL}){1,2})(?:[ \\t\\u00a0]+[\\p{L}.()-]+){0,2}[ \\t\\u00a0:№#]*(${REQ_VALUE}(?:${REQ_SEP}${REQ_VALUE}){1,2})(?![\\p{L}\\p{N}])`,
+  'giu',
+);
+const REQ_CAT = (label) => (/^(?:ИНН|INN)$/iu.test(label) ? 'INN' : /^(?:КПП|KPP)$/iu.test(label) ? 'KPP' : 'OGRN');
+const REQ_SHAPE = { INN: /^(?:\d{10}|\d{12})$/u, KPP: /^\d{4}[0-9A-Z]{2}\d{3}$/u, OGRN: /^(?:\d{13}|\d{15})$/u };
+const REQ_CHECK = { INN: [inn, 'inn'], KPP: [kpp, 'kpp'], OGRN: [ogrn, 'ogrn'] };
+let reqMemo = { text: null, out: [] };
+/**
+ * Значения составной подписи реквизитов потока: [{cat, start, end, text}] (кэш на текст потока).
+ * @param {string} text
+ */
+export function compoundRequisites(text) {
+  if (reqMemo.text === text) return reqMemo.out;
+  const out = [];
+  for (const c of scan(text, REQ_RE)) {
+    const labels = c.m[1].split(/[/\\,]/u).map((s) => s.trim());
+    const valuesSrc = c.m[2];
+    const base = c.end - valuesSrc.length;
+    const values = [...valuesSrc.matchAll(/[0-9A-Z]+/gu)];
+    if (values.length !== labels.length) continue;
+    values.forEach((v, i) => {
+      const cat = REQ_CAT(labels[i]);
+      if (REQ_SHAPE[cat].test(v[0]))
+        out.push({ cat, start: base + /** @type {number} */ (v.index), end: base + /** @type {number} */ (v.index) + v[0].length, text: v[0] });
+    });
+  }
+  reqMemo = { text, out };
+  return out;
+}
+/** Кандидаты категории `cat` из составной подписи, которых ещё нет среди `out` (по началу). */
+function pushCompound(out, text, cat) {
+  const have = new Set(out.map((c) => c.start));
+  const [check, name] = REQ_CHECK[cat];
+  for (const r of compoundRequisites(text))
+    if (r.cat === cat && !have.has(r.start)) out.push(check(r.text) ? cand(r.start, r.end, 'validated', name) : cand(r.start, r.end, 'labeled'));
+  return out;
+}
+
 /* ---------- ИНН ---------- */
 const INN_RE = new RegExp(`${NB}(?:\\d{12}|\\d{10})${NA}`, 'gu');
 
@@ -20,31 +67,23 @@ export function detectInn(text, ctx) {
     else if (valid && !foreign && !goodsCodeContext(text, c.start, c.end, ctx) && !docSeriesTail(text, c.start, ctx))
       out.push(cand(c.start, c.end, 'validated', 'inn'));
   }
-  return out;
+  return pushCompound(out, text, 'INN');
 }
 
 /* ---------- КПП ---------- */
 const KPP_RE = new RegExp(`${NB}\\d{4}[0-9A-Z]{2}\\d{3}${NA}`, 'gu');
-// «ИНН/КПП 7736050003/773601001» — второй номер без собственного лейбла; между меткой и номерами — до двух слов
-// («ИНН/КПП покупателя: X/Y», «ИНН/КПП продавца»), вокруг «/» — пробелы («ИНН / КПП: X / Y») (WP11-D, корпус жанров)
-const INN_KPP_RE =
-  /(?<![\p{L}\p{N}])(?:ИНН|INN)[ \t\u00a0]*\/[ \t\u00a0]*(?:КПП|KPP)(?:[ \t\u00a0]+[\p{L}.()-]+){0,2}[ \t\u00a0:№#]*(?:\d{12}|\d{10})[ \t\u00a0]*\/[ \t\u00a0]*(\d{4}[0-9A-Z]{2}\d{3})(?![\p{L}\p{N}])/giu;
 
+// «ИНН/КПП 7736050003/773601001» — второй номер без собственного лейбла: составная подпись (`compoundRequisites`)
 export function detectKpp(text, ctx) {
   const out = [];
-  const seen = new Set();
   for (const c of scan(text, KPP_RE)) {
     const { mine } = labelState(text, c.start, ctx, 'KPP');
-    if (mine) {
-      out.push(cand(c.start, c.end, 'labeled', kpp(c.text) ? 'kpp' : undefined));
-      seen.add(c.start);
-    }
+    if (mine) out.push(cand(c.start, c.end, 'labeled', kpp(c.text) ? 'kpp' : undefined));
   }
-  for (const c of scan(text, INN_KPP_RE)) {
-    const g = c.m[1];
-    const start = c.end - g.length;
-    if (!seen.has(start)) out.push(cand(start, c.end, 'labeled', kpp(g) ? 'kpp' : undefined));
-  }
+  // КПП составной подписи — всегда labeled (у КПП нет контрольной суммы: kpp() проверяет только вид)
+  const have = new Set(out.map((c) => c.start));
+  for (const r of compoundRequisites(text))
+    if (r.cat === 'KPP' && !have.has(r.start)) out.push(cand(r.start, r.end, 'labeled', kpp(r.text) ? 'kpp' : undefined));
   return out;
 }
 
@@ -60,7 +99,7 @@ export function detectOgrn(text, ctx) {
     // штрихкод EAN-13 и код товара проходят контрольную сумму ОГРН — без лейбла не берутся (WP11-D)
     else if (valid && !foreign && !goodsCodeContext(text, c.start, c.end, ctx)) out.push(cand(c.start, c.end, 'validated', 'ogrn'));
   }
-  return out;
+  return pushCompound(out, text, 'OGRN');
 }
 
 /* ---------- БИК ---------- */
