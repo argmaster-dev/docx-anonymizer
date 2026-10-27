@@ -21,11 +21,21 @@ Tax ID|VAT|VAT ID|IBAN|SWIFT|BIC`),
 ];
 
 /**
+ * Модели и помощники ИИ (доработка 0.5 по прогону КП). С края многословного PER фильтр людей их не срезает («Grok Smith» — человек,
+ * повторное ревью), спан из одного такого слова отбрасывается целиком.
+ */
+// prettier-ignore
+export const AI_PRODUCT_NAMES = [
+  ...wordList(`DeepSeek|Дипсик|Qwen|Gemini|Copilot|GitHub Copilot|Microsoft Copilot|Perplexity|Grok|Midjourney|Шедеврум|ГигаЧат
+Яндекс GPT|Yandex GPT|GPT-4|GPT-4o|GPT-5|Яндекс Алиса|Яндекс.Алиса|Яндекс Станция|Яндекс.Станция|SaluteSpeech|Сбер Салют`),
+];
+
+/**
  * Программы, сервисы, платформы и модели ИИ (продукты, а не стороны документа). Отдельно от обращений: по нему же фильтр PER
  * узнаёт перечисление продуктов («в GigaChat, Алису, DeepSeek и другие модели», `filters-pl.js`). Голосовой помощник — только
  * составным названием («Яндекс Алиса»): «Алиса» одна — женское имя.
  */
-// Последняя группа — модели и помощники ИИ (доработка 0.5 по прогону КП).
+// Последняя группа — модели и помощники ИИ (`AI_PRODUCT_NAMES`, доработка 0.5 по прогону КП).
 // prettier-ignore
 export const PRODUCT_NAMES = [
   ...wordList(`Word|Excel|PowerPoint|Outlook|Teams|OneDrive|SharePoint|Office|Microsoft Office|MS Office|Microsoft 365|Office 365
@@ -39,8 +49,7 @@ Google|Гугл|Google Docs|Google Drive|Google Sheets|Google Meet|Gmail|Chrome|
 Tilda|Тильда|WordPress|Photoshop|Illustrator|Acrobat|Adobe Acrobat|Adobe|Canva|ChatGPT|GPT|Claude|GigaChat
 YandexGPT|Контур.Диадок|Диадок|Контур.Эльба|СБИС|Сбис|Госуслуги|Честный знак
 Power BI|Tableau|Looker|Metabase|Grafana|Qlik|Excel-таблица|PDF-файл|Word-файл|GitHub|GitLab|Docker|Kubernetes|PostgreSQL|MySQL|Python|JavaScript|Postman`),
-  ...wordList(`DeepSeek|Дипсик|Qwen|Gemini|Copilot|GitHub Copilot|Microsoft Copilot|Perplexity|Grok|Midjourney|Шедеврум|ГигаЧат
-Яндекс GPT|Yandex GPT|GPT-4|GPT-4o|GPT-5|Яндекс Алиса|Яндекс.Алиса|Яндекс Станция|Яндекс.Станция|SaluteSpeech|Сбер Салют`),
+  ...AI_PRODUCT_NAMES,
 ];
 
 /** Продукты, обращения и формулы вежливости, бренд владельца. */

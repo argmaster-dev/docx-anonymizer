@@ -28,7 +28,7 @@
 //      («в GigaChat, Алису, DeepSeek и другие модели»); за именем глагол — человек (доработка 0.5 по прогону КП);
 //   иначе — сохранить (возможно, с отрезанными служебными словами).
 // Чистый JS без chrome.* и DOM; значения документа в логи не попадают.
-import { BUILTIN_STOPLIST, stopKey } from './stoplist.js';
+import { AI_PRODUCT_NAMES, BUILTIN_STOPLIST, stopKey } from './stoplist.js';
 import { productContext } from './product-context.js';
 import { isCapsLine, isStoplisted, wholeWordAround, inStoplist, isToolWordInDoc } from './filters.js';
 import { lowerE, wordList, isNeverMaskOrg, isStopWord, isRoleNoun, ROLE_WORDS } from '../detect/names/lexicon.js';
@@ -122,6 +122,8 @@ export function nameLike(word, next = '.', strict = false) {
   return surnameLemmas(w).length > 0 || (!strict && (surnameSuffixInfo(w) || []).length > 0);
 }
 
+/** Модели ИИ, новые в 0.5: с края PER не срезаются («Grok Smith»), только отбрасывают спан целиком (повторное ревью). */
+const AI_KEYS = new Set(AI_PRODUCT_NAMES.map(stopKey));
 /** Слово есть в словарях имён, фамилий или отчеств (ru/en; без догадки по суффиксу фамилии). */
 const dictName = (w) => /^\p{L}{2,}$/u.test(w) && nameLike(w, ' ', true);
 
@@ -282,7 +284,7 @@ export function filterPersonLocSpans(spans, ctx) {
     const per = sp.label === 'PER';
     // слово стоп-списка, которое есть в словарях имён и фамилий («Claude», «Tilda», «Slack», «Swift», «Mac»), от края PER не
     // отрезается: «Claude Dubois» — человек целиком (ревью доработки 0.5); одиночное «Claude» отбрасывает шаг 1
-    const service = (w) => LETTER_RE.test(w) && (isService(w) || (inStoplist(stopKey(w), stoplist, w) && !(per && dictName(w))));
+    const service = (w) => LETTER_RE.test(w) && (isService(w) || (inStoplist(stopKey(w), stoplist, w) && !(per && (dictName(w) || AI_KEYS.has(stopKey(w))))));
     const junk = (w) => per && !PARTICLES.has(lowerE(w)) && (!LETTER_RE.test(w) || /\d/.test(w) || isLowerWord(w));
     let a = 0;
     let b = ws.length;

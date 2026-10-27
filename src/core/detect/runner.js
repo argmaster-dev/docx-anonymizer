@@ -14,11 +14,21 @@ const AUTHOR_KINDS = new Set(['author', 'initials', 'author-id']);
 /**
  * Метка-заглушка в двойных квадратных скобках — пример замены в тексте, а не значение: «⟦ORG_1⟧», «⟦ORG_1.ACC⟧», «⟦ФИО_2⟧»,
  * «⟦AMT_1⟧». Только код категории — префикс плейсхолдера каталога (ru/en, и пользовательских категорий) или общий код меток
- * (`LABEL_CODES`) — заглавными, «_», номер и, может быть, «.ПОЛЕ» (доработка 0.5 по прогону КП: модель делала из «ORG» и «ACC»
- * организации). «⟦ИВАНОВ⟧», «⟦IVANOV_1⟧», «⟦Петров_2⟧», «⟦А123ВС77⟧» — не заглушки: маскируются (ревью доработки).
+ * (`LABEL_CODES`) — заглавными, «_», номер и, может быть, «.ПОЛЕ» из закрытого списка `FIELD_CODES` (доработка 0.5 по прогону КП:
+ * модель делала из «ORG» и «ACC» организации). «⟦СУММА_1.ИВАНОВ_ПЕТР⟧», «⟦ФИО_1.ПЕТРОВ⟧» — не заглушки (повторное ревью); у кода лица
+ * («ФИО», «PER», «PERSON», «NAME») такое «поле» само — ФИО, `labeled` (`personInToken`). «⟦ИВАНОВ⟧», «⟦IVANOV_1⟧», «⟦Петров_2⟧», «⟦А123ВС77⟧» — не заглушки: маскируются (ревью доработки).
  * `text-view.js` оборачивает в «⟦…⟧» само значение в строке контекста — такая строка, вставленная в документ, тоже не заглушка.
  */
 const LABEL_CODES = ['ORG', 'PER', 'PERSON', 'LOC', 'ADDR', 'AMT', 'ACC', 'MISC', 'NAME', 'DATE', 'PHONE', 'EMAIL', 'INN', 'KPP'];
+/** Поля меток-заглушек («⟦ORG_1.ACC⟧», «⟦ORG_1.INN⟧»): закрытый список кодов реквизитов. */
+const FIELD_CODES = [
+  ...['INN', 'KPP', 'OGRN', 'OGRNIP', 'ACC', 'ACCOUNT', 'BIK', 'SWIFT', 'IBAN', 'ADDR', 'ADDRESS', 'PHONE', 'EMAIL', 'DATE', 'AMT', 'NAME'],
+  ...['ИНН', 'КПП', 'ОГРН', 'ОГРНИП', 'СЧЕТ', 'СЧЁТ', 'БИК', 'АДРЕС', 'ТЕЛ', 'ТЕЛЕФОН', 'ДАТА', 'СУММА'],
+];
+/** Коды лица: «поле» не из списка внутри такой заглушки — ФИО («⟦ФИО_1.ПЕТРОВ⟧»). */
+const PERSON_CODES = ['ФИО', 'PER', 'PERSON', 'NAME'];
+const PERSON_FIELD_RE = new RegExp(`⟦(?:${PERSON_CODES.join('|')})_\\d+\\.([\\p{L}][\\p{L}_-]*)⟧`, 'gu');
+const FIELD_SET = new Set(FIELD_CODES);
 const escRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** Регулярка меток-заглушек для каталога (кэш на каталог). @type {WeakMap<object, RegExp>} */
 const labelTokenRes = new WeakMap();
@@ -32,10 +42,24 @@ function labelTokenRe(catalog) {
       .sort((x, y) => y.length - x.length)
       .map(escRe)
       .join('|');
-    re = new RegExp(`⟦(?:${alt})_\\d+(?:\\.[\\p{Lu}_]+)?⟧`, 'gu');
+    re = new RegExp(`⟦(?:${alt})_\\d+(?:\\.(?:${FIELD_CODES.map(escRe).join('|')}))?⟧`, 'gu');
     labelTokenRes.set(catalog, re);
   }
   return re;
+}
+
+/**
+ * Кандидаты ФИО из «поля» заглушки лица, которого нет в `FIELD_CODES`: «⟦ФИО_1.ПЕТРОВ⟧» → «ПЕТРОВ» (`labeled`).
+ * @param {string} text
+ */
+function personInToken(text) {
+  const out = [];
+  for (const m of text.matchAll(PERSON_FIELD_RE)) {
+    if (FIELD_SET.has(m[1])) continue;
+    const start = /** @type {number} */ (m.index) + m[0].length - 1 - m[1].length;
+    out.push({ start, end: start + m[1].length, confidence: 'labeled' });
+  }
+  return out;
 }
 
 /**
@@ -161,6 +185,9 @@ export async function analyze(doc, settings, opts = {}) {
     }
     if (i % 200 === 0) progress('detect', Math.round((i / total) * 100));
   });
+
+  // 1б. «Поле» не из списка в заглушке лица: «⟦ФИО_1.ПЕТРОВ⟧» — ФИО (повторное ревью доработки 0.5, fail-closed)
+  for (const s of doc.streams) if (s.text?.includes('⟦')) for (const c of personInToken(s.text)) accept(c, 'PERSON', s, 'rule');
 
   // 2. Авторы правок и комментариев (FR-11)
   if (isEnabled('PERSON')) {

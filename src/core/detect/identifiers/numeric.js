@@ -7,39 +7,59 @@ import { docSeriesTail } from './papers.js';
 const cand = (start, end, confidence, validator) => (validator ? { start, end, confidence, validator } : { start, end, confidence });
 
 /* ---------- составная подпись реквизитов ---------- */
-// «ИНН/КПП X/Y», «КПП/ ИНН Y/X», «ИНН, КПП X, Y», «ИНН\КПП X\Y», «ИНН / КПП / ОГРН X/Y/Z»: метки через «/», «\» или «,», значения —
-// в том же порядке через тот же набор разделителей; между метками и значениями — до двух слов («ИНН/КПП покупателя:»).
-// Значение получает категорию своей метки по позиции, если подходит по виду (ИНН 10/12, КПП 9, ОГРН 13/15 знаков); уровень —
-// validated при верной контрольной сумме, иначе labeled (fail-closed). WP11-D (только «ИНН/КПП»), ревью доработки 0.5 по прогону КП.
+// «ИНН/КПП X/Y», «КПП/ ИНН Y/X», «ИНН, КПП X, Y», «ИНН\КПП X\Y», «ИНН / КПП / ОГРН X/Y/Z»: 2–3 метки через «/», «\» или «,», затем
+// (через до двух слов: «ИНН/КПП покупателя:») цепочка значений через те же разделители. WP11-D (только «ИНН/КПП»), ревью доработки 0.5.
+// Значения сопоставляются меткам по ВИДУ, а не по позиции (ИНН 10/12, КПП 9, ОГРН 13/15 знаков — виды не пересекаются):
+//   - первая группа (столько значений, сколько меток, или меньше: «ИНН/КПП/ОГРН X/Y») — каждое значение получает категорию своего
+//     вида, даже если такой метки нет или вид повторился (fail-closed: «ИНН/КПП 773601001/7736050003» — оба);
+//   - следующие полные группы, где виды значений — ровно категории меток («Стороны: ИНН/КПП X/Y, X2/Y2»), — тоже;
+//   - лишнее значение вне полных групп («…, 4951234567 — телефон», «…, 1027700132195 — ОГРН») составная подпись не помечает: его видят
+//     остальные детекторы; только значение сразу через «/» или «\» («ИНН/КПП X/Y/Z» — ОГРН-детектор не видит его из-за «цифра/»)
+//     при верной контрольной сумме — validated по виду.
+// Уровень — validated при верной контрольной сумме, иначе labeled.
 const REQ_LABEL = '(?:ИНН|INN|КПП|KPP|ОГРНИП|ОГРН|OGRNIP|OGRN)';
 const REQ_SEP = '[ \\t\\u00a0]*[/\\\\,][ \\t\\u00a0]*';
 const REQ_VALUE = '(?:\\d{15}|\\d{13}|\\d{12}|\\d{10}|\\d{4}[0-9A-Z]{2}\\d{3})';
 const REQ_RE = new RegExp(
-  `(?<![\\p{L}\\p{N}])(${REQ_LABEL}(?:${REQ_SEP}${REQ_LABEL}){1,2})(?:[ \\t\\u00a0]+[\\p{L}.()-]+){0,2}[ \\t\\u00a0:№#]*(${REQ_VALUE}(?:${REQ_SEP}${REQ_VALUE}){1,2})(?![\\p{L}\\p{N}])`,
+  `(?<![\\p{L}\\p{N}])(${REQ_LABEL}(?:${REQ_SEP}${REQ_LABEL}){1,2})(?:[ \\t\\u00a0]+[\\p{L}.()-]+){0,2}[ \\t\\u00a0:№#]*(${REQ_VALUE}(?:${REQ_SEP}${REQ_VALUE}){0,8})(?![\\p{L}\\p{N}])`,
   'giu',
 );
 const REQ_CAT = (label) => (/^(?:ИНН|INN)$/iu.test(label) ? 'INN' : /^(?:КПП|KPP)$/iu.test(label) ? 'KPP' : 'OGRN');
 const REQ_SHAPE = { INN: /^(?:\d{10}|\d{12})$/u, KPP: /^\d{4}[0-9A-Z]{2}\d{3}$/u, OGRN: /^(?:\d{13}|\d{15})$/u };
+const shapeCat = (v) => Object.keys(REQ_SHAPE).find((c) => REQ_SHAPE[c].test(v));
 const REQ_CHECK = { INN: [inn, 'inn'], KPP: [kpp, 'kpp'], OGRN: [ogrn, 'ogrn'] };
 let reqMemo = { text: null, out: [] };
 /**
- * Значения составной подписи реквизитов потока: [{cat, start, end, text}] (кэш на текст потока).
+ * Значения составной подписи реквизитов потока: [{cat, start, end, text, checkedOnly?}] (кэш на текст потока); `checkedOnly` —
+ * лишнее значение через «/», которое берётся только при верной контрольной сумме.
  * @param {string} text
  */
 export function compoundRequisites(text) {
   if (reqMemo.text === text) return reqMemo.out;
   const out = [];
   for (const c of scan(text, REQ_RE)) {
-    const labels = c.m[1].split(/[/\\,]/u).map((s) => s.trim());
+    const labels = c.m[1].split(/[/\\,]/u).map((s) => REQ_CAT(s.trim()));
+    const n = labels.length;
     const valuesSrc = c.m[2];
     const base = c.end - valuesSrc.length;
-    const values = [...valuesSrc.matchAll(/[0-9A-Z]+/gu)];
-    if (values.length !== labels.length) continue;
-    values.forEach((v, i) => {
-      const cat = REQ_CAT(labels[i]);
-      if (REQ_SHAPE[cat].test(v[0]))
-        out.push({ cat, start: base + /** @type {number} */ (v.index), end: base + /** @type {number} */ (v.index) + v[0].length, text: v[0] });
+    const values = [...valuesSrc.matchAll(/[0-9A-Z]+/gu)].map((v) => {
+      const at = /** @type {number} */ (v.index);
+      // разделитель перед значением — «/» или «\», а не запятая
+      const tight = at > 0 && /[/\\][ \t\u00a0]*$/u.test(valuesSrc.slice(0, at));
+      return { text: v[0], start: base + at, end: base + at + v[0].length, cat: shapeCat(v[0]), tight };
     });
+    let i = 0;
+    // первая группа: по виду, fail-closed
+    for (; i < Math.min(n, values.length); i++) if (values[i].cat) out.push(values[i]);
+    // следующие полные группы: виды значений — ровно категории меток
+    while (i + n <= values.length) {
+      const g = values.slice(i, i + n).map((v) => v.cat);
+      if (g.some((x) => !x) || new Set(g).size !== n || !g.every((x) => labels.includes(x))) break;
+      out.push(...values.slice(i, i + n));
+      i += n;
+    }
+    // лишнее значение сразу через «/» или «\» — только с верной контрольной суммой
+    for (; i < values.length && values[i].tight && values[i].cat; i++) out.push({ ...values[i], checkedOnly: true });
   }
   reqMemo = { text, out };
   return out;
@@ -48,8 +68,11 @@ export function compoundRequisites(text) {
 function pushCompound(out, text, cat) {
   const have = new Set(out.map((c) => c.start));
   const [check, name] = REQ_CHECK[cat];
-  for (const r of compoundRequisites(text))
-    if (r.cat === cat && !have.has(r.start)) out.push(check(r.text) ? cand(r.start, r.end, 'validated', name) : cand(r.start, r.end, 'labeled'));
+  for (const r of compoundRequisites(text)) {
+    if (r.cat !== cat || have.has(r.start)) continue;
+    if (check(r.text)) out.push(cand(r.start, r.end, 'validated', name));
+    else if (!r.checkedOnly) out.push(cand(r.start, r.end, 'labeled'));
+  }
   return out;
 }
 
@@ -83,7 +106,7 @@ export function detectKpp(text, ctx) {
   // КПП составной подписи — всегда labeled (у КПП нет контрольной суммы: kpp() проверяет только вид)
   const have = new Set(out.map((c) => c.start));
   for (const r of compoundRequisites(text))
-    if (r.cat === 'KPP' && !have.has(r.start)) out.push(cand(r.start, r.end, 'labeled', kpp(r.text) ? 'kpp' : undefined));
+    if (r.cat === 'KPP' && !r.checkedOnly && !have.has(r.start)) out.push(cand(r.start, r.end, 'labeled', kpp(r.text) ? 'kpp' : undefined));
   return out;
 }
 
