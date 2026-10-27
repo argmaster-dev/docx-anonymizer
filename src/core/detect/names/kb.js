@@ -32,6 +32,7 @@ import { findPersons, TOPONYM_BEFORE_RE } from './person.js';
 import { tableHeaders } from '../tables.js';
 import { findPersonsByDict } from './person-dict.js';
 import { findVocativeNames } from './vocative.js';
+import { productContext } from '../../ner/product-context.js';
 import { findCompanies, companyCore } from './company.js';
 import { tokenize, tokenSeq, escapeRe, pickNonOverlapping, overlaps } from './text.js';
 import { lowerE, COMMON_NOUNS, isStopWord, isNeverMaskOrg } from './lexicon.js';
@@ -757,7 +758,7 @@ export function detectNamesAndKb(doc, entities, ctx = {}) {
         for (const t of tokCache.get(s.id) || tokenize(s.text)) {
           if (t.t !== 'W' || t.script !== 'cyr' || t.caps || !forms.has(lowerE(t.text))) continue;
           if ((occupied.get(s.id) || []).some((b) => overlaps(b, t))) continue;
-          if (TOPONYM_BEFORE_RE.test(s.text.slice(Math.max(0, t.start - 14), t.start))) continue;
+          if (TOPONYM_BEFORE_RE.test(s.text.slice(Math.max(0, t.start - 14), t.start)) || productContext(s.text, t.start, t.end)) continue;
           out.push({ streamId: s.id, category: 'PERSON', start: t.start, end: t.end, confidence: 'kb', source: 'kb', canonical });
           occupy(s.id, t);
         }
@@ -803,8 +804,9 @@ export function detectNamesAndKb(doc, entities, ctx = {}) {
             const a = tokenSeq(t, toks, i, n);
             if (!a) continue;
             const hits = partyPeople.filter((r) => r.latin === (a[0].script === 'lat') && personMatches(r, a, t, singleOk(r)));
-            // одно слово после «г.», «ул.», «им.» — топоним («г. Владимир»), а не имя лица (WP11-E)
-            if (n === 1 && TOPONYM_BEFORE_RE.test(t.slice(Math.max(0, a[0].start - 14), a[0].start))) continue;
+            // одно слово после «г.», «ул.», «им.» — топоним («г. Владимир»), а не имя лица (WP11-E); в контексте продукта
+            // («в GigaChat, Алису, DeepSeek», «голосовой помощник Алиса») — помощник, а не лицо (доработка 0.5 по прогону КП)
+            if (n === 1 && (TOPONYM_BEFORE_RE.test(t.slice(Math.max(0, a[0].start - 14), a[0].start)) || productContext(t, a[0].start, a[0].end))) continue;
             if (hits.length === 1) cands.push({ start: a[0].start, end: a[n - 1].end, category: 'PERSON', canonical: hits[0].canonical });
           }
           for (const r of partyPeople) {

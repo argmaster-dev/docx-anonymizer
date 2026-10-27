@@ -19,11 +19,18 @@
 //      «г.» сама по себе — не признак) — отбросить;
 //   5. PER: внутри — слово со строчной буквы (кроме частиц «ван», «де», «оглы») или цифры — отбросить; ни одно слово
 //      не похоже на имя, фамилию или отчество (словари `names/dict`, `morph.js`, инициал), и спан — остаток фразы после
-//      отрезания, капс («ДОКУМЕНТЫ БЕЗ РУТИНЫ») или одно слово в заголовке, пункте, ячейке — отбросить;
+//      отрезания, капс («ДОКУМЕНТЫ БЕЗ РУТИНЫ») или одно слово в заголовке, пункте, ячейке — отбросить; одно такое слово,
+//      которое в документе пишется и со строчной («Анонимайзер» и «анонимайзер документов») и не стоит рядом с другим словом
+//      с заглавной, — отбросить (доработка 0.5 по прогону КП);
+//   5а. PER (и LOC, ставший бы PER) одним словом в контексте продукта (`product-context.js`): имя помощника («Алиса», «Маруся»)
+//      после «Яндекс», «голосовой помощник», «умная колонка», «чат-бот», «нейросеть»; любое слово в перечислении между двумя
+//      продуктами `PRODUCT_NAMES` или после продукта перед «и другие» («в GigaChat, Алису, DeepSeek и другие модели») — отбросить
+//      (доработка 0.5 по прогону КП);
 //   иначе — сохранить (возможно, с отрезанными служебными словами).
 // Чистый JS без chrome.* и DOM; значения документа в логи не попадают.
 import { BUILTIN_STOPLIST, stopKey } from './stoplist.js';
-import { isCapsLine, isStoplisted, wholeWordAround, inStoplist } from './filters.js';
+import { productContext } from './product-context.js';
+import { isCapsLine, isStoplisted, wholeWordAround, inStoplist, isCommonInDoc } from './filters.js';
 import { lowerE, wordList, isNeverMaskOrg, isStopWord, isRoleNoun, ROLE_WORDS } from '../detect/names/lexicon.js';
 import { addressTailEnd, NOT_HOUSE_SRC, VALUE_LABEL_SRC } from '../detect/names/address.js';
 import { patronymicInfo, firstNameInfo } from '../detect/names/morph.js';
@@ -295,6 +302,8 @@ export function filterPersonLocSpans(spans, ctx) {
     if (per && words.length === 1 && inPlaceList(spans, sp, text, start, end)) continue;
     // 3. одно слово со строчной буквы
     if (words.length === 1 && isLowerWord(words[0])) continue;
+    // 5а. одно слово в контексте продукта: «Яндекс Алиса», «в GigaChat, Алису, DeepSeek и другие модели» (доработка 0.5, КП)
+    if (per && words.length === 1 && productContext(text, start, end)) continue;
     if (sp.label === 'LOC') {
       // 4. LOC — только в адресе
       if (!hasAddressContext(text, start, end)) {
@@ -310,7 +319,8 @@ export function filterPersonLocSpans(spans, ctx) {
           // «на Тверской», «у Садовой» — улица-прилагательное, а не фамилия
           !/(?:ск|цк)(?:ой|ая|ую|ие)$/u.test(lowerE(words[0])) &&
           !PLACE_COLUMN_RE.test(ctx?.columnHeader || '') &&
-          !(ADJ_SURNAME_RE.test(lowerE(words[0])) && ADJ_NEXT_RE.test(text.slice(end, end + 30)))
+          !(ADJ_SURNAME_RE.test(lowerE(words[0])) && ADJ_NEXT_RE.test(text.slice(end, end + 30))) &&
+          !productContext(text, start, end)
         )
           out.push({ ...sp, start, end, label: 'PER' });
         continue;
@@ -328,6 +338,9 @@ export function filterPersonLocSpans(spans, ctx) {
         // одно слово в заголовке, пункте, ячейке
         const line = SHORT_LINE_KINDS.has(ctx?.blockKind || '') || !!ctx?.cellTexts?.has(text) || isCapsLine(text);
         if (trimmed || caps || (words.length === 1 && line)) continue;
+        // одно слово, которое в документе пишется и со строчной («Анонимайзер» в начале фраз и «анонимайзер документов»), и рядом
+        // с ним нигде нет второго слова с заглавной («Вера Лукина») — нарицательное или продукт, а не человек (доработка 0.5, КП)
+        if (words.length === 1 && !ctx?.pairedWords?.has(lowerE(words[0])) && isCommonInDoc(words[0], ctx?.commonStems)) continue;
       }
     }
     // «Пролетарским районным судом»: прилагательное перед прилагательным со строчной — не фамилия (ловушка WP11-E)

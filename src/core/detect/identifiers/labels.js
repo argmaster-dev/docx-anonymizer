@@ -138,13 +138,18 @@ const LABEL_CATEGORIES = [
 const GAP = '[ \\t\\u00a0:–—-]*(?:(?:№|#|N[oо]\\.?)[ \\t\\u00a0:]*)?';
 const FILLER = '(?:[ \\t\\u00a0]+[\\p{L}.«»"\'()-]+){1,3}';
 
+// «/» в метке — с пробелами или без с каждой стороны: «ИНН/КПП», «ИНН/ КПП», «ИНН / КПП», «р / с» (доработка 0.5 по прогону КП:
+// «ИНН/ КПП 7701234567/770101001» оставлял ИНН открытым — метка «КПП» делала его «чужим», FR-20, fail-closed)
+const SLASH_SRC = '[ \\t\\u00a0]*\\/[ \\t\\u00a0]*';
 const labelSrc = (l) =>
   l
     .trim()
+    .replace(/\s*\/\s*/g, '/')
     .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     .replace(/[её]/gi, '[её]')
     .replace(/\\\./g, '\\.?')
-    .replace(/\s+/g, '[ \\t\\u00a0]+');
+    .replace(/\s+/g, '[ \\t\\u00a0]+')
+    .replace(/\//g, SLASH_SRC);
 
 /** @type {WeakMap<object, {cat: string, strict: RegExp, lenient: RegExp}[]>} */
 const cache = new WeakMap();

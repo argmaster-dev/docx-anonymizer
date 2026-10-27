@@ -14,6 +14,7 @@
 import { lowerE, isStopWord, COMMON_NOUNS, FIRST_NAMES_EN, STOP_EXACT } from './lexicon.js';
 import { bigFirstNameInfo } from './dict/index.js';
 import { TOPONYM_BEFORE_RE } from './person.js';
+import { productContext } from '../../ner/product-context.js';
 
 const SP = '[ \\t\\u00a0]';
 /** Метка реплики: необязательное время в скобках или без, затем 1–3 слова с заглавной и двоеточие. */
@@ -112,7 +113,8 @@ export function findVocativeNames(text) {
     if (nl < 0) break;
     lineStart = nl + 1;
   }
-  return out;
+  // «голосовой помощник Алиса.», «Яндекс Алиса!» — помощник, а не обращение (доработка 0.5 по прогону КП)
+  return out.filter((v) => !productContext(text, v.start, v.end));
 }
 
 /** Подпись Telegram: «Арсений, [14.10.2026 10:11]», «Валерия К., [14.10.2026 10:05]» — строка целиком. */

@@ -117,21 +117,28 @@ function docxCellTexts(doc) {
  * - `stoplist` — ключи `stopKey` встроенного стоп-списка и `settings.nerStoplist`;
  * - `properStems` — основы слов, которые в обычном тексте (не капс-строка, не заголовок) хоть раз написаны с заглавной
  *   не в начале предложения (правило 3);
- * - `cellTexts` — тексты абзацев в таблицах DOCX (правило 1; у текстовой модели PDF вид ячейки приходит в `blockKind`).
+ * - `cellTexts` — тексты абзацев в таблицах DOCX (правило 1; у текстовой модели PDF вид ячейки приходит в `blockKind`);
+ * - `commonStems` — основы слов (≥ 4 букв), которые в обычном тексте хоть раз написаны со строчной: нарицательное
+ *   («анонимайзер»), а не имя (фильтр PER, `isCommonInDoc`; доработка 0.5 по прогону КП).
  * @param {import('../docx/model.js').DocModel} doc
  * @param {object} settings  эффективные настройки (`nerStoplist` — пользовательское дополнение стоп-списка)
- * @returns {{stoplist: Set<string>, properStems: Set<string>, cellTexts: Set<string>, pairedWords: Set<string>}}
+ * @returns {{stoplist: Set<string>, properStems: Set<string>, cellTexts: Set<string>, pairedWords: Set<string>, commonStems: Set<string>}}
  */
 export function createOrgFilterContext(doc, settings) {
   const kindByPid = new Map((doc?.paragraphs || []).map((p) => [p.pid, p.kind]));
   const properStems = new Set();
+  const commonStems = new Set();
   for (const s of doc?.streams || []) {
     if (s.type !== 'live' || !s.text) continue;
     if (HEADING_KINDS.has(kindByPid.get(s.pid) || '') || isCapsLine(s.text)) continue;
     for (const m of s.text.matchAll(WORD_RE)) {
       const w = m[0];
       const first = w[0];
-      if (!LETTER_RE.test(first) || first === first.toLowerCase()) continue;
+      if (!LETTER_RE.test(first)) continue;
+      if (first === first.toLowerCase()) {
+        if (first !== first.toUpperCase() && w.length >= 4) for (const st of stems(w, 3)) commonStems.add(st);
+        continue;
+      }
       // начало потока или предложения: «Входит в стоимость…» — не имя собственное
       const before = s.text.slice(0, m.index).replace(/[\s\u00a0]+$/, '');
       if (!before || /[.!?:;•\-–—(«"“]$/.test(before) || /^\d+[.)]?$/.test(before)) continue;
@@ -148,7 +155,17 @@ export function createOrgFilterContext(doc, settings) {
       pairedWords.add(lowerE(m[2]));
     }
   }
-  return { stoplist: buildStoplist(settings?.nerStoplist), properStems, cellTexts: docxCellTexts(doc || {}), pairedWords };
+  return { stoplist: buildStoplist(settings?.nerStoplist), properStems, cellTexts: docxCellTexts(doc || {}), pairedWords, commonStems };
+}
+
+/**
+ * Слово (≥ 4 букв) в документе пишется и со строчной буквы — нарицательное («Анонимайзер» в начале фразы и «анонимайзер
+ * документов» в тексте). Без контекста документа — нет.
+ * @param {string} word
+ * @param {Set<string>} [commonStems]  из `createOrgFilterContext`
+ */
+export function isCommonInDoc(word, commonStems) {
+  return !!commonStems && word.length >= 4 && stems(word, 2).some((st) => commonStems.has(st));
 }
 
 /** ОПФ в спане или вплотную к нему («ООО «Ромашка»», «Northwind Systems Ltd.»). */
@@ -276,15 +293,23 @@ function isAddressOrPosition(span, after = '') {
   return ADDRESS_WORD_RE.test(span) || (POSITION_WORD_RE.test(span.trim()) && !/^[\s\u00a0]+\p{Lu}/u.test(after));
 }
 
+/** Слово «серия» прямо перед спаном: «исполнительный лист серии ФС № 0123…» — буквы серии, а не организация. */
+const SERIES_BEFORE_RE = /(?<![\p{L}])(?:сери[яиюе]|серией|сер\.|series)[ \u00a0]*$/iu;
 /**
  * Правило 5: обрывок кода или номера — «ПС» из «17/ПС-2026», «АБ-12»: короткий спан из заглавных (≤ 4 букв) с цифрой
- * внутри или вплотную (через «/» или «-»). «Ромашка» из «Ромашка-2000» и «Вектор» из «Исполнитель/Вектор» — не обрывки.
+ * внутри или вплотную (через «/» или «-») или сразу после слова «серия» («серии ФС» — доработка 0.5: вместо записи «ФС»
+ * стоп-списка). «Ромашка» из «Ромашка-2000» и «Вектор» из «Исполнитель/Вектор» — не обрывки.
  */
 function isCodeFragment(text, start, end) {
   const span = text.slice(start, end);
   const letters = span.match(/\p{L}/gu) || [];
   if (!letters.length || letters.length > 4 || letters.some((ch) => ch !== ch.toUpperCase() || ch === ch.toLowerCase())) return false;
-  return /\d/.test(span) || /[\d№][/‐‑-]?$/.test(text.slice(Math.max(0, start - 2), start)) || /^[/‐‑-]?\d/.test(text.slice(end, end + 2));
+  return (
+    /\d/.test(span) ||
+    /[\d№][/‐‑-]?$/.test(text.slice(Math.max(0, start - 2), start)) ||
+    /^[/‐‑-]?\d/.test(text.slice(end, end + 2)) ||
+    SERIES_BEFORE_RE.test(text.slice(Math.max(0, start - 12), start))
+  );
 }
 
 /** Каждое слово спана в обычном тексте документа — имя собственное (с заглавной не в начале предложения). */

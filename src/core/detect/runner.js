@@ -11,6 +11,23 @@ import { PlaceholderAllocator, resolvePlaceholderLanguage } from '../placeholder
 
 const BOUNDARY_RE = /[\n\uFFFC]/;
 const AUTHOR_KINDS = new Set(['author', 'initials', 'author-id']);
+/**
+ * Метка-заглушка в двойных квадратных скобках — пример замены в тексте («⟦ORG_1.ACC⟧», «⟦AMT_1⟧», «⟦ФИО_2⟧»), а не значение:
+ * без пробелов, с буквой; заглавные, цифры и «_ . -» или «…_число…» (доработка 0.5 по прогону КП: модель делала из «ORG» и «ACC»
+ * организации). Обычный текст в таких скобках («⟦Иванов⟧») под правило не подпадает — при сомнении значение маскируется.
+ */
+const LABEL_TOKEN_RE = /⟦(?=[^⟧\s]*\p{L})(?:[\p{Lu}\p{N}_.-]+|[\p{L}\p{N}.-]*_\p{N}+[\p{L}\p{N}_.-]*)⟧/gu;
+/** @type {WeakMap<object, [number, number][]>} */
+const labelTokenCache = new WeakMap();
+/** Кандидат целиком внутри метки-заглушки «⟦…⟧» потока (FR-60, FR-61: такие спаны не становятся сущностью ни у правил, ни у модели). */
+function insideLabelToken(stream, start, end) {
+  let spans = labelTokenCache.get(stream);
+  if (!spans) {
+    spans = stream.text.includes('⟦') ? [...stream.text.matchAll(LABEL_TOKEN_RE)].map((m) => [m.index, m.index + m[0].length]) : [];
+    labelTokenCache.set(stream, spans);
+  }
+  return spans.some(([a, b]) => start >= a && end <= b);
+}
 
 /**
  * @typedef {object} AnalyzeOptions
@@ -58,6 +75,7 @@ export async function analyze(doc, settings, opts = {}) {
     const explicit = source === 'user' || source === 'list';
     if (!explicit && !isEnabled(category)) return;
     if (!explicit && !cat.allowedLevels.includes(cand.confidence)) return;
+    if (!explicit && insideLabelToken(stream, cand.start, cand.end)) return;
     if (!Number.isInteger(cand.start) || !Number.isInteger(cand.end) || cand.start < 0 || cand.end > stream.text.length || cand.end <= cand.start) return;
     const text = stream.text.slice(cand.start, cand.end);
     if (BOUNDARY_RE.test(text)) return;
