@@ -82,8 +82,8 @@ def main():
         pre = src
         used_pre = False
 
-    # quantize.keep_fp32: MatMul nodes left in fp32 by name suffix (1.2.0: the token classifier, 312 x 7 — argmax
-    # agreement on the 50-sentence gate 98.96 % -> see eval.json; costs a few kB)
+    # quantize.keep_fp32: MatMul nodes left in fp32 by name suffix (empty = every MatMul int8, as in 1.1.0 and the
+    # shipped 1.2.0; the first 1.2.0 build kept the classifier and the last-layer FFN fp32 — README 1.2.0)
     keep = [str(x) for x in (cfg["quantize"].get("keep_fp32") or [])]
     names = [n.name for n in onnx.load(str(pre)).graph.node if n.op_type == "MatMul"]
     exclude = [n for n in names if any(n.endswith(k) for k in keep)]

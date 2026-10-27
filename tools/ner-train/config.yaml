@@ -116,13 +116,16 @@ export:
 
 quantize:
   max_size_mb: 40
-  # 1.2.0: the token classifier and the FFN of the last layer stay fp32 (+1 MB): argmax agreement on the 50-sentence
-  # gate 98.96 % with everything int8 -> 99.10 %, mean |dlogit| 0.031 -> 0.027 (README 1.2.0)
-  keep_fp32: [classifier/MatMul, layer.2/output/dense/MatMul, layer.2/intermediate/dense/MatMul]
+  # MatMul nodes left fp32 by name suffix, e.g. [classifier/MatMul, layer.2/output/dense/MatMul,
+  # layer.2/intermediate/dense/MatMul] (the first 1.2.0 build: +1 MB, NER on 20 pages +15 %). Since the review of
+  # WP12-E (owner, 27.10.2026) everything is int8, as in 1.1.0; the agreement gate is on 2 000 sentences (README 1.2.0)
+  keep_fp32: []
 
 verify:
-  sentences: 50
+  sentences: 50            # informational since 1.2.0 (670 tokens: one token = 0.15 pp)
+  gate_sentences: 2000     # 1 000 ru + 1 000 en test sentences — the argmax agreement gate
   min_agreement: 0.99
+  baseline_onnx: ../../../ner-models-backup/rubert-tiny2-ner-ruen-1.1.0/model.onnx   # published 1.1.0 int8 (K10 on int8)
 
 calibrate:
   score: marginal     # marginal = P(B-X)+P(I-X) averaged over words (JS provider); argmax = P(predicted label)

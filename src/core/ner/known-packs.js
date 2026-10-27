@@ -10,8 +10,8 @@ export const KNOWN_PACKS = Object.freeze([
   // 1.0.0 остаётся в списке: импортированный ранее пакет 1.0.0 по-прежнему «проверен», а полный архив 0.4 ставит 1.1.0 поверх (К9)
   Object.freeze({ id: 'rubert-tiny2-ner-ruen', version: '1.1.0', sha256: '5616d089ed34cb2e299bb1f8af0adb5863e29fa8e8784b37197694f30deea0b8' }),
   // WP12-E (версия 0.5): тот же id; + NEREL и Nerus (без явной лицензии на тексты — NOTICE пакета), синтетика 0.5;
-  // docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.0.zip, 30 655 937 байт. 1.0.0 и 1.1.0 остаются «проверенными»; полный архив 0.5 ставит 1.2.0 поверх
-  Object.freeze({ id: 'rubert-tiny2-ner-ruen', version: '1.2.0', sha256: 'def55521af9b072001af90d4f5d8e99564b9e01306c59a3ebe18da4037bd4edc' }),
+  // docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.0.zip, 29 606 008 байт (весь int8). 1.0.0 и 1.1.0 остаются «проверенными»; полный архив 0.5 ставит 1.2.0 поверх
+  Object.freeze({ id: 'rubert-tiny2-ner-ruen', version: '1.2.0', sha256: 'a7e022266ae7c37d00988d546c702c299c8aa9a82af0fd9bdcc63404e3ce19e4' }),
 ]);
 
 /**

@@ -43,18 +43,31 @@ def heldout_cases(files):
     return out
 
 
-def heldout_recall(model_dir, cases, labels, threshold):
-    """Share of gold PERSON occurrences whose every word is PER with marginal probability >= threshold."""
+def heldout_recall(model_dir, cases, labels, threshold, onnx=None):
+    """Share of gold PERSON occurrences whose every word is PER with marginal probability >= threshold.
+    onnx: path of an ONNX model (e.g. the shipped int8) to score instead of the PyTorch model in model_dir
+    (the tokenizer still comes from model_dir; the vocabulary is the same for every pack version)."""
     tok = AutoTokenizer.from_pretrained(str(model_dir))
-    model = AutoModelForTokenClassification.from_pretrained(str(model_dir)).eval()
+    if onnx is not None:
+        from common import ort_session
+        sess = ort_session(onnx)
+    else:
+        model = AutoModelForTokenClassification.from_pretrained(str(model_dir)).eval()
     per = [i for i, l in enumerate(labels) if l.endswith("-PER")]
     types = {t: [i for i, l in enumerate(labels) if l.endswith("-" + t)] for t in ("PER", "ORG", "LOC")}
     by_group, missed = {}, []
     for c in cases:
         words = [(m.group(), m.start(), m.end()) for m in WORD_RE.finditer(c["text"])]
         enc = tok([w for w, _, _ in words], is_split_into_words=True, truncation=True, max_length=128, return_tensors="pt")
-        with torch.no_grad():
-            probs = torch.softmax(model(**enc).logits[0].float(), -1).numpy()
+        if onnx is not None:
+            feed = {k: enc[k].numpy().astype(np.int64) for k in ("input_ids", "attention_mask")}
+            feed["token_type_ids"] = np.zeros_like(feed["input_ids"])
+            lg = sess.run(["logits"], feed)[0][0].astype(np.float64)
+            e = np.exp(lg - lg.max(-1, keepdims=True))
+            probs = e / e.sum(-1, keepdims=True)
+        else:
+            with torch.no_grad():
+                probs = torch.softmax(model(**enc).logits[0].float(), -1).numpy()
         wtype, prev = {}, None
         for pos, w in enumerate(enc.word_ids(0)):
             if w is None or w == prev:
