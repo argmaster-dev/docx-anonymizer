@@ -93,7 +93,7 @@ def main():
     if distill:
         data_info = json.loads((rd / "data_info.json").read_text(encoding="utf-8"))
         train_ds = add_teacher_logits(train_ds, rd / "teacher" / "train_word_logits", data_info.get("train_fingerprint"))
-    train_ds = train_ds.remove_columns(EXTRA_COLUMNS)
+    train_ds = train_ds.remove_columns(EXTRA_COLUMNS + [c for c in ("ignore",) if c in train_ds.column_names])
     eval_ds = data["validation"].remove_columns(EXTRA_COLUMNS)
 
     tokenizer = AutoTokenizer.from_pretrained(cfg["base_model"])

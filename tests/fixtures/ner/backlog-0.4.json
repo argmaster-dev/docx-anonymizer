@@ -1,0 +1,23 @@
+{
+  "description": "К11 (концепция 0.5): утечки отложенных наборов ревьюера heldout2/heldout3 из бэклога 0.4 — каждый случай двумя-тремя фразами. Значения исключены из обучающей синтетики модели 1.2.0 (tools/ner-train/config.yaml synth.exclude_gold) и проверены на пересечение с NEREL/Nerus (overlap_fixtures).",
+  "cases": [
+    { "id": "miron-keys", "source": "heldout3", "text": "Ключи от переговорной оставил Мирон, он будет после обеда.", "entities": [{ "category": "PERSON", "value": "Мирон" }] },
+    { "id": "miron-pass", "source": "heldout3", "text": "Пропуск для курьера заказал Мирон.", "entities": [{ "category": "PERSON", "value": "Мирон" }] },
+    { "id": "efimtseva-sign", "source": "heldout3", "text": "Акт сверки подпишет Ефимцева в понедельник.", "entities": [{ "category": "PERSON", "value": "Ефимцева" }] },
+    { "id": "efimtseva-agree", "source": "heldout3", "text": "Счёт согласовала Ефимцева, можно оплачивать.", "entities": [{ "category": "PERSON", "value": "Ефимцева" }] },
+    { "id": "takahashi-ru", "source": "heldout3", "text": "Встреча с Jun Takahashi перенесена на четверг.", "entities": [{ "category": "PERSON", "value": "Jun Takahashi" }] },
+    { "id": "takahashi-en", "source": "heldout3", "text": "Contact person: Jun Takahashi, procurement department.", "entities": [{ "category": "PERSON", "value": "Jun Takahashi" }] },
+    { "id": "giorgadze-resp", "source": "heldout2", "text": "Ответственный исполнитель — Гиоргадзе Нино, отдел логистики.", "entities": [{ "category": "PERSON", "value": "Гиоргадзе Нино" }] },
+    { "id": "giorgadze-signed", "source": "heldout2", "text": "Договор от имени поставщика подписала Гиоргадзе Нино.", "entities": [{ "category": "PERSON", "value": "Гиоргадзе Нино" }] },
+    { "id": "thorne-ru", "source": "heldout2", "text": "Презентацию для партнёров готовит Katarzyna Thorne.", "entities": [{ "category": "PERSON", "value": "Katarzyna Thorne" }] },
+    { "id": "thorne-en", "source": "heldout2", "text": "Please forward the invoice to Katarzyna Thorne.", "entities": [{ "category": "PERSON", "value": "Katarzyna Thorne" }] },
+    { "id": "khabibullin-line", "source": "heldout2", "text": "Р. Хабибуллин", "entities": [{ "category": "PERSON", "value": "Р. Хабибуллин" }] },
+    { "id": "khabibullin-exec", "source": "heldout2", "text": "Исполнитель: Р. Хабибуллин, тел. 8 (843) 200-15-15", "entities": [{ "category": "PERSON", "value": "Р. Хабибуллин" }] },
+    { "id": "maxim-invoice", "source": "heldout3", "text": "Счёт выставлен, Максим.", "entities": [{ "category": "PERSON", "value": "Максим" }] },
+    { "id": "maxim-courier", "source": "heldout3", "text": "Документы отправил курьером, Максим.", "entities": [{ "category": "PERSON", "value": "Максим" }] },
+    { "id": "profsoyuznaya-originals", "source": "heldout2", "text": "Оригиналы привезите на Профсоюзную 104, корпус 2.", "entities": [{ "category": "ADDRESS", "value": "Профсоюзную 104" }] },
+    { "id": "profsoyuznaya-courier", "source": "heldout2", "text": "Курьер заберёт документы на Профсоюзную 104 до 18:00.", "entities": [{ "category": "ADDRESS", "value": "Профсоюзную 104" }] },
+    { "id": "abdrakhmanova", "source": "heldout2", "text": "Заявку на закупку согласовала Абдрахманова Айгерим.", "entities": [{ "category": "PERSON", "value": "Абдрахманова Айгерим" }] },
+    { "id": "kudryavtsev-shift", "source": "heldout2", "text": "Старший смены Евгений Кудрявцев: склад закрыт на инвентаризацию.", "entities": [{ "category": "PERSON", "value": "Евгений Кудрявцев" }] }
+  ]
+}

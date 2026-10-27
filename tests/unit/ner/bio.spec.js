@@ -122,6 +122,68 @@ describe('bridgePunct и joinAdjacent', () => {
     expect(s[0].score).toBeCloseTo(0.8, 6);
     expect(s[0]).not.toHaveProperty('words');
   });
+  // версия 0.5 (WP12-E): модель рвёт ФИО с инициалами без пробела — «Комаров Р.» + «А.» (B-PER на втором инициале)
+  it('PER вплотную, без промежутка, — одна сущность («Комаров Р.А.»)', () => {
+    const text = 'Подписал Комаров Р.А. сегодня';
+    const s = joinAdjacent(
+      mergeBio(preds(text, ['Подписал', 'Комаров/B-PER:0.9', 'Р/I-PER:0.9', './I-PER:0.8', 'А/B-PER:0.7', './I-PER:0.7', 'сегодня']), {
+        withWords: true,
+      }),
+      text,
+    );
+    expect(s.map((x) => text.slice(x.start, x.end))).toEqual(['Комаров Р.А.']);
+    expect(s[0].score).toBeCloseTo(0.8, 6);
+  });
+  it('PER через одни инициалы с точкой — одна сущность («А.А.Иванов», «Р. А. Комаров» без среднего инициала)', () => {
+    const t1 = 'Директор А.А.Иванов';
+    const s1 = joinAdjacent(mergeBio(preds(t1, ['Директор', 'А/B-PER:0.9', './I-PER:0.9', 'А', '.', 'Иванов/B-PER:0.9']), { withWords: true }), t1);
+    expect(s1.map((x) => t1.slice(x.start, x.end))).toEqual(['А.А.Иванов']);
+    const t2 = 'Комаров Р. А. Петрович';
+    const s2 = joinAdjacent(mergeBio(preds(t2, ['Комаров/B-PER:0.9', 'Р', '.', 'А', '.', 'Петрович/B-PER:0.9']), { withWords: true }), t2);
+    expect(s2.map((x) => t2.slice(x.start, x.end))).toEqual(['Комаров Р. А. Петрович']);
+  });
+  it('без промежутка и через инициал склеиваются только PER; запятая, «и», строчное слово и перенос строки разделяют', () => {
+    const t1 = 'ООО«Вектор»';
+    const s1 = joinAdjacent(
+      [
+        { start: 0, end: 3, label: 'ORG', score: 0.9 },
+        { start: 3, end: 11, label: 'ORG', score: 0.9 },
+      ],
+      t1,
+    );
+    expect(s1).toHaveLength(2);
+    const t2 = 'Иванов Р. Москва';
+    const s2 = joinAdjacent(
+      [
+        { start: 0, end: 6, label: 'LOC', score: 0.9 },
+        { start: 10, end: 16, label: 'LOC', score: 0.9 },
+      ],
+      t2,
+    );
+    expect(s2).toHaveLength(2);
+    for (const t of ['Иванов, Петров', 'Иванов и Петров', 'Иванов\nПетров', 'Иванов р. Петров']) {
+      const a = t.indexOf('Петров');
+      const s = joinAdjacent(
+        [
+          { start: 0, end: 6, label: 'PER', score: 0.9 },
+          { start: a, end: a + 6, label: 'PER', score: 0.9 },
+        ],
+        t,
+      );
+      expect(s, t).toHaveLength(2);
+    }
+    // PER вплотную к ORG — разные типы, не склеиваются
+    const t3 = 'ИвановООО';
+    expect(
+      joinAdjacent(
+        [
+          { start: 0, end: 6, label: 'PER', score: 0.9 },
+          { start: 6, end: 9, label: 'ORG', score: 0.9 },
+        ],
+        t3,
+      ),
+    ).toHaveLength(2);
+  });
 });
 
 describe('filterSpans', () => {

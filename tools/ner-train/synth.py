@@ -4,7 +4,13 @@ All names, companies and addresses are fictitious combinations of common first n
 (own word lists, unrelated to any evaluation corpus). Configured by data.synth in config.yaml (see prepare.py).
 
 Genres (1.1.0): commercial proposal, business letter, invoice / UPD, regulation / manual, resume, chat (ru);
-letter and resume (en). Headings in caps ("ВХОДИТ В ПАКЕТ"), numbered headings ("05 Цены"), abbreviations
+letter and resume (en). Added in 1.2.0 (concept 0.5, item 8): initials without a space ("Комаров Р.А.", "А.А.Иванов")
+in signatures, reconciliation acts, tables and letters (`initials`); foreign names — Kazakh, Tatar, Georgian, Armenian,
+Polish, German, Chinese, Japanese and others, Cyrillic and Latin (`foreign`); bare first names and surnames without
+context, one-initial signatures and vocatives at the end of a phrase (`bare`); names in table cells, CRM / payroll rows,
+slides and speaker notes (`table`); homonyms by context (Надежда / надежда, Плата), adjectival streets as LOC,
+"Дорогой/Дорогая" as O (`homonym`); entities of version 0.5 that model 1.1.0 called organisations — СТС, ПТС, полис
+ОМС, MAC, ФС, ЕГРН, КУСП, ВНЖ, МКБ-10, car makes and models, diagnoses — as O (`docs05`). Headings in caps ("ВХОДИТ В ПАКЕТ"), numbered headings ("05 Цены"), abbreviations
 (ЭДО, ВЭД, УПД, ТЗ, MVP, API, CRM, ...) and product names (Word, Excel, Telegram, 1С, Bitrix24, ...) are always O;
 a configurable share of genre sentences has no entities at all (negatives).
 
@@ -194,6 +200,135 @@ EN_POSITION = ["Head of Sales", "Account Manager", "Project Manager", "Senior Pr
 EN_UNIV = ["University of Westbrook", "Kingsbury College", "Highland Institute of Technology", "Lakeside University",
            "Northwind Business School", "Crescent State University", "Pinecrest College of Design"]
 
+# ---- 1.2.0: foreign names, initials, homonyms, entities of version 0.5 ----------------------------------------------
+
+
+def _decl_m(n):
+    """Male first name / surname ending in a consonant: nom, gen, dat, ins (Нурлан, Шмидт)."""
+    if n.endswith("й"):
+        return (n, n[:-1] + "я", n[:-1] + "ю", n[:-1] + "ем")
+    return (n, n + "а", n + "у", n + ("ем" if n[-1] in "жшчщц" else "ом"))
+
+
+def _decl_f(n):
+    """Female first name ending in -а / -я (Динара, Натия); other endings do not decline (Тамар, Ануш)."""
+    if n.endswith("ия"):
+        return (n, n[:-1] + "и", n[:-1] + "и", n[:-1] + "ей")
+    if n.endswith("а"):
+        soft = n[-2] in "гкхжшчщ"
+        return (n, n[:-1] + ("и" if soft else "ы"), n[:-1] + "е", n[:-1] + ("ой" if n[-2] not in "жшчщц" else "ей"))
+    return (n, n, n, n)
+
+
+def _fixed(n):
+    return (n, n, n, n)
+
+
+# Cyrillic foreign names: (first forms, surname male forms | None, surname female forms | None); surnames on -ов/-ин and
+# -ский are declined by _surname-like rules below, the rest (-дзе, -швили, -ян, Chinese, Japanese) do not decline.
+FOREIGN_M_FIRST = [_decl_m(x) for x in ["Нурлан", "Ерлан", "Данияр", "Асхат", "Бауыржан", "Ержан", "Талгат", "Арман",
+                                         "Серик", "Канат", "Айдос", "Ринат", "Ильдар", "Рустам", "Айрат", "Марат",
+                                         "Ильнур", "Давит", "Леван", "Зураб", "Тамаз", "Арам", "Ашот", "Тигран", "Гагик",
+                                         "Ваган", "Карен", "Самвел", "Томаш", "Кшиштоф", "Марек", "Збигнев", "Анджей",
+                                         "Клаус", "Юрген", "Штефан", "Дитер", "Вольфганг", "Маркус", "Фарид", "Шамиль"]]
+FOREIGN_F_FIRST = [_decl_f(x) for x in ["Динара", "Гульнара", "Камила", "Мадина", "Айгуль", "Асель", "Салтанат",
+                                         "Жанар", "Алсу", "Лейсан", "Регина", "Тамар", "Кетеван", "Эка", "Мариам",
+                                         "Натия", "Софико", "Манана", "Ануш", "Лусине", "Гаянэ", "Карине", "Нарине",
+                                         "Седа", "Агнешка", "Малгожата", "Магдалена", "Сабине", "Моника", "Уте",
+                                         "Беате", "Зарина", "Эльмира", "Наиля"]]
+FOREIGN_SUR_OV = ["Жумабаев", "Касымов", "Нургалиев", "Сагинтаев", "Ахметов", "Байжанов", "Ибраев", "Тулегенов",
+                  "Есенов", "Мукашев", "Абенов", "Гарипов", "Сафин", "Галиев", "Шарипов", "Валиуллин", "Нуриев",
+                  "Хайруллин", "Зарипов", "Мингазов", "Ахметзянов", "Гильмутдинов", "Фаттахов", "Сабиров", "Юсупов"]
+FOREIGN_SUR_SKY = ["Ковальский", "Вишневский", "Зелиньский", "Шиманский", "Левандовский", "Каминьский", "Домбровский"]
+FOREIGN_SUR_FIXED = ["Беридзе", "Кипиани", "Чхеидзе", "Лордкипанидзе", "Мачавариани", "Церетели", "Абашидзе",
+                     "Квирикашвили", "Гелашвили", "Меладзе", "Бакрадзе", "Джапаридзе", "Хуцишвили", "Табатадзе",
+                     "Акопян", "Саркисян", "Петросян", "Манукян", "Григорян", "Аветисян", "Овсепян", "Казарян",
+                     "Мкртчян", "Арутюнян", "Галстян", "Варданян", "Новак", "Шмидт", "Беккер", "Хоффман", "Вагнер",
+                     "Фишер", "Рихтер", "Шульц", "Крюгер", "Майер", "Келлер", "Сейткали"]
+# full names that keep their own order (surname first for Chinese, given name first for Japanese); do not decline
+FOREIGN_FULL_FIXED = ["Ван Вэй", "Ли На", "Чжан Вэй", "Лю Ян", "Чэнь Цзин", "Чжао Лэй", "Хуан Минь", "Чжоу Синь",
+                      "У Хао", "Сунь Ли", "Ян Мэй", "Го Цян", "Хироси Танака", "Юки Сато", "Кэндзи Ватанабэ",
+                      "Аяко Ито", "Такэси Кобаяси", "Мики Ямамото", "Нгуен Ван Тхань", "Чан Тхи Лан"]
+# Latin script: (first, last) pairs of many origins; written as "First Last", "LAST First", "Last, First", "F. Last"
+LATIN_FIRST = ["Nurlan", "Dinara", "Yerlan", "Aigul", "Asel", "Davit", "Levan", "Tamar", "Ketevan", "Aram", "Tigran",
+               "Anush", "Tomasz", "Piotr", "Krzysztof", "Marek", "Agnieszka", "Malgorzata", "Ewa", "Joanna", "Klaus",
+               "Jurgen", "Stefan", "Sabine", "Dieter", "Ute", "Wolfgang", "Monika", "Wei", "Na", "Jing", "Lei",
+               "Hiroshi", "Yuki", "Kenji", "Ayako", "Takeshi", "Carlos", "Lucia", "Emre", "Ayse", "Rahul", "Priya",
+               "Ahmed", "Fatima", "Mehmet", "Sofia", "Lars", "Ingrid", "Pierre", "Camille", "Marco", "Giulia"]
+LATIN_SUR = ["Zhumabayev", "Kassymova", "Akhmetov", "Beridze", "Kipiani", "Chkheidze", "Abashidze", "Hakobyan",
+             "Sargsyan", "Petrosyan", "Kowalski", "Nowak", "Wisniewski", "Wojcik", "Zielinska", "Szymanski",
+             "Lewandowska", "Schmidt", "Becker", "Hoffmann", "Wagner", "Fischer", "Richter", "Schulz", "Kruger",
+             "Wang", "Zhang", "Liu", "Chen", "Zhao", "Huang", "Zhou", "Tanaka", "Sato", "Watanabe", "Ito",
+             "Kobayashi", "Mendoza", "Fernandez", "Yilmaz", "Demir", "Sharma", "Nair", "Hassan", "Karimi",
+             "Andersson", "Johansson", "Dubois", "Moreau", "Rossi", "Bianchi", "Novotny", "Horvath", "Popescu"]
+# names that are also common words (by context: a person or O)
+HOMONYM_F = [_decl_f(x) for x in ["Надежда", "Любовь", "Злата", "Роза", "Лилия", "Майя", "Слава", "Мирослава",
+                                   "Ангелина", "Василиса", "Ника", "Влада", "Снежана"]]
+HOMONYM_COMMON = ["надежда", "любовь", "роза", "лилия", "слава", "вера", "плата", "ника", "майя", "зарница"]
+CAR_MODELS = ["Лада Веста", "Лада Гранта", "Лада Ларгус", "Лада Нива", "Lada Vesta", "Lada Granta", "Toyota Camry",
+              "Toyota RAV4", "Kia Rio", "Kia Sportage", "Hyundai Solaris", "Hyundai Creta", "Volkswagen Polo",
+              "Skoda Octavia", "Renault Logan", "Renault Duster", "Haval Jolion", "Chery Tiggo 7 Pro", "Geely Coolray",
+              "BMW X5", "Mercedes-Benz E200", "ГАЗель Next", "КАМАЗ 5490", "УАЗ Патриот", "Ford Focus",
+              "Nissan Qashqai", "Mitsubishi Outlander", "Тойота Камри", "Киа Рио", "Хендай Солярис", "Шкода Октавия",
+              "Фольксваген Поло", "Рено Логан", "Чери Тигго", "Хавал Джолион",
+              # more makes and models (held-out partition must generalise: 1 of 5 goes to synth_genre_test)
+              "Лада Приора", "Лада Калина", "Лада Икс-Рей", "Lada XRAY", "Lada Niva Travel", "Toyota Corolla",
+              "Toyota Land Cruiser 200", "Toyota Prado", "Kia Ceed", "Kia K5", "Kia Optima", "Hyundai Tucson",
+              "Hyundai Elantra", "Volkswagen Tiguan", "Volkswagen Passat", "Skoda Rapid", "Skoda Kodiaq",
+              "Renault Sandero", "Renault Kaptur", "Haval F7", "Haval H6", "Chery Tiggo 4", "Geely Monjaro",
+              "Geely Atlas", "Changan CS55", "Exeed TXL", "Omoda C5", "Nissan X-Trail", "Nissan Almera",
+              "Mitsubishi Pajero", "Mazda CX-5", "Mazda 6", "Ford Mondeo", "Chevrolet Niva", "Opel Astra",
+              "Peugeot 408", "Audi A6", "BMW 320i", "Mercedes-Benz GLC", "Volvo XC60", "Lexus RX 350", "Subaru Forester",
+              "ГАЗ 3302", "ГАЗель Бизнес", "УАЗ Буханка", "КАМАЗ 65115", "МАЗ 5440", "Москвич 3", "Тойота Королла",
+              "Тойота Ленд Крузер", "Киа Сид", "Киа Спортейдж", "Хендай Крета", "Хендай Туссан", "Фольксваген Тигуан",
+              "Шкода Рапид", "Рено Дастер", "Рено Сандеро", "Ниссан Икс-Трейл", "Мицубиси Аутлендер", "Мазда СХ-5",
+              "Джили Монджаро", "Чанган CS55", "Хавал Ф7", "Мерседес-Бенц Е200", "БМВ Х5", "Ауди А6", "Шевроле Нива"]
+DIAGNOSES = ["Острый бронхит", "Гипертоническая болезнь II стадии", "Сахарный диабет 2 типа", "Хронический гастрит",
+             "Остеохондроз поясничного отдела позвоночника", "Острая респираторная вирусная инфекция", "ОРВИ",
+             "Внебольничная пневмония", "Бронхиальная астма", "Ишемическая болезнь сердца", "Хронический тонзиллит",
+             "Острый ринофарингит", "Мигрень без ауры", "Аллергический ринит", "Железодефицитная анемия",
+             "Острый отит", "Ушиб мягких тканей", "Растяжение связок голеностопного сустава", "Ангина", "Грипп",
+             "Хроническая сердечная недостаточность", "Мигрень с аурой", "Сахарный диабет 1 типа", "Гипотиреоз",
+             "Хронический панкреатит", "Желчнокаменная болезнь", "Язвенная болезнь желудка", "Пиелонефрит",
+             "Цистит", "Острый аппендицит", "Перелом лучевой кости", "Сотрясение головного мозга", "Конъюнктивит",
+             "Атопический дерматит", "Псориаз", "Ожирение 1 степени", "Варикозная болезнь нижних конечностей",
+             "Хроническая обструктивная болезнь лёгких", "Новая коронавирусная инфекция", "COVID-19",
+             "Ветряная оспа", "Краснуха", "Синусит", "Ларингит", "Трахеит", "Гастроэнтерит", "Энтероколит",
+             "Остеоартроз коленного сустава", "Межпозвонковая грыжа", "Сколиоз", "Плоскостопие",
+             "Вегетососудистая дистония", "Артериальная гипертензия", "Аритмия", "Тахикардия",
+             "Дорсопатия шейного отдела", "Невралгия тройничного нерва", "Катаракта", "Глаукома", "Миопия",
+             "Анемия", "Гепатит B", "Тонзиллофарингит", "Бронхопневмония", "Хронический бронхит",
+             "Депрессивный эпизод", "Тревожное расстройство", "Инсульт", "Инфаркт миокарда", "Стенокардия"]
+MKB_CODES = ["J20.9", "I11.9", "E11.9", "K29.5", "M42.1", "J06.9", "J18.9", "J45.0", "I25.1", "J35.0", "J00",
+             "G43.0", "J30.4", "D50.9", "H66.9", "S00.8", "S93.4", "J03.9", "J11.1", "I10"]
+# public institutions with a number or a court / registry office (O in the 0.5 genres: medical, court, realty)
+INSTITUTIONS = ["ГБУЗ « Городская поликлиника № {n} »", "ГБУЗ « Городская клиническая больница № {n} »",
+                "ГАУЗ « Детская поликлиника № {n} »", "Городская поликлиника № {n}", "Женская консультация № {n}",
+                "ГБУЗ « Станция скорой медицинской помощи »", "Поликлиника № {n}", "Больница № {n}",
+                "Мещанский районный суд", "Октябрьский районный суд", "мировой судья судебного участка № {n}",
+                "ОСП по Центральному району", "МФЦ « Мои документы »",
+                "Отделение по вопросам миграции", "Межмуниципальный отдел Росреестра"]  # no toponyms inside: those stay LOC
+DOCS05_TERMS = ["СТС", "ПТС", "ЭПТС", "Полис ОМС", "полис ОМС", "ОМС", "MAC", "MAC-адрес", "ФС", "ЕГРН", "КУСП", "ВНЖ",
+                "РВП", "МКБ-10", "МКБ", "ОСАГО", "КАСКО", "ДМС", "СНИЛС", "VIN", "ГРЗ", "ЕГРП"]
+HEADERS_RU = ["ФИО", "Сотрудник", "Ответственный менеджер", "Должность", "Телефон", "Эл . почта", "Сумма сделки", "Статус",
+              "Оклад", "К выплате", "Подразделение", "Табельный номер", "Дата приёма", "Контакт", "Всего", "Примечание",
+              "Источник", "Этап сделки", "Регион", "Подпись"]
+STATUSES_RU = ["В работе", "Новый", "Закрыт", "Отказ", "Сделка", "Ожидает оплаты", "Согласование", "Отгружено",
+               "Холодный", "Повторный"]
+# adjectival streets (gen/prep, nom, acc): LOC in an address, never a person ("на Садовой , 12")
+STREET_ADJ = [("Садовой", "Садовая", "Садовую"), ("Тверской", "Тверская", "Тверскую"), ("Луговой", "Луговая", "Луговую"),
+              ("Лесной", "Лесная", "Лесную"), ("Заречной", "Заречная", "Заречную"),
+              ("Первомайской", "Первомайская", "Первомайскую"), ("Советской", "Советская", "Советскую"),
+              ("Школьной", "Школьная", "Школьную"), ("Полевой", "Полевая", "Полевую"), ("Песчаной", "Песчаная", "Песчаную"),
+              ("Кленовой", "Кленовая", "Кленовую"), ("Молодёжной", "Молодёжная", "Молодёжную"),
+              ("Октябрьской", "Октябрьская", "Октябрьскую"), ("Нагорной", "Нагорная", "Нагорную"),
+              ("Рабочей", "Рабочая", "Рабочую"), ("Солнечной", "Солнечная", "Солнечную")]
+COUNTRIES = ["Казахстан", "Республика Казахстан", "Грузия", "Армения", "Китай", "КНР", "Польша", "Германия", "Япония",
+             "Узбекистан", "Киргизия", "Таджикистан", "Азербайджан", "Вьетнам", "Турция", "Индия", "Беларусь"]
+LANGS = ["казахского", "грузинского", "армянского", "польского", "немецкого", "китайского", "японского", "английского"]
+GREETING_END = ["Спасибо", "Хорошо", "Принято", "Отправил", "Счёт выставлен", "Договор у вас", "Всё готово",
+                "Жду ответа", "Созвонимся завтра", "Документы подписаны", "Оплату получили", "Сделаю до вечера"]
+
 # ---- O-only fillers -------------------------------------------------------------------------------------------
 ABBR_RU = ["ЭДО", "ВЭД", "УПД", "ТЗ", "ФИО", "КП", "НДС", "ИНН", "КПП", "БИК", "ОГРН", "КЭП", "ЭЦП", "ТТН", "ПО",
            "ИТ", "ЛК", "ГОСТ", "ЕГРЮЛ", "ТКП", "УКД", "МЧД", "СЧФ", "ТН ВЭД", "КС-2"]
@@ -209,11 +344,24 @@ CAPS_RU = ["ВХОДИТ В ПАКЕТ", "ПОЧЕМУ ТАК", "ЧТО ВЫ П�
            "ДОПОЛНИТЕЛЬНО", "ВАЖНО", "РЕЗУЛЬТАТ", "ЗАДАЧА", "РЕШЕНИЕ", "ПРЕИМУЩЕСТВА", "НОВЫЙ ДОКУМЕНТ ИЛИ",
            "ВОПРОСЫ И ОТВЕТЫ", "ДОРОЖНАЯ КАРТА", "КАК МЫ РАБОТАЕМ", "КОМАНДА ПРОЕКТА", "ТАРИФЫ", "ВХОДИТ",
            "НЕ ВХОДИТ", "ЛИЧНЫЕ КАЧЕСТВА", "О СЕБЕ", "ПРИЛОЖЕНИЯ", "РЕКВИЗИТЫ", "ПОДПИСИ СТОРОН", "ПОДДЕРЖКА",
-           "СОДЕРЖАНИЕ", "ВВЕДЕНИЕ", "ГЛОССАРИЙ"]
+           "СОДЕРЖАНИЕ", "ВВЕДЕНИЕ", "ГЛОССАРИЙ",
+           # 1.2.0
+           "ДОРОЖНАЯ КАРТА ПРОЕКТА", "ПЛАН РАБОТ", "НАШИ ПРОЕКТЫ", "ОТЗЫВЫ КЛИЕНТОВ", "ЭТАПЫ", "РИСКИ", "БЮДЖЕТ",
+           "ИТОГИ КВАРТАЛА", "ПЛАН НА МЕСЯЦ", "ЗАДАЧИ", "ВЫВОДЫ", "РЕКОМЕНДАЦИИ", "ПРИМЕЧАНИЯ", "ОГРАНИЧЕНИЯ",
+           "ТРЕБОВАНИЯ", "КОМПЕТЕНЦИИ", "ДОСТИЖЕНИЯ", "СЕРТИФИКАТЫ", "КУРСЫ", "ЯЗЫКИ", "СЧЁТ-ФАКТУРА", "АКТ",
+           "ДОГОВОР", "СПЕЦИФИКАЦИЯ", "ПРОТОКОЛ", "ПРИКАЗ", "СЛУЖЕБНАЯ ЗАПИСКА", "ДОВЕРЕННОСТЬ"]
 TITLES_RU = ["Цены", "Сроки", "Команда", "Этапы", "Кейсы", "Гарантии", "Контакты", "Задача", "Решение", "Аналитика",
              "Дизайн", "Разработка", "Поддержка", "Интеграции", "Тарифы", "Отчётность", "Обучение", "Безопасность",
              "Входит в пакет", "Почему так", "Как мы работаем", "Что дальше", "Оплата", "Документы", "Вопросы",
-             "Опыт работы", "Образование", "Навыки", "Порядок согласования", "Хранение данных"]
+             "Опыт работы", "Образование", "Навыки", "Порядок согласования", "Хранение данных",
+             # 1.2.0: more one- and two-word headings (news corpora push capitalised single words towards LOC / ORG)
+             "Обзор", "Итоги", "Планы", "Риски", "Бюджет", "Методика", "Результаты", "Выводы", "Приложения", "Глоссарий",
+             "Ограничения", "Требования", "Ответственность", "Контроль", "Согласование", "Доставка", "Возврат",
+             "Претензии", "Реквизиты", "Подписи", "Сопровождение", "Внедрение", "Миграция", "Тестирование", "Запуск",
+             "Аудит", "Консультации", "Компетенции", "Достижения", "Портфолио", "Рекомендации", "Языки", "Хобби",
+             "Сертификаты", "Курсы", "Проекты", "Клиенты", "Партнёры", "Отзывы", "Преимущества", "Миссия", "Ценности",
+             "Структура", "Процессы", "Метрики", "Отчёты", "Финансы", "Логистика", "Склад", "Закупки", "Продажи",
+             "Маркетинг", "Персонал", "Обучение персонала", "Охрана труда", "Пожарная безопасность", "Архив"]
 FRAGMENTS_RU = ["Новый документ или", "и сопровождение проекта", "по договору поставки", "а также",
                 "в течение 5 рабочих", "Подробнее на сайте", "Стоимость под ключ", "Без скрытых платежей",
                 "Срок — от 2 недель", "Оплата поэтапно", "Готовый результат", "Под ключ", "Быстрый старт",
@@ -229,13 +377,24 @@ CHAT_RU = ["скинь КП до вечера", "ок , созвон в Zoom в 
            "Excel с ценами в Telegram", "Notion обновил , проверь", "Jira не открывается", "Zoom через 5 минут",
            "Slack лежит , пишу сюда", "Figma : макет готов", "Telegram — там ссылка"]
 EN_CAPS = ["EXPERIENCE", "EDUCATION", "SKILLS", "SUMMARY", "KEY BENEFITS", "PRICING", "WHAT'S INCLUDED", "WHY US",
-           "CONTACT", "REFERENCES", "NEXT STEPS", "PROFILE", "CERTIFICATIONS", "LANGUAGES", "ACHIEVEMENTS"]
+           "CONTACT", "REFERENCES", "NEXT STEPS", "PROFILE", "CERTIFICATIONS", "LANGUAGES", "ACHIEVEMENTS",
+           # 1.2.0
+           "OVERVIEW", "OBJECTIVES", "PROJECTS", "AWARDS", "INTERESTS", "TIMELINE", "DELIVERABLES", "SCOPE",
+           "OUR TEAM", "ABOUT US", "CASE STUDIES", "TERMS", "RESULTS", "ROADMAP", "FAQ", "PUBLICATIONS"]
 EN_TITLES = ["Pricing", "Timeline", "Team", "Deliverables", "Scope of Work", "Support", "Payment Terms", "Our Approach",
              "Case Studies", "Next Steps", "Experience", "Education", "Skills", "Contact Details", "Summary", "Why Us",
              "Key Benefits", "What's Included", "About Us", "Our Team", "How We Work", "Project Timeline",
              "Investment", "Terms and Conditions", "Work Experience", "Professional Summary", "Core Skills",
              "Selected Projects", "Contact Information", "Get in Touch", "Our Services", "Client Testimonials",
-             "Key Achievements", "Languages and Certifications", "Our Mission", "Next Steps and Timeline"]
+             "Key Achievements", "Languages and Certifications", "Our Mission", "Next Steps and Timeline",
+             # 1.2.0: more Title Case headings
+             "Overview", "Background", "Objectives", "Methodology", "Results", "Conclusions", "Appendix", "Budget",
+             "Risks", "Assumptions", "Requirements", "Responsibilities", "Milestones", "Roadmap", "Highlights",
+             "Portfolio", "Awards", "Publications", "Volunteer Work", "Interests", "Training", "Certificates",
+             "Projects", "Clients", "Partners", "Testimonials", "Benefits", "Features", "Pricing Plans", "FAQ",
+             "Terms of Payment", "Delivery", "Warranty", "Support Plan", "Implementation", "Onboarding", "Reporting",
+             "Key Metrics", "Lessons Learned", "Recommendations", "Executive Summary", "Market Analysis",
+             "Competitive Landscape", "Go-to-Market", "Financials", "Use of Funds", "The Team", "Contact Us"]
 ITEMS_RU = ["Ноутбук", "Сервер", "Монитор", "Принтер", "Клавиатура", "Мышь беспроводная", "Маршрутизатор",
             "Источник бесперебойного питания", "Сканер", "Проектор", "Кресло офисное", "Стол письменный", "Картридж",
             "Жёсткий диск", "Коммутатор", "Флеш-накопитель", "Планшет", "Смартфон", "Гарнитура", "Веб-камера",
@@ -287,11 +446,14 @@ class Lex:
     PARTITIONED = ["RU_M_FIRST", "RU_F_FIRST", "RU_PATR", "RU_SUR_OV", "RU_SUR_SKY", "RU_SUR_FIXED", "RU_ORG_ROOT",
                    "RU_STUDIO_ROOT", "RU_BANK", "RU_UNIV", "RU_CITY", "RU_REGION", "RU_STREET", "EN_FIRST", "EN_SUR",
                    "EN_ORG", "EN_CITY", "EN_UNIV", "CAPS_RU", "TITLES_RU", "FRAGMENTS_RU", "CHAT_RU", "EN_CAPS",
-                   "EN_TITLES", "REGION_ADJ", "ORG_DESC_NAME"]
+                   "EN_TITLES", "REGION_ADJ", "ORG_DESC_NAME", "FOREIGN_M_FIRST", "FOREIGN_F_FIRST", "FOREIGN_SUR_OV",
+                   "FOREIGN_SUR_SKY", "FOREIGN_SUR_FIXED", "FOREIGN_FULL_FIXED", "LATIN_FIRST", "LATIN_SUR",
+                   "HOMONYM_F", "CAR_MODELS", "DIAGNOSES", "STREET_ADJ", "COUNTRIES"]
     # entity word lists filtered by the evaluation-corpus block list (headings, chat lines and toponyms are not)
     FILTERED = {"RU_M_FIRST", "RU_F_FIRST", "RU_PATR", "RU_SUR_OV", "RU_SUR_SKY", "RU_SUR_FIXED", "RU_ORG_ROOT",
                 "RU_STUDIO_ROOT", "RU_BANK", "RU_UNIV", "EN_FIRST", "EN_SUR", "EN_ORG", "EN_UNIV", "REGION_ADJ",
-                "ORG_DESC_NAME"}
+                "ORG_DESC_NAME", "FOREIGN_M_FIRST", "FOREIGN_F_FIRST", "FOREIGN_SUR_OV", "FOREIGN_SUR_SKY",
+                "FOREIGN_SUR_FIXED", "FOREIGN_FULL_FIXED", "LATIN_FIRST", "LATIN_SUR", "HOMONYM_F"}
 
     def __init__(self, part: str, block: set | None = None):
         assert part in ("train", "test"), part
@@ -316,23 +478,120 @@ def _patronymic(stem, female, case):
     return {"nom": base + "ич", "gen": base + "ича", "dat": base + "ичу", "ins": base + "ичем"}[case]
 
 
+def _sur_ov(s, female, case):
+    if female:
+        return {"nom": s + "а", "gen": s + "ой", "dat": s + "ой", "ins": s + "ой"}[case]
+    return {"nom": s, "gen": s + "а", "dat": s + "у", "ins": s + ("ым" if s.endswith(("ов", "ёв", "ев", "ин")) else "ом")}[case]
+
+
+def _sur_sky(s, female, case):
+    stem = s[:-2]
+    if s.endswith(("ый", "ой")):  # Заречный, Полевой
+        return ({"nom": stem + "ая", "gen": stem + "ой", "dat": stem + "ой", "ins": stem + "ой"} if female else
+                {"nom": s, "gen": stem + "ого", "dat": stem + "ому", "ins": stem + "ым"})[case]
+    if female:
+        return {"nom": stem + "ая", "gen": stem + "ой", "dat": stem + "ой", "ins": stem + "ой"}[case]
+    return {"nom": s, "gen": stem + "ого", "dat": stem + "ому", "ins": stem + "им"}[case]
+
+
 def _surname(rng, lx, female, case):
     r = rng.random()
     if r < 0.7:
-        s = rng.choice(lx.ru_sur_ov)
-        if female:
-            return {"nom": s + "а", "gen": s + "ой", "dat": s + "ой", "ins": s + "ой"}[case]
-        return {"nom": s, "gen": s + "а", "dat": s + "у", "ins": s + ("ым" if s.endswith(("ов", "ёв", "ев", "ин")) else "ом")}[case]
+        return _sur_ov(rng.choice(lx.ru_sur_ov), female, case)
     if r < 0.92:  # adjectival surnames: 0.22 of all (was 0.18), the female forms (-ая) look like streets / companies
-        s = rng.choice(lx.ru_sur_sky)
-        stem = s[:-2]
-        if s.endswith(("ый", "ой")):  # Заречный, Полевой
-            return ({"nom": stem + "ая", "gen": stem + "ой", "dat": stem + "ой", "ins": stem + "ой"} if female else
-                    {"nom": s, "gen": stem + "ого", "dat": stem + "ому", "ins": stem + "ым"})[case]
-        if female:
-            return {"nom": stem + "ая", "gen": stem + "ой", "dat": stem + "ой", "ins": stem + "ой"}[case]
-        return {"nom": s, "gen": stem + "ого", "dat": stem + "ому", "ins": stem + "им"}[case]
+        return _sur_sky(rng.choice(lx.ru_sur_sky), female, case)
     return rng.choice(lx.ru_sur_fixed)
+
+
+def _foreign_surname(rng, lx, female, case):
+    r = rng.random()
+    if r < 0.4:  # Kazakh / Tatar / Bashkir on -ов / -ин
+        return _sur_ov(rng.choice(lx.foreign_sur_ov), female, case)
+    if r < 0.52:  # Polish on -ский
+        return _sur_sky(rng.choice(lx.foreign_sur_sky), female, case)
+    s = rng.choice(lx.foreign_sur_fixed)
+    if not female and s[-1] not in "аеиоуыэюя":
+        return _decl_m(s)[CASES.index(case)]  # Шмидта, Новаку, Акопяну; -дзе / -швили / -ани do not decline
+    return s
+
+
+def _foreign_parts(rng, lx, case, female=None):
+    """(first, patronymic or "", surname) of a foreign name in Cyrillic."""
+    if female is None:
+        female = rng.random() < 0.45
+    first = rng.choice(lx.foreign_f_first if female else lx.foreign_m_first)[CASES.index(case)]
+    sur = _foreign_surname(rng, lx, female, case)
+    patr = _patronymic(rng.choice(lx.ru_patr), female, case) if rng.random() < 0.15 else ""
+    return first, patr, sur
+
+
+def foreign_person(rng, lx, case="nom", surname_first=None):
+    """Foreign name in Cyrillic: "Нурлан Жумабаев", "Беридзе Тамар", "Ван Вэй" (fixed order, does not decline)."""
+    if rng.random() < 0.18:
+        return rng.choice(lx.foreign_full_fixed)
+    first, patr, sur = _foreign_parts(rng, lx, case)
+    if surname_first is None:
+        surname_first = rng.random() < 0.5
+    if surname_first:
+        return f"{sur} {first} {patr}".strip()
+    return f"{first} {patr} {sur}".replace("  ", " ").strip() if patr and rng.random() < 0.3 else f"{first} {sur}"
+
+
+def latin_person(rng, lx):
+    """Foreign name in Latin script: "Tomasz Kowalski", "WANG Wei", "T. Kowalski", "Kowalski T."."""
+    f, l = rng.choice(lx.latin_first), rng.choice(lx.latin_sur)
+    r = rng.random()
+    if r < 0.5:
+        return f"{f} {l}"
+    if r < 0.65:
+        return f"{l} {f}"
+    if r < 0.75:
+        return f"{l.upper()} {f}"
+    if r < 0.88:
+        return f"{f[0]}. {l}"
+    return f"{l} {f[0]}."
+
+
+def initials_person(rng, lx, case="nom", foreign=0.2):
+    """Initials with and without spaces: "Комаров Р.А.", "Р.А. Комаров", "Р.А.Комаров", "Р. Комаров", "Комаров Р."."""
+    first, patr, sur = (_foreign_parts if rng.random() < foreign else _parts)(rng, lx, case)
+    i1 = first[0] + "."
+    i2 = patr[0] + "." if patr else ""
+    r = rng.random()
+    if r < 0.30:
+        out = f"{sur} {i1}{i2}"
+    elif r < 0.42:
+        out = f"{sur} {i1} {i2}"
+    elif r < 0.60:
+        out = f"{i1}{i2} {sur}"
+    elif r < 0.72:
+        out = f"{i1}{i2}{sur}"
+    elif r < 0.80:
+        out = f"{i1} {i2} {sur}"
+    elif r < 0.88:
+        out = f"{i1} {sur}"
+    elif r < 0.93:
+        out = f"{sur} {i1}"
+    else:
+        out = f"{sur.upper()} {i1}{i2}"
+    return re.sub(r"\s+", " ", out).strip()
+
+
+def bare_first(rng, lx, case="nom", female=None):
+    r = rng.random()
+    if r < 0.7:
+        return _parts(rng, lx, case, female)[0]
+    if r < 0.9:
+        return _foreign_parts(rng, lx, case, female)[0]
+    if female is False:
+        return _parts(rng, lx, case, False)[0]
+    return rng.choice(lx.homonym_f)[CASES.index(case)]
+
+
+def bare_surname(rng, lx, case="nom", female=None):
+    if female is None:
+        female = rng.random() < 0.45
+    return (_foreign_surname if rng.random() < 0.25 else _surname)(rng, lx, female, case)
 
 
 def _parts(rng, lx, case, female=None):
@@ -729,13 +988,264 @@ GENRES = {
         "{org_desc}",
     ]),
 }
+# Genres of model 1.2.0 (concept 0.5, item 8); the comment in each list separates positive and negative templates
+GENRES.update({
+    "initials": ("ru", [
+        "Главный бухгалтер __________ {per_init}",
+        "Подпись __________ / {per_init} /",
+        "{per_init} __________",
+        "От {org} : {pos} {per_init}",
+        "От {org_desc} : {pos} {per_init} , {date}",
+        "Исп . {per_init} , тел . {phone}",
+        "Исполнитель : {per_init}",
+        "Руководитель {per_init} Главный бухгалтер {per_init2}",
+        "Сверку провёл {pos} {per_init}",
+        "Согласовано : {per_init} , {date}",
+        "{per_init} , {pos}",
+        "{num} | {per_init} | {price}",
+        "Комиссия : {per_init} , {per_init2} , {per_init3}",
+        "Доверенность выдана {per_init_dat} на получение ТМЦ",
+        "Передано {per_init_dat} {date}",
+        "Получено от {per_init_gen}",
+        "Акт составлен {per_init_ins} в присутствии {per_init_gen2}",
+        "Копия : {per_init}",
+        "Ответственный : {per_init} ( {pos} )",
+        "По данным {org_gen} : главный бухгалтер {per_init}",
+        "Товар получил {per_init} по доверенности № {num}",
+        "Генеральный директор {org} _____________ {per_init}",
+        "Генеральный директор _____________ {per_init} М . П .",
+        "С уважением , {per_init}",
+        "Утверждаю : {per_init} {date}",
+        "{per_init}",
+        # negatives
+        "Подпись __________ / расшифровка подписи /",
+        "М . П .",
+        "Главный бухгалтер __________",
+        "( подпись ) ( Ф . И . О . )",
+        "Расхождений не выявлено",
+        "Дата подписания : {date}",
+    ]),
+    "foreign": ("ru", [
+        "Контактное лицо : {fper}",
+        "Встреча с {fper_ins} перенесена на {date}",
+        "Ответственный : {fper_sf}",
+        "Переводчик — {fper}",
+        "Письмо от {fper_gen} получено {date}",
+        "Contact : {lper} , {en_pos}",
+        "Подписал : {lper}",
+        "Согласовано с {fper_ins}",
+        "{fper} , {pos} , {org}",
+        "Участники : {fper} , {fper2} , {per}",
+        "Звонил {fper} из {org_gen}",
+        "Гость : {lper} ( {en_city} )",
+        "Представитель поставщика {lper} прибудет {date}",
+        "Представитель {en_org} — {lper}",
+        "Dear {lper} ,",
+        "Регистрация : {fper_init}",
+        "Счёт оплатит {fper}",
+        "Передайте {fper_dat} документы по {abbr}",
+        "Иностранный работник : {fper_sf} , гражданство : {country}",
+        "Сотрудник : {fper_sf} , патент № {dnine}",
+        "{lper} , {en_pos} , {en_org}",
+        "Встреча с {lper} в {prod} в {time}",
+        "От : {lper} < {email} >",
+        "Кому : {fper_dat}",
+        "{fper}",
+        "{lper}",
+        # negatives
+        "Перевод документов с {lang} языка заверен нотариально",
+        "Иностранный работник обязан предоставить документы",
+        "Гражданство : лицо без гражданства",
+        "Translation from {lang} is attached",
+    ]),
+    "bare": ("ru", [
+        "ключи оставил {first}",
+        "Ключи оставил {first} , забери у охраны",
+        "Ключи у {first_gen}",
+        "Отчёт сделает {sur}",
+        "Подпишет {sur_f}",
+        "Подпишет {sur}",
+        "Это к {sur_dat}",
+        "Спроси у {first_gen}",
+        "{first} в отпуске до {date}",
+        "{sur} на больничном",
+        "Передай {first_dat} , что {abbr} готов",
+        "Звонил {first} , просил перезвонить",
+        "Документы забрал {sur}",
+        "{greet_end} , {first} .",
+        "{greet_end} , {first} !",
+        "{greet_end} , {first}",
+        "Хорошо , {first} , сделаю",
+        "{first} , посмотри , пожалуйста",
+        "Доброе утро , {first} !",
+        "Дорогой {first_m} !",
+        "Дорогая {first_f} , поздравляем !",
+        "Дорогая {per_io_f} !",
+        "Дорогой {per_io_m} , спасибо за поддержку !",
+        "Согласовала {sur_f}",
+        "Отгрузку проверил {sur} , всё на месте",
+        "Завтра выходит {first} , ему передать ключи",
+        "Курьером поедет {first}",
+        "У {sur_gen} есть доступ к {prod}",
+        "С {sur_ins} договорились на {date}",
+        "— {first}",
+        "{init_sig}",
+        "{init_sig} , {pos}",
+        "Исп . {init_sig}",
+        "Ответ подготовил {init_sig}",
+        "{first} ( бухгалтерия )",
+        "Пропуск на имя {sur_gen} заказан",
+        "{sur} ? Он уже ушёл",
+        # negatives
+        "Дорогие коллеги !",
+        "Дорогой ценой , но успели",
+        "Спасибо , коллеги !",
+        "Хорошо , сделаю",
+        "{greet_end} .",
+        "Ключи на вахте",
+        "Подпишем завтра",
+    ]),
+    "table": ("ru", [
+        "{num} {sep} {per_sf} {sep} {phone} {sep} {email}",
+        "{num} {sep} {per_init} {sep} {pos} {sep} {price}",
+        "{per_sf} {sep} {org} {sep} {date} {sep} {status}",
+        "{per_sf} {sep} {pos} {sep} {price}",
+        "{per_sf}",
+        "{per_sf}",
+        "{per_init}",
+        "{fper_sf}",
+        "{lper}",
+        "{date} {sep} {org} {sep} {per_init} {sep} {status}",
+        "{num} {sep} {fper_sf} {sep} {pos} {sep} {price}",
+        "Менеджер : {per_sf}",
+        "Клиент : {per} , {org}",
+        "Комментарий : {first} перезвонит {date}",
+        "Команда : {per_fi} , {per_fi2} , {per_fi3}",
+        "Спикер — {per}",
+        "Заметки докладчика : напомнить {first_dat} про {abbr}",
+        "Ответственный : {per_init}",
+        "Контакты : {per} , {phone}",
+        "Руководитель направления — {per_fi}",
+        "{per_fi} — {pos}",
+        "{status} {sep} {per_sf}",
+        # negatives
+        "{header} {sep} {header2} {sep} {header3} {sep} {header4}",
+        "{header} {sep} {header2} {sep} {header3}",
+        "{header}",
+        "{num} {sep} {status} {sep} {price}",
+        "{date} {sep} {price} {sep} {status}",
+        "Всего {sep} {price}",
+        "Заметки докладчика : показать динамику по {abbr}",
+        "Слайд {num} . {title}",
+    ]),
+    "homonym": ("ru", [
+        "{hom_io} , добрый день !",
+        "Звонила {hom} из бухгалтерии",
+        "{hom} , пришлите счёт , пожалуйста",
+        "Передайте {hom_dat} документы",
+        "Ответственный : {hom_fs}",
+        "Дорогая {hom} , спасибо !",
+        "Дорогой {per_io_m} , поздравляем с юбилеем !",
+        "Офис на {street_adj} , {num}",
+        "Склад : ул . {street_adj_nom} , д . {num}",
+        "Доставка на {street_adj_acc} {num} , корпус {num2}",
+        "По {street_adj} улице проезд закрыт",
+        "Магазин на углу {street_adj} и {street_adj2}",
+        "Документы привезите на {street_adj_acc} {num} , корпус {num2}",
+        "Оригиналы отправьте на {street_adj_acc} {num}",
+        "Встречаемся на {street_adj} {num} в {time}",
+        "Склад переехал на {street_adj_acc} {num}",
+        # negatives
+        "Надежда на быстрое решение остаётся",
+        "Есть надежда , что поставка придёт в срок",
+        "Плата за аренду вносится ежемесячно до {num} числа",
+        "Плата за пользование участком составляет {price} руб .",
+        "Плата не взимается",
+        "Арендная плата : {price} руб . в месяц",
+        "Вера в продукт — главное для команды",
+        "Любовь к деталям — наш принцип",
+        "Слава богу , всё подписали",
+        "Роза ветров учтена в проекте",
+        "Лилия , пион и роза — в составе букета",
+        "{hom_common_cap} : {frag}",
+        "Дорогие коллеги , {chat}",
+        "Дорогой ценой , но сдали в срок",
+        "Плата",
+        "Надежда",
+    ]),
+    "docs05": ("ru", [
+        "Собственник ТС : {per}",
+        "Владелец : {per} , СТС {dtwo} {rutwo} № {dsix}",
+        "Пациент : {per} , {year} г . р .",
+        "Лечащий врач {per_init}",
+        "Должник : {per}",
+        "Взыскатель : {org}",
+        "Истец : {per}",
+        "Ответчик : {org}",
+        "Судья {per_init}",
+        "Продавец {per} передаёт , а покупатель {per2} принимает автомобиль {car}",
+        "Арендатор {per} , полис ОМС {dsixteen}",
+        "Арендодатель : {per} , выписка из ЕГРН от {date}",
+        "Иностранный гражданин {fper_sf} , ВНЖ серии {dtwo} № {dseven}",
+        "Пациентка {per_fi} , диагноз : {diag}",
+        "Заявление {per_gen} зарегистрировано в КУСП № {num}",
+        # negatives
+        "СТС {dtwo} {rutwo} № {dsix}",
+        "Свидетельство о регистрации ТС ( СТС ) : серия {dtwo} {rutwo} № {dsix}",
+        "ПТС {dtwo} {rutwo} {dsix} от {date}",
+        "ЭПТС № {dfifteen}",
+        "Полис ОМС № {dsixteen}",
+        "Полис ОМС : {dsixteen}",
+        "Номер полиса ОМС единого образца : {dsixteen}",
+        "MAC-адрес : {mac}",
+        "MAC {mac} , IP {ip}",
+        "Исполнительный лист серии ФС № {dnine} от {date}",
+        "ФС № {dnine}",
+        "Автомобиль {car} , {year} года выпуска",
+        "Марка , модель ТС : {car}",
+        "{car} , цвет белый , пробег {num} 000 км",
+        "Транспортное средство : {car_caps}",
+        "{car}",
+        "{car}",
+        "Выписка из ЕГРН от {date}",
+        "Сведения ЕГРН : запись № {cad}",
+        "КУСП № {num} от {date}",
+        "Зарегистрировано в КУСП за № {num}",
+        "ВНЖ серии {dtwo} № {dseven}",
+        "Вид на жительство ( ВНЖ ) выдан {date}",
+        "Диагноз : {diag}",
+        "Код МКБ-10 : {mkb} {diag}",
+        "{diag}",
+        "{diag} ( {mkb} )",
+        "Сопутствующий : {diag}",
+        "Полис ОСАГО серии ХХХ № {dten}",
+        "{docterm}",
+        "{docterm} : {dten}",
+        "{docterm} {sep} {docterm2} {sep} {docterm3}",
+        # public institutions in medical / court / registry documents are not counterparties (O, as in the genre gold)
+        "{inst} , кабинет {num}",
+        "{inst}",
+        "Выдана : {inst} , {date}",
+        "Направлен в {inst}",
+        "Полис",
+        "Почта : {email}",
+    ]),
+})
 GENRE_WEIGHTS = {"proposal": 3, "letter": 2, "invoice": 2, "manual": 2, "resume": 2, "chat": 2, "letter_en": 1,
-                 "resume_en": 1, "reconciliation": 1, "deck": 1}
+                 "resume_en": 1, "reconciliation": 1, "deck": 1,
+                 # 1.2.0
+                 "initials": 2, "foreign": 2, "bare": 2, "table": 2, "homonym": 1, "docs05": 2}
 ENTITY_KEYS = {"per", "per_gen", "per_dat", "per_ins", "per_short", "per_fi", "per_first", "per_io", "per_io_m",
                "per_io_f", "per_caps", "org", "org_gen", "org_dat", "org_caps", "org_desc", "studio", "bank", "univ", "loc",
                "loc_gen", "loc_prep", "region", "street", "en_per", "en_sur", "en_per_caps", "en_org", "en_city",
-               "en_univ"}
+               "en_univ",
+               # 1.2.0
+               "per_init", "per_init_gen", "per_init_dat", "per_init_ins", "fper", "fper_gen", "fper_dat", "fper_ins",
+               "fper_sf", "fper_init", "lper", "first", "first_gen", "first_dat", "first_ins", "first_m", "first_f",
+               "sur", "sur_gen", "sur_dat", "sur_ins", "sur_f", "init_sig", "per_sf", "hom", "hom_dat", "hom_io",
+               "hom_fs", "street_adj", "street_adj_nom", "street_adj_acc", "country"}
 PLACEHOLDER_RE = re.compile(r"(\{\w+\})")
+DIGIT_KEYS = {"dtwo": 2, "dfour": 4, "dsix": 6, "dseven": 7, "dnine": 9, "dten": 10, "dfifteen": 15, "dsixteen": 16}
 
 
 def _key(raw: str) -> str:
@@ -803,6 +1313,83 @@ def _span(rng, lx, key, lang):
         return rng.choice(lx.en_city), "LOC"
     if kind == "en_univ":
         return rng.choice(lx.en_univ), "ORG"
+    # ---- 1.2.0 entities
+    if kind in ("per_init", "per_init_gen", "per_init_dat", "per_init_ins"):
+        case = {"per_init": "nom", "per_init_gen": "gen", "per_init_dat": "dat", "per_init_ins": "ins"}[kind]
+        return initials_person(rng, lx, case), "PER"
+    if kind == "fper_init":
+        return initials_person(rng, lx, "nom", foreign=1.0), "PER"
+    if kind in ("fper", "fper_gen", "fper_dat", "fper_ins"):
+        case = {"fper": "nom", "fper_gen": "gen", "fper_dat": "dat", "fper_ins": "ins"}[kind]
+        return foreign_person(rng, lx, case), "PER"
+    if kind == "fper_sf":
+        return foreign_person(rng, lx, "nom", surname_first=True), "PER"
+    if kind == "lper":
+        return latin_person(rng, lx), "PER"
+    if kind in ("first", "first_gen", "first_dat", "first_ins"):
+        case = {"first": "nom", "first_gen": "gen", "first_dat": "dat", "first_ins": "ins"}[kind]
+        return bare_first(rng, lx, case), "PER"
+    if kind == "first_m":
+        return bare_first(rng, lx, "nom", female=False), "PER"
+    if kind == "first_f":
+        return bare_first(rng, lx, "nom", female=True), "PER"
+    if kind in ("sur", "sur_gen", "sur_dat", "sur_ins"):
+        case = {"sur": "nom", "sur_gen": "gen", "sur_dat": "dat", "sur_ins": "ins"}[kind]
+        return bare_surname(rng, lx, case), "PER"
+    if kind == "sur_f":
+        return bare_surname(rng, lx, "nom", female=True), "PER"
+    if kind == "init_sig":
+        first, _, sur = (_foreign_parts if rng.random() < 0.3 else _parts)(rng, lx, "nom")
+        return (f"{first[0]}. {sur}" if rng.random() < 0.8 else f"{sur} {first[0]}."), "PER"
+    if kind == "per_sf":
+        first, patr, sur = (_foreign_parts if rng.random() < 0.15 else _parts)(rng, lx, "nom")
+        return (f"{sur} {first} {patr}".strip() if rng.random() < 0.75 else f"{sur} {first}"), "PER"
+    if kind in ("hom", "hom_dat"):
+        return rng.choice(lx.homonym_f)[0 if kind == "hom" else 2], "PER"
+    if kind == "hom_io":
+        return f"{rng.choice(lx.homonym_f)[0]} {_patronymic(rng.choice(lx.ru_patr), True, 'nom')}", "PER"
+    if kind == "hom_fs":
+        return f"{rng.choice(lx.homonym_f)[0]} {_surname(rng, lx, True, 'nom')}", "PER"
+    if kind in ("street_adj", "street_adj_nom", "street_adj_acc"):
+        return rng.choice(lx.street_adj)[{"street_adj": 0, "street_adj_nom": 1, "street_adj_acc": 2}[kind]], "LOC"
+    if kind == "country":
+        return rng.choice(lx.countries), "LOC"
+    # ---- 1.2.0 O fillers
+    if kind == "car":
+        return rng.choice(lx.car_models), None
+    if kind == "car_caps":
+        return rng.choice(lx.car_models).upper(), None
+    if kind == "diag":
+        return rng.choice(lx.diagnoses), None
+    if kind == "mkb":
+        return rng.choice(MKB_CODES), None
+    if kind == "inst":
+        return rng.choice(INSTITUTIONS).replace("{n}", str(rng.randint(1, 220))), None
+    if kind == "docterm":
+        return rng.choice(DOCS05_TERMS), None
+    if kind == "header":
+        return rng.choice(HEADERS_RU), None
+    if kind == "status":
+        return rng.choice(STATUSES_RU), None
+    if kind == "greet_end":
+        return rng.choice(GREETING_END), None
+    if kind == "hom_common_cap":
+        w = rng.choice(HOMONYM_COMMON)
+        return w[0].upper() + w[1:], None
+    if kind == "lang":
+        return rng.choice(LANGS), None
+    if kind == "sep":
+        return rng.choice(["|", "|", ";", ",", ""]), None
+    if kind == "rutwo":
+        return "".join(rng.choice("АВЕКМНОРСТУХ") for _ in range(2)), None
+    if kind == "mac":
+        return ":".join(f"{rng.randint(0, 255):02X}" for _ in range(6)), None
+    if kind == "ip":
+        return ".".join(str(rng.randint(1, 254)) for _ in range(4)), None
+    if kind == "cad":
+        return f"{rng.randint(10, 89)}:{rng.randint(1, 99):02d}:{_digits(rng, 7)}:{rng.randint(1, 9999)}", None
+    if kind in DIGIT_KEYS:  # placeholder keys must not end in a digit (_key strips it)
+        return _digits(rng, DIGIT_KEYS[kind]), None
     # ---- O fillers
     if kind == "role":
         return rng.choice(RU_ROLE), None

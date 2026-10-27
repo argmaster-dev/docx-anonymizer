@@ -40,6 +40,24 @@ Power BI|Tableau|Looker|Metabase|Grafana|Qlik|Excel-таблица|PDF-файл|
   ...NEVER_MASK_ORGS,
 ];
 
+/**
+ * Документы, полисы, реестры, кодексы и коды версии 0.5 (WP12-C — новые категории; WP12-E): модель 1.1.0 называла их организациями
+ * («СТС», «Полис ОМС», «MAC», «ФС», «Лада Веста»), а значения рядом с ними закрывают детекторы идентификаторов. Марки и модели
+ * автомобилей — только целыми названиями модели («Лада» одна — ещё и женское имя, «Toyota» — и компания).
+ */
+// prettier-ignore
+export const STOP_DOCS_05 = [
+  ...wordList(`СТС|ПТС|ЭПТС|ОМС|Полис ОМС|полис ОМС|ДМС|Полис ДМС|ОСАГО|Полис ОСАГО|КАСКО|СНИЛС|MAC|MAC-адрес|IP-адрес|ФС|ЕГРН|ЕГРП
+КУСП|ВНЖ|РВП|МКБ|МКБ-10|ГРЗ|VIN|ПТС/ЭПТС|СТС/ПТС|ЗАГС|УИД|Полис|Почта|Эл. почта|Электронная почта
+ГПК|АПК|УПК|КоАП|КАС|ГК РФ|ГПК РФ|АПК РФ|УК РФ|УПК РФ|НК РФ|ТК РФ|ЖК РФ|СК РФ|ЗК РФ|КоАП РФ|КАС РФ`),
+  ...wordList(`Лада Веста|Лада Гранта|Лада Ларгус|Лада Нива|Лада Приора|Лада Калина|Лада Иксрей|Lada Vesta|Lada Granta|Lada Largus
+Lada Niva|Toyota Camry|Toyota Corolla|Toyota RAV4|Toyota Land Cruiser|Kia Rio|Kia Sportage|Kia Ceed|Hyundai Solaris|Hyundai Creta
+Hyundai Tucson|Volkswagen Polo|Volkswagen Tiguan|Skoda Octavia|Skoda Rapid|Renault Logan|Renault Duster|Renault Sandero
+Haval Jolion|Haval F7|Chery Tiggo|Geely Coolray|Geely Monjaro|Nissan Qashqai|Nissan X-Trail|Mitsubishi Outlander|Ford Focus
+Mazda CX-5|BMW X5|Mercedes-Benz E200|ГАЗель Next|УАЗ Патриот|Тойота Камри|Киа Рио|Хендай Солярис|Шкода Октавия|Фольксваген Поло
+Рено Логан|Чери Тигго|Хавал Джолион`),
+];
+
 // Кириллические буквы, совпадающие по начертанию с латинскими: «1С» и «1C», «ВЭД» с латинской «B» — одно слово.
 const HOMOGLYPHS = { а: 'a', в: 'b', е: 'e', к: 'k', м: 'm', н: 'h', о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x' };
 
@@ -60,7 +78,7 @@ export function stopKey(s) {
 }
 
 /** Встроенный стоп-список (ключи `stopKey`). */
-export const BUILTIN_STOPLIST = Object.freeze(new Set([...STOP_ABBREVIATIONS, ...STOP_PRODUCTS].map(stopKey)));
+export const BUILTIN_STOPLIST = Object.freeze(new Set([...STOP_ABBREVIATIONS, ...STOP_PRODUCTS, ...STOP_DOCS_05].map(stopKey)));
 
 /**
  * Стоп-список документа: встроенный ∪ пользовательский (`settings.nerStoplist`).

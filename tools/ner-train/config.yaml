@@ -2,7 +2,7 @@
 # Any key can be overridden from the command line: --set train.epochs=10 --set run_id=exp1
 id: rubert-tiny2-ner-ruen          # model pack id
 run_id: rubert-tiny2-ner-ruen      # artifacts go to runs/<run_id>/
-version: 1.1.0
+version: 1.2.0
 base_model: cointegrated/rubert-tiny2
 seed: 42
 labels: [O, B-PER, I-PER, B-ORG, I-ORG, B-LOC, I-LOC]
@@ -10,7 +10,8 @@ labels: [O, B-PER, I-PER, B-ORG, I-ORG, B-LOC, I-LOC]
 data:
   max_length: 128
   # sources: corpus mix of the training split. weight = how many times the train split is repeated
-  # (a fractional part subsamples, e.g. 1.5 = once + a random half). Licenses: README «Источники 1.1.0».
+  # (a fractional part subsamples, e.g. 1.5 = once + a random half; 0 = source off). Licenses: README «Источники 1.2.0».
+  # dedupe: true — train sentences equal to a test sentence (WikiANN test, test_factru, overlap_fixtures) are removed.
   # mode: sources        — every source below;
   #       teacher_synth  — fallback when external corpora are rejected: only kind=wikiann sources are kept and the
   #                        synthetic share is raised to >= synth.teacher_synth_min_share (teacher soft labels on it).
@@ -44,9 +45,45 @@ data:
       license: "MIT (annotations, dialogue-evaluation 2015); texts from OpenCorpora, CC BY-SA 3.0"
       url: https://github.com/dialogue-evaluation/factRuEval-2016
       citation: "Starostin et al., FactRuEval 2016: Evaluation of Named Entity Recognition and Fact Extraction Systems for Russian, Dialogue 2016"
+    # 1.2.0 (owner decision 26.10.2026): corpora WITHOUT an explicit license on the texts — NOTICE, README and the help
+    # page say so and that the model is used at the user's own risk
+    - id: nerel-1.1
+      kind: nerel
+      lang: ru
+      weight: 0.5             # half of the train split (abl. WP12-E: x1 costs WikiANN ru ORG -0.01 on validation)
+      dedupe: true
+      no_license: true        # NOTICE / README / help: corpus without an explicit license, model at the user's own risk
+      commit: 8f07d3e410f322d5dbf6b68b13fbf4a4aa077fe9
+      sha256: ffd4691e04a8df2a4cabddd361a168da41dffd281b9810709fb20e7b0513b7cc
+      version_dir: NEREL-v1.1
+      license: "NO EXPLICIT LICENSE (repository has no license file; texts from Russian Wikinews); used at the owner's decision, model used at the user's own risk"
+      url: https://github.com/nerel-ds/NEREL
+      citation: "Loukachevitch et al., NEREL: A Russian Dataset with Nested Named Entities, Relations and Events, RANLP 2021"
+    - id: nerus-lenta
+      kind: nerus
+      lang: ru
+      weight: 1
+      dedupe: true
+      no_license: true
+      sentences: 20000        # random sentences of the document sample (pool ≈ 48.6k sentences, 4 417 documents)
+      doc_share: 0.006        # deterministic document sample of the 739k-document dump (hash of seed:doc id)
+      seed: 13
+      file: nerus_lenta.conllu.gz
+      download: https://storage.yandexcloud.net/natasha-nerus/data/nerus_lenta.conllu.gz
+      sha256: fefd13f9af2efaa641580713e84c2f52fec646a7cdf7833a268a3adc70591d94
+      license: "NO EXPLICIT LICENSE on the texts (Lenta.ru news; MIT covers the natasha/nerus code only); silver annotation by Slovnet BERT NER; used at the owner's decision, model used at the user's own risk"
+      url: https://github.com/natasha/nerus
+      citation: "Nerus — large silver standard Russian corpus with NER, morphology and syntax markup (natasha project, A. Kukushkin)"
+  # evaluation fixtures checked for overlap with the dedupe sources (paths from the repository root)
+  overlap_fixtures:
+    - "tests/fixtures/genres/**/*.gold.json"
+    - "tests/fixtures/heldout/**/*.gold.json"
+    - "tests/fixtures/ner/backlog-0.4.json"
+    - "tests/fixtures/ner/heldout-names.json"
   synth:
     enabled: true
-    share: 0.35          # share of synthetic sentences in the final train split
+    share: 0.42          # share of synthetic sentences in the final train split (1.1.0: 0.35; 1.2.0 adds six genres
+                         # and NEREL / Nerus — the 1.1.0 genres keep about their absolute volume)
     max_ratio: 0.5       # upper bound for share (was a hard 20 % assert in 1.0.0)
     teacher_synth_min_share: 0.5   # share used in data.mode=teacher_synth
     genre_share: 0.8     # genre templates among synthetic sentences (the rest: contract templates of 1.0.0)
@@ -57,7 +94,12 @@ data:
     test_size: 2000
     # genre corpus gold (WP11-B, path from the repository root): word-list items sharing a proper-name word with its
     # PERSON / COMPANY values are dropped, so eval-genres stays a held-out measurement (data_info.json gold_exclusion)
-    exclude_gold: "tests/fixtures/genres/**/*.gold.json"
+    # 1.2.0: also the held-out fixtures (WP11-D) and the K11 backlog cases (heldout2 / heldout3 names)
+    exclude_gold:
+      - "tests/fixtures/genres/**/*.gold.json"
+      - "tests/fixtures/heldout/**/*.gold.json"
+      - "tests/fixtures/ner/backlog-0.4.json"
+      - "tests/fixtures/ner/heldout-names.json"
 
 train:
   learning_rate: 2.0e-4   # 5e-5 (spec default) gave ORG 0.708; see README
@@ -74,6 +116,9 @@ export:
 
 quantize:
   max_size_mb: 40
+  # 1.2.0: the token classifier and the FFN of the last layer stay fp32 (+1 MB): argmax agreement on the 50-sentence
+  # gate 98.96 % with everything int8 -> 99.10 %, mean |dlogit| 0.031 -> 0.027 (README 1.2.0)
+  keep_fp32: [classifier/MatMul, layer.2/output/dense/MatMul, layer.2/intermediate/dense/MatMul]
 
 verify:
   sentences: 50
@@ -85,10 +130,20 @@ calibrate:
   grid_stop: 0.95
   grid_step: 0.05
 
-gates:                          # concept 0.4, K8; evaluate.py --strict exits 1 when a gate fails
+evaluate:
+  threshold: 0.7                # nerThreshold of the extension (heldout_names decoding)
+  # K10: hand-written held-out sentences (foreign names, names without context, initials, tables) + the K11 backlog
+  heldout_names:
+    - tests/fixtures/ner/heldout-names.json
+    - tests/fixtures/ner/backlog-0.4.json
+  baseline_model: runs/rubert-tiny2-ner-ruen-1.1.0/model   # the published 1.1.0 (PyTorch fp32 of the same run)
+
+gates:                          # concept 0.5, K10; evaluate.py --strict exits 1 when a gate fails
   ru_per_f1: 0.91
-  ru_org_f1: 0.75               # "no regression to 1.0.0" (coordinator, WP11-C2); 0.78 is not reachable by rubert-tiny2
+  ru_org_f1: 0.75               # "no regression to 1.1.0"; 0.78 is not reachable by rubert-tiny2 (README 1.1.0)
   synth_genre_org_precision: 0.85
+  synth_genre_false_org_max: 5  # false ORG spans on the entity-free sentences of synth_genre_test (at most)
+  heldout_names_recall_gain: 0.10  # PER recall on evaluate.heldout_names: this model minus the 1.1.0 baseline
   en_per_f1: 0.80               # informational
 
 # Knowledge distillation (teacher.py, then train.py uses the teacher's soft labels)

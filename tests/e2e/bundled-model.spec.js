@@ -1,12 +1,13 @@
 // WP10-C (К15, К17): полная сборка — модель NER из архива расширения ставится сама при установке, без сети и без импорта.
 // Гейт — dist-e2e/models/index.json (полная e2e-сборка):
-//   flock <lock> sh -c 'node scripts/build.mjs --e2e --with-model=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.1.0.zip && npx playwright test bundled-model.spec.js'
+//   flock <lock> sh -c 'node scripts/build.mjs --e2e --with-model=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.0.zip && npx playwright test bundled-model.spec.js'
 // Сценарий: чистый профиль → ≤ 30 с nerModel и bundledModelSha выставлены → файлы в OPFS → карточка «проверенный пакет» →
 // анализ даёт source:'ner' → повторный bootstrap файлы не переписывает → удаление не возвращает модель само → «Восстановить»
 // → «Сбросить настройки» модель не трогает. Второй сценарий — копия сборки с испорченным zip: «не удалось ({код})», «Повторить».
-// Третий (версия 0.4, WP11-C3, К9) — обновление поверх 1.0.0, гейт NER_PACK_PREV (путь к zip прежнего пакета того же id):
-//   flock <lock> sh -c 'node scripts/build.mjs --e2e --with-model=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.1.0.zip &&
-//     NER_PACK_PREV=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.0.0.zip npx playwright test bundled-model.spec.js'
+// Третий (версия 0.4, WP11-C3, К9; 0.5, WP12-E — 1.1.0 → 1.2.0) — обновление поверх прежнего пакета, гейт NER_PACK_PREV (путь к zip
+// прежнего пакета того же id):
+//   flock <lock> sh -c 'node scripts/build.mjs --e2e --with-model=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.0.zip &&
+//     NER_PACK_PREV=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.1.0.zip npx playwright test bundled-model.spec.js'
 import { createHash } from 'node:crypto';
 import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -225,9 +226,10 @@ test.describe('испорченный zip встроенной модели', ()
   });
 });
 
-// Обновление встроенной модели (версия 0.4, WP11-C3, К9): профиль, где стоит прежний пакет того же id (1.0.0 — импорт через
-// настройки или полный архив 0.3) и bundledModelSha = его sha, после обновления расширения до полной сборки с 1.1.0 получает
-// 1.1.0 сам: новый sha → план install → MODEL_INSTALL → в OPFS один слот с 1.1.0, bundledModelSha = sha 1.1.0, сети нет.
+// Обновление встроенной модели (версия 0.4, WP11-C3, К9; версия 0.5, WP12-E): профиль, где стоит прежний пакет того же id (1.1.0 —
+// полный архив 0.4 или импорт через настройки; в 0.4 — 1.0.0) и bundledModelSha = его sha, после обновления расширения до полной сборки
+// с новой версией (1.2.0) получает её сам: новый sha → план install → MODEL_INSTALL → в OPFS один слот с новой версией,
+// bundledModelSha = её sha, сети нет.
 // Обновление — повторная команда CDP Extensions.loadUnpacked того же каталога (как кнопка «Обновить» на chrome://extensions:
 // onInstalled с reason 'update'); поэтому сценарий идёт с earlyCapture — расширение загружено той же командой.
 // chrome.runtime.reload() под Playwright не подходит: расширение после него остаётся выгруженным (ERR_BLOCKED_BY_CLIENT).
@@ -256,10 +258,10 @@ const opfsSlots = (page) =>
   });
 
 test.describe('обновление поверх прежней версии', () => {
-  test.skip(!PREV, 'нужен NER_PACK_PREV — путь к zip прежней версии встроенного пакета (1.0.0)');
+  test.skip(!PREV, 'нужен NER_PACK_PREV — путь к zip прежней версии встроенного пакета (1.1.0)');
   test.use({ earlyCapture: true });
 
-  test('прежний пакет из настроек и его sha в профиле → после обновления 1.1.0 ставится сам, один слот, без сети', async ({
+  test('прежний пакет из настроек и его sha в профиле → после обновления новая версия ставится сама, один слот, без сети', async ({
     context,
     extensionId,
     extensionDir,
@@ -303,7 +305,7 @@ test.describe('обновление поверх прежней версии', (
     await expect.poll(async () => (await stored(page)).bundledModelSha, { timeout: 30000, intervals: [100, 250, 500] }).toBe(BUNDLED.sha256);
     const updateMs = Date.now() - t0;
 
-    // 4. Итог: установлен 1.1.0 (встроенный), в OPFS один слот без маркера, настройки на новом sha, ошибки нет
+    // 4. Итог: установлена новая версия (встроенная), в OPFS один слот без маркера, настройки на новом sha, ошибки нет
     expect(await stored(page)).toMatchObject({ nerModel: BUNDLED.id, bundledModelSha: BUNDLED.sha256, bundledModelError: '' });
     const after = await opfsSlots(page);
     expect(after.map((x) => [x.version, x.packSha256, x.installing])).toEqual([[BUNDLED.version, BUNDLED.sha256, false]]);

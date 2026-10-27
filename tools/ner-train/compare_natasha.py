@@ -23,8 +23,11 @@ Tokens are joined with single spaces for Natasha; Natasha's character spans are 
 reported (spans whose start/end fall inside a word). Metric: seqeval (default mode), exact span match, PER/ORG/LOC.
 
 Genre corpus (tests/fixtures/genres/**, Russian documents): text from DOCX (word/document.xml + headers, footers,
-footnotes; paragraphs joined with "\\n") and from the PDF text snapshot <name>.pdf.txt. Gold has values only, so the
-metric is document level: per document the sets of normalized PERSON / COMPANY values vs the normalized values of the
+footnotes; paragraphs joined with "\\n"), from the PDF text snapshot <name>.pdf.txt and (1.2.0) from the office formats
+of version 0.5 ("office": XLSX cells, PPTX slide and notes paragraphs, CSV / JSON as is).
+--pipeline-json adds the whole extension pipeline (rules + dictionaries + model, tools/ner-train/pipeline_values.mjs:
+analyze() in the commercial mode) as one more row of the document-level table, scored by the found values.
+Gold has values only, so the metric is document level: per document the sets of normalized PERSON / COMPANY values vs the normalized values of the
 predicted PER / ORG spans (exact value match), plus a lenient overlap variant using gold occurrences found in the text.
 
 Speed and cold start are measured in fresh subprocesses with one CPU thread (OMP/MKL/OpenBLAS = 1, ORT intra-op = 1).
@@ -367,12 +370,19 @@ def bridge_punct(preds, text):
             nxt[2] = "I"
 
 
+GAP_INITIALS_RE = re.compile(r"(?:[ \t\u00a0]*[^\W\d_]\.)+[ \t\u00a0]*")
+
+
 def join_adjacent(spans, text, words=None):
-    """bio.js joinAdjacent: same-type spans separated only by spaces/tabs/NBSP become one (score: word-weighted mean;
-    here weighted by span character length as a proxy)."""
+    """bio.js joinAdjacent (version 0.5): same-type spans separated only by spaces/tabs/NBSP become one; PER spans also
+    when they touch ("Комаров Р." + "А.") or are separated only by initials with a dot ("А." + "Иванов" in
+    "А.А.Иванов"). Score: word-weighted mean (here weighted by span character length as a proxy)."""
     out = []
     for typ, a, b, sc in spans:
-        if out and out[-1][0] == typ and re.fullmatch(r"[ \t\u00a0]+", text[out[-1][2]:a] or "x"):
+        gap = text[out[-1][2]:a] if out else "x"
+        initials = typ == "PER" and (gap == "" or (GAP_INITIALS_RE.fullmatch(gap) and all(
+            c.isupper() for c in re.findall(r"[^\W\d_]", gap))))
+        if out and out[-1][0] == typ and (re.fullmatch(r"[ \t\u00a0]+", gap) or initials):
             t0, a0, b0, s0 = out[-1]
             n1, n2 = b0 - a0, b - a
             out[-1] = (typ, a0, b, (s0 * n1 + sc * n2) / (n1 + n2))
@@ -437,6 +447,40 @@ def occurrences(text, value):
     return out
 
 
+A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+S = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+
+
+def office_text(base):
+    """Text of the office formats of version 0.5 (WP12-B): XLSX — one line per cell (shared and inline strings),
+    PPTX — one line per paragraph of slides and notes, CSV / JSON — the file as is (UTF-8 or CP1251)."""
+    if Path(base + ".xlsx").exists():
+        lines = []
+        with zipfile.ZipFile(base + ".xlsx") as z:
+            for n in sorted(z.namelist()):
+                if n == "xl/sharedStrings.xml" or re.match(r"xl/worksheets/sheet\d+\.xml$", n):
+                    root = ET.fromstring(z.read(n))
+                    for si in list(root.iter(S + "si")) + list(root.iter(S + "is")):
+                        lines.append("".join(t.text or "" for t in si.iter(S + "t")))
+        return "\n".join(lines)
+    if Path(base + ".pptx").exists():
+        lines = []
+        with zipfile.ZipFile(base + ".pptx") as z:
+            for n in sorted(z.namelist()):
+                if re.match(r"ppt/(slides/slide|notesSlides/notesSlide)\d+\.xml$", n):
+                    for para in ET.fromstring(z.read(n)).iter(A + "p"):
+                        lines.append("".join(t.text or "" for t in para.iter(A + "t")))
+        return "\n".join(lines)
+    for ext in (".csv", ".json"):
+        if Path(base + ext).exists():
+            raw = Path(base + ext).read_bytes()
+            try:
+                return raw.decode("utf-8")
+            except UnicodeDecodeError:
+                return raw.decode("cp1251")
+    return None
+
+
 def genre_docs():
     docs = []
     for gold_path in sorted((REPO / "tests" / "fixtures" / "genres").glob("*/*.gold.json")):
@@ -450,12 +494,31 @@ def genre_docs():
             texts["docx"] = docx_text(base + ".docx")
         if Path(base + ".pdf.txt").exists():
             texts["pdf"] = Path(base + ".pdf.txt").read_text(encoding="utf-8")
+        office = office_text(base)
+        if office is not None:
+            texts["office"] = office
         docs.append({"name": name, "genre": gold_path.parent.name, "gold": gold, "texts": texts})
     return docs
 
 
+def values_predict(values_by_doc, fmt):
+    """Predictions given as values (the whole extension pipeline, pipeline_values.mjs) -> predict(text, doc) with the
+    spans of every occurrence of every value in the text (for the overlap variant)."""
+    def predict(text, d):
+        vals = values_by_doc.get((d["genre"], d["name"], fmt), {})
+        out = []
+        for typ, cat in (("PER", "PERSON"), ("ORG", "COMPANY")):
+            for v in vals.get(cat, []):
+                occ = occurrences(text, v)
+                out += [(typ, s, e) for s, e in occ] or [(typ, -1, -1, v)]
+        return out
+    predict.with_doc = True
+    return predict
+
+
 def doc_level(docs, fmt, predict):
-    """predict(text) -> list of (type, start, end). Exact-value and overlap document-level P/R/F1 for PER and ORG."""
+    """predict(text) -> list of (type, start, end). Exact-value and overlap document-level P/R/F1 for PER and ORG.
+    A predict with `with_doc` gets (text, doc) and may return (type, -1, -1, value) for a value absent from the text."""
     cat_of = {"PER": "PERSON", "ORG": "COMPANY"}
     agg = {t: {"tp": 0, "fp": 0, "fn": 0, "ov_found": 0, "ov_pred_ok": 0, "ov_pred": 0, "gold": 0,
                "gold_absent": 0, "negative_hits": 0} for t in cat_of}
@@ -464,7 +527,7 @@ def doc_level(docs, fmt, predict):
         if fmt not in d["texts"]:
             continue
         text = d["texts"][fmt]
-        pred = predict(text)
+        pred = predict(text, d) if getattr(predict, "with_doc", False) else predict(text)
         row = {"name": d["name"], "genre": d["genre"]}
         for t, cat in cat_of.items():
             a = agg[t]
@@ -473,8 +536,9 @@ def doc_level(docs, fmt, predict):
             a["gold_absent"] += len(set(gold_vals) - set(present))
             g = {norm_value(cat, v) for v in present}
             g.discard("")
-            ps = [(s, e) for typ, s, e in pred if typ == t]
-            p = {norm_value(cat, text[s:e]) for s, e in ps}
+            ps = [(x[1], x[2]) for x in pred if x[0] == t and x[1] >= 0]
+            p = {norm_value(cat, text[s:e]) for s, e in ps} | {norm_value(cat, x[3]) for x in pred
+                                                                if x[0] == t and x[1] < 0}
             p.discard("")
             negs = {norm_value(cat, n["value"]) for n in d["gold"].get("negatives", [])
                     if n.get("category") == cat and "mode" not in n}
@@ -592,9 +656,12 @@ def sha256(p):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--run-id", default="rubert-tiny2-ner-ruen-1.1.0")
+    ap.add_argument("--run-id", default="rubert-tiny2-ner-ruen-1.2.0")
     ap.add_argument("--onnx", default=str(REPO / "models-src" / "rubert-tiny2-ner-ruen" / "model.onnx"))
-    ap.add_argument("--expect-version", default="1.1.0")
+    ap.add_argument("--expect-version", default="1.2.0")
+    ap.add_argument("--pipeline-json", action="append", default=[], metavar="LABEL=PATH",
+                    help="values found by the whole extension pipeline (pipeline_values.mjs), e.g. "
+                         "pipeline-1.2.0=runs/compare-natasha/pipeline-1.2.0.json; repeatable")
     ap.add_argument("--out", default=str(ROOT / "runs" / "compare-natasha"))
     ap.add_argument("--skip-torch", action="store_true")
     ap.add_argument("--skip-bench", action="store_true")
@@ -702,13 +769,23 @@ def main():
     # --- genre corpus (document level)
     docs = genre_docs()
     ours_text = OursText(onnx_path, onnx_path.parent / "vocab.txt")
-    genre = {"documents": {fmt: sum(1 for d in docs if fmt in d["texts"]) for fmt in ("docx", "pdf")},
+    genre = {"documents": {fmt: sum(1 for d in docs if fmt in d["texts"]) for fmt in ("docx", "pdf", "office")},
              "names": [d["name"] for d in docs]}
     def nat_post(text, lines=True):
         sp = nat.spans_lines(text) if lines else nat.spans(text)
         return [(t, a, b) for t, a, b, _ in filter_spans(join_adjacent([(t, a, b, 1.0) for t, a, b in sp], text), text)]
 
-    for fmt in ("docx", "pdf"):
+    pipelines = {}
+    for item in args.pipeline_json:
+        label, _, path = item.partition("=")
+        rows = json.loads(Path(path).read_text(encoding="utf-8"))
+        pipelines[label] = {(r["genre"], r["name"], {"docx": "docx", "pdf": "pdf"}.get(r["format"], "office")): r
+                            for r in rows["docs"]}
+        genre[f"pipeline:{label}"] = {k: v for k, v in rows.items() if k != "docs"}
+    for fmt in ("docx", "pdf", "office"):
+        for label, by_doc in pipelines.items():
+            agg, per_doc = doc_level(docs, fmt, values_predict(by_doc, fmt))
+            genre[f"{fmt}/{label}"] = {"aggregate": agg, "per_doc": per_doc}
         for post in (False, True):
             for tname in ("t0.7", "ext_defaults"):
                 th = THRESHOLDS[tname]

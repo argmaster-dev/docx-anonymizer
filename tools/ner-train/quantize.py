@@ -82,8 +82,14 @@ def main():
         pre = src
         used_pre = False
 
+    # quantize.keep_fp32: MatMul nodes left in fp32 by name suffix (1.2.0: the token classifier, 312 x 7 — argmax
+    # agreement on the 50-sentence gate 98.96 % -> see eval.json; costs a few kB)
+    keep = [str(x) for x in (cfg["quantize"].get("keep_fp32") or [])]
+    names = [n.name for n in onnx.load(str(pre)).graph.node if n.op_type == "MatMul"]
+    exclude = [n for n in names if any(n.endswith(k) for k in keep)]
+    assert len(exclude) == len(keep), f"quantize.keep_fp32 {keep} matched {exclude}"
     quantize_dynamic(str(pre), str(mid), weight_type=QuantType.QInt8, op_types_to_quantize=["MatMul"],
-                     per_channel=True, reduce_range=False)
+                     per_channel=True, reduce_range=False, nodes_to_exclude=exclude)
     m = onnx.load(str(mid))
     emb = quantize_word_embeddings(m)
     m = onnx.shape_inference.infer_shapes(m)
@@ -99,7 +105,8 @@ def main():
     size_after = dst.stat().st_size / 2**20
     limit = float(cfg["quantize"]["max_size_mb"])
     info = {"file": str(dst.relative_to(rd)), "quant_pre_process": used_pre,
-            "matmul": {"weight_type": "QInt8", "per_channel": True, "activations": "dynamic uint8"},
+            "matmul": {"weight_type": "QInt8", "per_channel": True, "activations": "dynamic uint8",
+                       "kept_fp32": exclude},
             "word_embeddings": emb, "size_fp32_mb": round(size_before, 2), "size_int8_mb": round(size_after, 2),
             "size_int8_bytes": dst.stat().st_size, "gather_quantized": gather_quantized, "ops": ops,
             "domains": domains, "opset": [f"{o.domain or 'ai.onnx'}:{o.version}" for o in m.opset_import],

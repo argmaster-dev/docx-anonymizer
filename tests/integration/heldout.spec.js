@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { buildHeldoutDocs, HELDOUT_DIR } from '../../scripts/gen-heldout-fixtures.mjs';
 import { evaluateCorpus, listCorpus, loadDoc, loadNerProvider, modeSettings, formatReport } from '../../scripts/eval-genres.mjs';
-import { registerBuiltinDetectors, clearDetectors, analyze, findOccurrences } from '../../src/core/index.js';
+import { registerBuiltinDetectors, clearDetectors, analyze, findOccurrences, fromText } from '../../src/core/index.js';
 
 const MODEL_DIR = process.env.NER_MODEL_DIR ? resolve(process.env.NER_MODEL_DIR) : '';
 /** Покрытие людей и адресов gold по вхождениям: доля вхождений, закрытых сущностями целиком. */
@@ -38,6 +38,45 @@ async function coverage(o) {
     }
   }
   return out;
+}
+
+// К11 (концепция 0.5): случаи отложенных наборов ревьюера heldout2/heldout3 из бэклога 0.4 (tests/fixtures/ner/backlog-0.4.json;
+// их значения исключены из обучающей синтетики модели 1.2.0). С моделью закрыто ≥ 80 % случаев; каждый незакрытый — в KNOWN_GAPS_K11
+// с причиной (it.fails: исправленный недочёт делает тест красным — запись удалить).
+const BACKLOG = JSON.parse(readFileSync(new URL('../fixtures/ner/backlog-0.4.json', import.meta.url), 'utf8'));
+const K11_MIN_CLOSED = 0.8;
+/** @type {{id: string, reason: string}[]} */
+const KNOWN_GAPS_K11 = [];
+
+/**
+ * Случай закрыт, если каждое вхождение каждого gold-значения целиком покрыто сущностями анализа (любой категории — утечки нет)
+ * в обоих режимах.
+ * @param {any} nerProvider
+ */
+async function backlogClosure(nerProvider) {
+  const open = [];
+  for (const c of BACKLOG.cases) {
+    const doc = fromText(
+      c.text.split('\n').map((text) => ({ kind: 'p', text, page: 1 })),
+      { name: `${c.id}.txt`, format: 'text' },
+    );
+    let ok = true;
+    for (const mode of ['normal', 'commercial']) {
+      const a = await analyze(doc, modeSettings(mode), { nerProvider: nerProvider || undefined });
+      for (const e of c.entities) {
+        const occ = findOccurrences(doc, e.value);
+        if (!occ.length) throw new Error(`${c.id}: нет «${e.value}» в тексте`);
+        for (const o of occ) {
+          const spans = a.entities.filter((x) => x.streamId === o.streamId && x.start < o.end && o.start < x.end).sort((x, y) => x.start - y.start);
+          let pos = o.start;
+          for (const x of spans) if (x.start <= pos) pos = Math.max(pos, x.end);
+          if (pos < o.end) ok = false;
+        }
+      }
+    }
+    if (!ok) open.push(c.id);
+  }
+  return { closed: BACKLOG.cases.length - open.length, total: BACKLOG.cases.length, open };
 }
 
 const leakKeys = (docs, skipModelOnly) =>
@@ -74,12 +113,25 @@ describe('набор ревью WP11-D (heldout)', () => {
     expect(r.docs.filter((d) => d.mode === 'normal' && d.negHits.length).map((d) => `${d.name}: ${d.negHits.map((n) => n.value)}`)).toEqual([]);
   }, 60000);
 
+  it('К11 без модели: печать закрытых случаев бэклога 0.4 (правила и словари)', async () => {
+    const r = await backlogClosure(null);
+    console.log(`[heldout] К11 без модели: закрыто ${r.closed}/${r.total}; открыты: ${r.open.join(', ')}`);
+    expect(r.total).toBeGreaterThanOrEqual(16);
+  }, 60000);
+
   describe.skipIf(!MODEL_DIR)('с моделью NER (NER_MODEL_DIR)', () => {
     let provider;
     beforeAll(async () => {
       provider = await loadNerProvider(MODEL_DIR);
       if (!provider) throw new Error('модель не найдена');
     }, 60000);
+
+    it(`К11: случаи бэклога 0.4 закрыты ≥ ${K11_MIN_CLOSED * 100} %, открыты ровно KNOWN_GAPS_K11`, async () => {
+      const r = await backlogClosure(provider);
+      console.log(`[heldout] К11 ${provider.label}: закрыто ${r.closed}/${r.total}; открыты: ${r.open.join(', ') || '—'}`);
+      expect(r.closed / r.total).toBeGreaterThanOrEqual(K11_MIN_CLOSED);
+      expect(r.open).toEqual(KNOWN_GAPS_K11.map((g) => g.id));
+    }, 120000);
 
     it('ни одной утечки (целиком и частью) в обоих режимах; покрытие людей и адресов ≥ 0,95', async () => {
       try {

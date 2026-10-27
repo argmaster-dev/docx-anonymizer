@@ -3,7 +3,8 @@
 // обычный режим — ноль утечек pii/ids (целиком и частично), ноль организаций, отрицательные примеры не становятся сущностью;
 // коммерческий без модели — полнота организаций с ОПФ ≥ 0,95, ложных COMPANY на КП ≤ 2; фильтры модельных ORG на корпусе —
 // стаб-провайдером, который размечает ORG каждый отрицательный пример; с моделью (NER_MODEL_DIR) — числа в отчёт и жёсткие
-// гейты К6/К7 для пакета 1.1.0 (в CI модели нет — блок пропускается); PRIVATE_FIXTURES=1 — настоящие документы из
+// гейты К6/К7 (с 0.5 — К9) для пакета 1.2.0 на всех жанрах, включая жанры 0.5 и офисные (в CI модели нет — блок пропускается);
+// PRIVATE_FIXTURES=1 — настоящие документы из
 // tests/fixtures/private, только счётчики.
 // Отчёт целиком: npm run eval-genres.
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -30,11 +31,12 @@ import {
 } from '../../scripts/eval-genres.mjs';
 import { registerBuiltinDetectors, clearDetectors, analyze, applyDecisions, findOccurrences } from '../../src/core/index.js';
 
-// Гейты К6/К7 с моделью: пороги концепции 0.4; под NER_MODEL_DIR проверка жёсткая по умолчанию (пакет 1.1.0, версия 0.4.0).
-// GENRES_MODEL_GATES=0 — только печать чисел: для прогона другой модели (1.0.0, пробные run_id), которая гейтов не обязана проходить.
+// Гейты К6/К7 с моделью: пороги концепции 0.4 (К9 концепции 0.5 — те же пороги); под NER_MODEL_DIR проверка жёсткая по умолчанию
+// (пакет 1.2.0, версия 0.5). GENRES_MODEL_GATES=0 — только печать чисел: для прогона другой модели (1.0.0, 1.1.0, пробные run_id),
+// которая гейтов не обязана проходить.
 const ENFORCE_MODEL_GATES = process.env.GENRES_MODEL_GATES !== '0';
-// гейты К6/К7 пакета 1.1.0 — на жанрах 0.4; жанры 0.5 (WP12-C) с моделью печатаются, их гейты — у модели 1.2.0 (WP12-E, К9)
-const GENRES_04 = GENRES.filter((g) => !GENRES_05.includes(g));
+// гейты пакета 1.2.0 (WP12-E, К9) — на всех жанрах: 0.4, 0.5 (WP12-C) и офисных (WP12-B); 1.1.0 брал только жанры 0.4
+const MODEL_GATE_GENRES = [...GENRES, ...OFFICE_GENRES];
 const K6_PERSON_PRECISION = 0.9;
 const K6_PERSON_RECALL = 0.85;
 const K7_COMPANY_PRECISION = 0.8;
@@ -390,7 +392,7 @@ describe('известные недочёты (KNOWN_GAPS): пока на мес
   }
 });
 
-describe.skipIf(!MODEL_DIR)('с моделью NER (NER_MODEL_DIR): гейты К6/К7 для пакета 1.1.0', () => {
+describe.skipIf(!MODEL_DIR)('с моделью NER (NER_MODEL_DIR): гейты К6/К7/К9 для пакета 1.2.0', () => {
   let withModel;
   let label;
   beforeAll(async () => {
@@ -421,9 +423,11 @@ describe.skipIf(!MODEL_DIR)('с моделью NER (NER_MODEL_DIR): гейты �
     for (const mode of ['normal', 'commercial']) {
       const hitsOf = (genres) =>
         withModel.docs.filter((d) => d.mode === mode && genres.includes(d.genre)).flatMap((d) => d.negHits.map((n) => `${d.name}.${d.format}: «${n.value}»`));
-      const hits = hitsOf(GENRES_04);
-      const hits05 = hitsOf(GENRES_05);
-      console.log(`[genres] ${label} ${mode}: отрицательных примеров стало сущностью ${hits.length} (жанры 0.5 — ${hits05.length}: ${hits05.join('; ')})`);
+      const hits = hitsOf(MODEL_GATE_GENRES);
+      const hits05 = hitsOf([...GENRES_05, ...OFFICE_GENRES]);
+      console.log(
+        `[genres] ${label} ${mode}: отрицательных примеров стало сущностью ${hits.length} (из них жанры 0.5 и офисные — ${hits05.length}): ${hits.join('; ')}`,
+      );
       expect(hits.length, hits.join('; ')).toBeLessThanOrEqual(MODEL_NEGATIVES_MAX);
     }
   });
@@ -431,8 +435,7 @@ describe.skipIf(!MODEL_DIR)('с моделью NER (NER_MODEL_DIR): гейты �
   it(`К6: PERSON P ≥ ${K6_PERSON_PRECISION}, R ≥ ${K6_PERSON_RECALL}; К7: COMPANY P ≥ ${K7_COMPANY_PRECISION}, ложных на КП ≤ ${K7_PROPOSAL_FALSE_COMPANY}, ОПФ R ≥ ${K7_OPF_RECALL}`, () => {
     const s = withModel.summary;
     const fails = [];
-    for (const g of GENRES) {
-      const gate = GENRES_04.includes(g); // жанры 0.5 с моделью — печать; гейты модели 1.2.0 на них — WP12-E (К9)
+    for (const g of MODEL_GATE_GENRES) {
       const per = catMetrics(s, 'commercial', g, 'PERSON');
       const com = catMetrics(s, 'commercial', g, 'COMPANY');
       const opf = s.commercial[g].opf;
@@ -440,8 +443,8 @@ describe.skipIf(!MODEL_DIR)('с моделью NER (NER_MODEL_DIR): гейты �
       console.log(
         `[genres] ${label} ${g}: PERSON P ${per.precision.toFixed(3)} R ${per.recall.toFixed(3)}; COMPANY P ${com.precision.toFixed(3)} (ложных ${com.fp}); ОПФ R ${opfR.toFixed(3)}`,
       );
-      if (gate && (per.precision < K6_PERSON_PRECISION || per.recall < K6_PERSON_RECALL)) fails.push(`К6 ${g}`);
-      if (gate && (com.precision < K7_COMPANY_PRECISION || opfR < K7_OPF_RECALL)) fails.push(`К7 ${g}`);
+      if (per.precision < K6_PERSON_PRECISION || per.recall < K6_PERSON_RECALL) fails.push(`К6 ${g}`);
+      if (com.precision < K7_COMPANY_PRECISION || opfR < K7_OPF_RECALL) fails.push(`К7 ${g}`);
     }
     for (const d of withModel.docs.filter((x) => x.mode === 'commercial' && x.genre === 'proposal'))
       if ((d.perCat.COMPANY?.fp ?? 0) > K7_PROPOSAL_FALSE_COMPANY) fails.push(`К7 ложные ORG ${d.name}.${d.format}`);

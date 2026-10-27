@@ -27,18 +27,19 @@ def retokenize(ds, tok, max_length):
     def fn(batch):
         enc = tok(batch["tokens"], is_split_into_words=True, truncation=True, max_length=max_length)
         labels, wids = [], []
+        ignore = batch["ignore"] if "ignore" in batch else None
         for i, tags in enumerate(batch["ner_tags"]):
             prev, lab = None, []
             w_ids = enc.word_ids(batch_index=i)
             for w in w_ids:
-                lab.append(-100 if w is None or w == prev else tags[w])
+                lab.append(-100 if w is None or w == prev or (ignore is not None and ignore[i][w]) else tags[w])
                 prev = w
             labels.append(lab)
             wids.append([-1 if w is None else w for w in w_ids])
         enc["labels"] = labels
         enc["word_ids"] = wids
         return enc
-    return ds.select_columns(KEEP).map(fn, batched=True)
+    return ds.select_columns(KEEP + [c for c in ("ignore",) if c in ds.column_names]).map(fn, batched=True)
 
 
 def word_logits(model, ds, collator, batch_size=128):
@@ -117,7 +118,9 @@ def main():
             metric_for_best_model="f1", fp16=torch.cuda.is_available(), seed=cfg["seed"], data_seed=cfg["seed"],
             logging_steps=200, report_to=[], dataloader_num_workers=2)
         rm = ["tokens", "ner_tags", "word_ids"]
-        trainer = Trainer(model=model, args=args, train_dataset=tr.remove_columns(rm), eval_dataset=va.remove_columns(rm),
+        trainer = Trainer(model=model, args=args, train_dataset=tr.remove_columns(rm + [c for c in ("ignore",)
+                                                                                         if c in tr.column_names]),
+                          eval_dataset=va.remove_columns(rm),
                           data_collator=collator, processing_class=tok, compute_metrics=compute_metrics)
         t0 = time.time()
         trainer.train()

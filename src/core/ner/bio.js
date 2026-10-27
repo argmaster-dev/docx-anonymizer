@@ -304,10 +304,17 @@ function onlyTemplateWords(value) {
   return words.every((w) => ROLE_WORDS.has(lowerE(w)) || EXTRA_TEMPLATE_WORDS.has(w.toLowerCase()) || isStopWord(w));
 }
 
+/** Промежуток из одних пробелов (без пунктуации и переноса строки). */
+const GAP_SPACES_RE = /^[ \t\u00a0]+$/;
+/** Промежуток PER из одних инициалов с точкой («А.» в «А.|А.|Иванов», когда модель пропустила средний инициал). */
+const GAP_INITIALS_RE = /^(?:[ \t\u00a0]*\p{Lu}\.)+[ \t\u00a0]*$/u;
+
 /**
  * Соседние спаны одного типа, разделённые только пробелами (без пунктуации и переноса строки), — одна сущность:
- * модель часто ставит B на каждое слово ФИО («Сибагатуллина/B-PER Наталия/B-PER Эдуардовна/I-PER»). score — среднее
- * по словам (взвешенное числом слов).
+ * модель часто ставит B на каждое слово ФИО («Сибагатуллина/B-PER Наталия/B-PER Эдуардовна/I-PER»). PER склеиваются ещё
+ * и вплотную, без промежутка («Комаров Р.» + «А.»: модель ставит B на второй инициал без пробела), и через одни инициалы
+ * с точкой («А.» + «Иванов» в «А.А.Иванов») — версия 0.5, сравнение с Natasha. score — среднее по словам (взвешенное
+ * числом слов).
  * @param {(import('../contracts/ner.js').NerSpan & {words?: number})[]} spans  в порядке текста
  * @param {string} text
  */
@@ -315,7 +322,9 @@ export function joinAdjacent(spans, text) {
   const out = [];
   for (const sp of spans) {
     const last = out[out.length - 1];
-    if (last && last.label === sp.label && /^[ \t\u00a0]+$/.test(text.slice(last.end, sp.start))) {
+    const gap = last ? text.slice(last.end, sp.start) : '';
+    const join = last && last.label === sp.label && (GAP_SPACES_RE.test(gap) || (sp.label === 'PER' && (gap === '' || GAP_INITIALS_RE.test(gap))));
+    if (join) {
       const n1 = last.words || 1;
       const n2 = sp.words || 1;
       last.score = (last.score * n1 + sp.score * n2) / (n1 + n2);
