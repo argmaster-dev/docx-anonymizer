@@ -90,7 +90,10 @@ describe('шифрование ключа (К8)', () => {
     expect(secrets.length).toBeGreaterThan(5);
     // текст файла — все строки карты; байты шифротекста, соли и IV в однобайтовых кодировках — строки от 6 символов: случайные байты
     // дают трёхбуквенные совпадения («inn» из категории INN) с заметной вероятностью, шестибуквенные — нет (≈ 10⁻¹⁰ на строку)
-    for (const v of secrets) expect(hay[0].includes(v.toLowerCase()) || hay[1].includes(v.toLowerCase()), v).toBe(false);
+    // base64 шифротекста без учёта регистра даёт трёхбуквенные совпадения так же случайно: короткие строки — только в тексте без случайных полей
+    const plain = JSON.stringify({ ...enc, ct: '', iv: '', kdf: { ...enc.kdf, salt: '' } }).toLowerCase();
+    for (const v of secrets) expect(plain.includes(v.toLowerCase()), v).toBe(false);
+    for (const v of secrets.filter((x) => x.length >= 6)) expect(hay[0].includes(v) || hay[1].includes(v.toLowerCase()), v).toBe(false);
     for (const v of secrets.filter((x) => x.length >= 6)) for (const h of hay.slice(2)) expect(h.includes(v.toLowerCase()), v).toBe(false);
     // ни меток, ни имён полей карты
     expect(text).not.toMatch(/entries|placeholder|ФИО|КОМПАНИЯ|ИНН/);
