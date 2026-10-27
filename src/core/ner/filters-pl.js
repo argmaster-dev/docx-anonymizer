@@ -122,6 +122,9 @@ export function nameLike(word, next = '.', strict = false) {
   return surnameLemmas(w).length > 0 || (!strict && (surnameSuffixInfo(w) || []).length > 0);
 }
 
+/** Слово есть в словарях имён, фамилий или отчеств (ru/en; без догадки по суффиксу фамилии). */
+const dictName = (w) => /^\p{L}{2,}$/u.test(w) && nameLike(w, ' ', true);
+
 /** Соседний LOC через запятую или «и»: спан — элемент перечисления мест. */
 function inPlaceList(spans, sp, text, start, end) {
   return spans.some(
@@ -266,21 +269,27 @@ export function filterPersonLocSpans(spans, ctx) {
     let start = Math.max(0, sp.start);
     let end = Math.min(text.length, sp.end);
     if (end <= start) continue;
-    // 1. стоп-список: продукты, аббревиатуры, бренд владельца
+    // 1. стоп-список: продукты, аббревиатуры, бренд владельца. PER из нескольких слов, каждое из которых есть в словарях имён и
+    //    фамилий («Claude Slack», «Tilda Swift»), — человек, а не перечисление продуктов (ревью доработки 0.5: утечка дороже)
     const around = wholeWordAround(text, start, end);
-    if (isStoplisted(text.slice(start, end), stoplist) || (around && isStoplisted(around, stoplist))) continue;
+    const spanWords = text.slice(start, end).match(WORD_RE) || [];
+    const allNames = sp.label === 'PER' && spanWords.length > 1 && spanWords.every((w) => dictName(w));
+    if (!allNames && (isStoplisted(text.slice(start, end), stoplist) || (around && isStoplisted(around, stoplist)))) continue;
     // 2. служебные слова по краям: «Ок. Почта», «Сальдо начальное», «Procurement Manager», «Фролова Главный»;
     //    у PER — и слова со строчной буквы или с цифрами по краям («экспедитор Кравчук», «Переписка с клиентом»)
     const base = start;
     const ws = [...text.slice(base, end).matchAll(WORD_RE)];
     const per = sp.label === 'PER';
-    const service = (w) => LETTER_RE.test(w) && (isService(w) || inStoplist(stopKey(w), stoplist, w));
+    // слово стоп-списка, которое есть в словарях имён и фамилий («Claude», «Tilda», «Slack», «Swift», «Mac»), от края PER не
+    // отрезается: «Claude Dubois» — человек целиком (ревью доработки 0.5); одиночное «Claude» отбрасывает шаг 1
+    const service = (w) => LETTER_RE.test(w) && (isService(w) || (inStoplist(stopKey(w), stoplist, w) && !(per && dictName(w))));
     const junk = (w) => per && !PARTICLES.has(lowerE(w)) && (!LETTER_RE.test(w) || /\d/.test(w) || isLowerWord(w));
     let a = 0;
     let b = ws.length;
     let trimmed = false;
     while (a < b && (service(ws[a][0]) || junk(ws[a][0]))) a++;
-    while (b > a && (service(ws[b - 1][0]) || junk(ws[b - 1][0]))) b--;
+    // в конце PER служебное слово из словарей имён тоже не отрезается: «Jane Dear» (в начале «Dear Anna» — обращение)
+    while (b > a && ((service(ws[b - 1][0]) && !(per && dictName(ws[b - 1][0]))) || junk(ws[b - 1][0]))) b--;
     if (a >= b) continue;
     const words = ws.slice(a, b).map((m) => m[0]);
     const nextOf = ws.slice(a, b).map((m) => text[base + /** @type {number} */ (m.index) + m[0].length] || '');

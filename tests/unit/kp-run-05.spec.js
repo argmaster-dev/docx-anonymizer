@@ -328,3 +328,48 @@ describe.skipIf(!MODEL_DIR)('ревью доработки с моделью NER
     for (const settings of [defaultSettings(), commercial()]) expect((await analyze(d, settings, { nerProvider: provider })).entities).toEqual([]);
   });
 });
+
+describe('ревью доработки: слово стоп-списка из словарей имён не отрезается от PER', () => {
+  const keep = (text, w) => {
+    const i = text.indexOf(w);
+    return filterPersonLocSpans([{ start: i, end: i + w.length, label: 'PER', score: 0.95 }], { text }).map((s) => text.slice(s.start, s.end));
+  };
+  // записи STOP_PRODUCTS / STOP_ABBREVIATIONS / STOP_DOCS_05, совпадающие с именами и фамилиями словарей: Claude, Tilda, Slack,
+  // SWIFT, MAC, Word; «Dear» — служебное слово (обращение) из словаря фамилий: в начале отрезается, в конце — нет
+  for (const [text, name] of [
+    ['Договор подписал Claude Dubois.', 'Claude Dubois'],
+    ['Договор подписал Dubois Claude.', 'Dubois Claude'],
+    ['Письмо отправила Tilda Swinton.', 'Tilda Swinton'],
+    ['Отчёт сдал John Slack.', 'John Slack'],
+    ['Согласовала Taylor Swift.', 'Taylor Swift'],
+    ['Ответил Bernie Mac.', 'Bernie Mac'],
+    ['Подписал Ethan Word.', 'Ethan Word'],
+    ['Ответ дала Jane Dear.', 'Jane Dear'],
+    ['Пришли Claude Slack и другие.', 'Claude Slack'],
+  ])
+    it(`«${name}» — целиком`, () => expect(keep(text, name)).toEqual([name]));
+  it('одиночный продукт и перечисление продуктов — по-прежнему не человек; «Dear Anna» — обращение отрезается', () => {
+    expect(keep('Отправляем запросы в ChatGPT и Claude.', 'Claude')).toEqual([]);
+    expect(keep('Работаем в Word и Excel.', 'Word и Excel')).toEqual([]);
+    expect(keep('Dear Anna, thank you.', 'Dear Anna')).toEqual(['Anna']);
+  });
+  it.skipIf(!MODEL_DIR)('с моделью: «Claude Dubois», «Jane Dear», «Taylor Swift» маскируются целиком', async () => {
+    const provider = await loadNerProvider(MODEL_DIR);
+    try {
+      for (const [t, name] of [
+        ['Ответ дала Jane Dear.', 'Jane Dear'],
+        ['Договор подписал Claude Dubois.', 'Claude Dubois'],
+        ['Согласовала Taylor Swift.', 'Taylor Swift'],
+      ])
+        for (const settings of [defaultSettings(), commercial()]) {
+          const r = await analyze(doc(t), settings, { nerProvider: provider });
+          expect(
+            r.entities.some((e) => e.text === name),
+            t,
+          ).toBe(true);
+        }
+    } finally {
+      provider?.dispose?.();
+    }
+  });
+});
