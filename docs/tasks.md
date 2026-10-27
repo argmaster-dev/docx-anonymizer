@@ -1480,6 +1480,53 @@ NER и правила, с моделью — блок `describe.skipIf(!NER_MODE
 `kp-run-05.spec.js` — 157 тестов (без модели 67, с `NER_MODEL_DIR` все 157 passed); `genres`, `heldout`, `model-coverage`, `wp11e`, `tests/unit/{ner,names}` с моделью —
 28 файлов, 805 passed / 1 skipped.
 
+## WP12-F — магазины, скриншоты, документация (версия 0.5)
+
+Концепция 0.5 п. 9 «Магазины», Ц7, К15, К16 (и К14/К17 в части `pack`). Последний WP версии. Исполнитель — `wp-implementer`. Подача в магазины — не делалась
+(решение владельца), аккаунтов и внешних отправок нет.
+
+**Файлы.** Новые: `scripts/pack-store.mjs`, `scripts/store-shots.mjs`, `playwright.shots.config.js`, `tests/shots/store.shots.js`,
+`tests/shots/pages/{chat-demo,promo}.html`, `tests/integration/pack-store.spec.js`, `docs/store/{checklist,privacy,listing,edge-upload}.md`,
+`docs/store/images/{ru,en}/0[1-6]-*.png`, `docs/store/images/{promo-440x280,promo-1400x560,store-icon-128,logo-300x300}.png`.
+Изменяемые: `scripts/pack.mjs` (экспорт `packOne` с доводкой `prepare`), `package.json` (0.5.0, `pack:store`, `store:shots`, описание), `package-lock.json`,
+`manifest.json` (0.5.0), `src/_locales/{ru,en}/messages.json` (краткое описание по 0.5, без названий ИИ-сервисов), `src/ui/i18n/{popup,options,help}.js`
+(«Chrome спросит / не выдал доступ» → «браузер»: в Edge было бы неверно), `src/ui/preview/preview.js` (U+FFFC в строке контекста — пробел, был «квадрат»),
+`docs/screenshots/*.png` (переснято на 0.5), `README.md`, `docs/spec-full.md`, `docs/contracts.md` (§0 — новые скрипты, §6.5 — лимит 512 КиБ), этот раздел.
+
+**Сделано:**
+1. **Версия 0.5.0** — `manifest.json`, `package.json`, `package-lock.json`; справка берёт версию из манифеста. `npm run pack` → `release/docx-anonymizer-0.5.0.zip`
+   (6 620 244 байт) и `-full.zip` (36 227 609 байт, модель 1.2.0); архивы 0.4.1 не тронуты (sha256 `b8de3285…` и `b162d61e…` до и после).
+2. **`npm run pack:store`** → `release/docx-anonymizer-0.5.0-store.zip` (36 227 257 байт, 34,5 МиБ): полный архив, манифест без `key` и `update_url`,
+   модель — только последний пакет из `KNOWN_PACKS` (иначе ошибка). `checkStorePackage` проверяет манифест в корне, MV3, версию, отсутствие
+   `key`/`update_url`/`host_permissions`, описание ≤ 132 и название ≤ 75 во всех локалях, иконки, внешние `<script src>`, CSP без внешних источников,
+   ровно один пакет модели с sha из `KNOWN_PACKS`, лишние файлы, размер ≤ 45 МБ; при нарушении — код выхода 1. `-- --lite` — пакет без модели
+   (6 619 892 байт) только для создания продукта в Edge, если полный не грузится через браузер. Пакет воспроизводим.
+3. **`docs/store/`**: `checklist.md` — комплект, пакет, удалённый код (WASM в пакете, модель — данные, CSP), читаемость, единственное назначение (тексты ru/en),
+   обоснование каждого разрешения (`storage`, `unlimitedStorage`, `offscreen`, `scripting`, `activeTab`, `optional_host_permissions`) ru/en, данные пользователя
+   (FAQ Chrome п. 3 и 14: раскрывать и локальную обработку; рекомендация по категориям раскрытия), лимиты размера, изображения, что осталось владельцу,
+   ссылки на официальную документацию (сверено 27.10.2026); `privacy.md` ru/en — ноль сетевых запросов, ничего не собирается и не передаётся, что хранится
+   локально и как удалить; `listing.md` — краткое и полное описание ru/en, категория, поисковые запросы Edge, заметки для проверяющих; `edge-upload.md` —
+   загрузка крупного пакета в Partner Center через REST API v1.1 (первую версию продукта API создать не может — сначала лёгкий пакет через форму).
+4. **Изображения** — `npm run store:shots` (e2e-сборка с моделью из `release/` + `playwright.shots.config.js`, в `npm run e2e` не входит): нейтральная локальная
+   страница «Ассистент» под `https://chat.example` (`context.route`, сети нет), только фикстуры `tests/fixtures`, подпись студии и раздел «Проверка конвейера (dev)»
+   скрыты CSS, справка снята только разделами без названий ИИ-сервисов и бренда. Магазин: 6 снимков 1280×800 на ru и на en (Word, вкладка «Текст», Excel,
+   скрытые данные, восстановление, PowerPoint — шестой только для Edge), промо 440×280 и 1400×560 (без текста), значок 128×128 с полями 16 px, логотип 300×300.
+   README: `panel-intercept`, `panel-preview` (1100×780), `popup` (340×420), `options` (1100×1908, три первых раздела), `help` (744×932), `restore` (1280×1222),
+   `before-after` (2230×705, LibreOffice + `pdftoppm`). Каждый снимок просмотрен.
+5. **Документация (К16):** README ru и English summary — форматы (таблица), скрытые данные, ключ с паролем, «что изменится после обновления с 0.4», пакет для
+   магазинов, ограничения (сканы — 0.6, особые категории только по метке, метрики — синтетика одного автора без реальных документов, известные пропуски бэклога),
+   словари в `vendor/dict`, команды `pack:store`/`store:shots`, лицензии данных модели (NEREL/Nerus — «как есть, на свой страх и риск»); `docs/spec-full.md` —
+   изменения 0.5, §1.4, FR-58 (50 категорий), §4.16 FR-63–FR-70, NFR-01, NFR-10; `docs/contracts.md` — §0 и §6.5; справка и подсказки ru/en сверены с 0.5
+   (поправлены только упоминания Chrome).
+
+**Проверки:** `npm run lint` — чисто; `npm test` — Test Files 96 passed / 2 skipped, Tests 3188 passed / 113 skipped / 2 todo; `npm run e2e` — 98 passed,
+7 skipped; `npm run pack` и `npm run pack:store` — зелёные, проверки магазинов пройдены; К14: лёгкий 6,3 МиБ ≤ 12 МБ, полный 34,5 МиБ ≤ 45 МБ, код
+`worker.js` без ORT 486 916 байт ≤ 512 КиБ.
+
+**Осталось владельцу:** аккаунты разработчика Chrome Web Store и Edge Partner Center; push → публичная ссылка на `docs/store/privacy.md`; заполнить формы по
+`docs/store/checklist.md` (категории раскрытия данных, `homepage_url`, раздел «Проверка конвейера (dev)» в меню — скрыть перед подачей или оставить); загрузка
+`release/docx-anonymizer-0.5.0-store.zip`, при сбое в Edge — `docs/store/edge-upload.md`.
+
 ## Бэклог после 0.4
 
 Версия 0.4.0: политика маскирования, список компаний, корпус жанров, модель 1.1.0 (WP11-A…D). Отложено:

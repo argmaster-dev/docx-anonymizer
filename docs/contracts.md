@@ -80,6 +80,8 @@ popup / content / options / restore ──port "docx"──► background (route
 | `src/ui/components/dom.js` | `h`, `clear` — построение DOM без `innerHTML` | 0.1 |
 | `schemas/` | `mapping` (с 0.5 — `oneOf`: открытая карта `$defs/mapping` или зашифрованный ключ `$defs/encrypted`), `protocol`, `model-pack` (JSON Schema draft 2020-12) | WP5; WP8; WP12-D |
 | `scripts/build.mjs`, `pack.mjs` | сборка `dist/` (`--e2e` → `dist-e2e/`, `--with-model=<zip>` — полная), архивы релиза: лёгкий и `-full` (§6.8) | фундамент; WP6, WP8, WP10-C |
+| `scripts/pack-store.mjs` | пакет для Chrome Web Store и Edge Add-ons (`npm run pack:store`): `packOne` из `pack.mjs` с доводкой `prepare` — манифест без `key`/`update_url` (`storeManifest`), полный архив с последним пакетом из `KNOWN_PACKS`; `checkStorePackage` — проверки требований магазинов; `--lite` — без модели (только создать продукт в Edge). Чек-лист — `docs/store/checklist.md` | WP12-F |
+| `scripts/store-shots.mjs`, `tests/shots/`, `playwright.shots.config.js` | снимки магазинов `docs/store/images/` и README `docs/screenshots/` (`npm run store:shots`): e2e-сборка с моделью, нейтральная страница `tests/shots/pages/chat-demo.html`, синтетические фикстуры; в `npm run e2e` не входят | WP12-F |
 | `scripts/make-dicts.mjs` | генератор словарей ФИО из закреплённых коммитов (`npm run dicts`, `--check`) → `vendor/dict/` | WP7; WP12-A |
 | `scripts/dicts-node.mjs` | словари в Node: `readDictFromDisk`, `loadDictsFromDisk` (тесты — `tests/setup/dicts.js`, скрипты) | WP12-A |
 | `scripts/bench.mjs` | бенчмарк конвейера без модели (`npm run bench`, `-- --browser`): холодный старт и 20-страничный договор | WP12-A |
@@ -547,7 +549,7 @@ OPFS (`navigator.storage.getDirectory()`), работает в окне и в de
   (запас кода 58 825 байт ≈ 57,4 КиБ, словарей 44 106 байт ≈ 43,1 КиБ; «КБ» в бюджетах = 1024 байт). Бэклог — словари в `vendor/dict/*.txt` с ленивой загрузкой через `package-fetch.js` (`docs/tasks.md`).
 - **С 0.5 (WP12-A, К14):** словари — файлы `vendor/dict/*.txt` (§2), в `worker.js` их нет (0 байт); разбор PDF ядра (`core/pdf/extract.js` + `layout.js`) —
   модуль по требованию `offscreen/chunks/extract-*.js` (38 399 байт). Бюджет — **код `worker.js` без ORT ≤ 400 КиБ** (409 600 байт), считая статически
-  импортируемый общий модуль `offscreen/chunks/chunk-*.js`; лимит 416 КиБ WP11-E снят. Состояние 26.10.2026 (`npm run pack`): `worker.js` 502 401 байт + общий модуль
+  импортируемый общий модуль `offscreen/chunks/chunk-*.js`; лимит 416 КиБ WP11-E снят. *С WP12-B лимит — **512 КиБ** (решение владельца 26.10.2026, К14: сторож от раздувания, не цель; код не минифицируется); 0.5.0 (27.10.2026) — 486 916 байт.* Состояние 26.10.2026 (`npm run pack`): `worker.js` 502 401 байт + общий модуль
   1 768 байт, из них ORT 102 856, **код без ORT 401 313 байт (391,9 КиБ, запас 8 287 байт ≈ 8,1 КиБ)**; `vendor/dict` — 359 538 байт; лёгкий архив 6 486 404 байт
   (та же сборка кода 0.4.1 — 6 479 326: + `vendor/dict/NOTICE.md`, модуль PDF и код слоя OOXML), полный — 36 029 405 байт. Сборка печатает размеры `worker.js`, модулей по требованию и `vendor/dict`.
 - Что проверяет `tests/integration/pack.spec.js` в лёгком архиве (до 0.5; с 0.5 — абзац выше и `pack.spec.js`): код `worker.js` без ORT и словарей ≤ 400 КБ, словари ≤ 400 КБ (и > 100 КБ), ORT встроен (> 50 КБ),

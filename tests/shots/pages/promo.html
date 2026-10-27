@@ -1,0 +1,84 @@
+<!doctype html>
+<!--
+  Промо-плитка магазинов (версия 0.5, WP12-F, К15): 440×280 (?size=small) и 1400×560 (?size=marquee).
+  Без текста (требование Chrome Web Store: «Avoid text»), без логотипов и подписей: документ с данными → щит → документ с метками.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+      body {
+        background: linear-gradient(135deg, #eef3ff 0%, #dfe8fb 100%);
+        display: grid;
+        place-items: center;
+      }
+      svg {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <svg id="art" viewBox="0 0 440 280" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="3" stdDeviation="5" flood-color="#1b2a55" flood-opacity="0.14" />
+        </filter>
+      </defs>
+      <!-- документ «до»: строки текста, часть — открытые данные (оранжевые) -->
+      <g transform="translate(34 40)" filter="url(#sh)">
+        <rect width="132" height="176" rx="10" fill="#fff" />
+        <path d="M104 0h18a10 10 0 0110 10v18z" fill="#e3e9f6" />
+        <rect x="16" y="22" width="70" height="8" rx="4" fill="#26324d" />
+        <rect x="16" y="44" width="38" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="58" y="44" width="58" height="7" rx="3.5" fill="#f08a3c" />
+        <rect x="16" y="60" width="100" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="16" y="76" width="52" height="7" rx="3.5" fill="#f08a3c" />
+        <rect x="72" y="76" width="44" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="16" y="92" width="100" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="16" y="108" width="30" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="50" y="108" width="66" height="7" rx="3.5" fill="#f08a3c" />
+        <rect x="16" y="124" width="84" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="16" y="140" width="46" height="7" rx="3.5" fill="#f08a3c" />
+        <rect x="66" y="140" width="50" height="7" rx="3.5" fill="#c3cbdb" />
+      </g>
+      <!-- документ «после»: те же строки, данные заменены метками (синие скобки) -->
+      <g transform="translate(274 40)" filter="url(#sh)">
+        <rect width="132" height="176" rx="10" fill="#fff" />
+        <path d="M104 0h18a10 10 0 0110 10v18z" fill="#e3e9f6" />
+        <rect x="16" y="22" width="70" height="8" rx="4" fill="#26324d" />
+        <rect x="16" y="44" width="38" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="58" y="42" width="44" height="11" rx="3" fill="#dfe7ff" stroke="#3561d6" stroke-width="1.5" />
+        <rect x="16" y="60" width="100" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="16" y="74" width="40" height="11" rx="3" fill="#dfe7ff" stroke="#3561d6" stroke-width="1.5" />
+        <rect x="60" y="76" width="56" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="16" y="92" width="100" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="16" y="108" width="30" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="50" y="106" width="44" height="11" rx="3" fill="#dfe7ff" stroke="#3561d6" stroke-width="1.5" />
+        <rect x="16" y="124" width="84" height="7" rx="3.5" fill="#c3cbdb" />
+        <rect x="16" y="138" width="40" height="11" rx="3" fill="#dfe7ff" stroke="#3561d6" stroke-width="1.5" />
+        <rect x="60" y="140" width="56" height="7" rx="3.5" fill="#c3cbdb" />
+      </g>
+      <!-- поток слева направо и щит в середине: обработка на этом компьютере -->
+      <path d="M176 128h22M242 128h22" stroke="#9fb2dc" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 9" />
+      <path d="M256 120l9 8-9 8" fill="none" stroke="#3561d6" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
+      <g transform="translate(220 128)" filter="url(#sh)">
+        <path d="M0-38l30 11v20c0 21-13 36-30 45C-17 29-30 14-30-7v-20z" fill="#3561d6" />
+        <path d="M-12 1l8 8 16-17" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+      </g>
+    </svg>
+    <script>
+      const size = new URLSearchParams(location.search).get('size') === 'marquee' ? [1400, 560] : [440, 280];
+      document.body.style.width = `${size[0]}px`;
+      document.body.style.height = `${size[1]}px`;
+      const art = document.getElementById('art');
+      // широкая плитка: рисунок той же пропорции по высоте, поля — фон
+      art.setAttribute('width', String(Math.round(size[1] * (440 / 280))));
+      art.setAttribute('height', String(size[1]));
+    </script>
+  </body>
+</html>
