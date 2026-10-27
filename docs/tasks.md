@@ -1473,6 +1473,13 @@ NER и правила, с моделью — блок `describe.skipIf(!NER_MODE
 (без модели 65, с `NER_MODEL_DIR` все 149 passed; на `1faf994` падают 26); с `NER_MODEL_DIR` — 33 файла, 2 095 passed / 1 skipped; `eval-genres` (корпус и heldout,
 без модели и с 1.2.0) — побайтно как на `e8d6deb`; КП — 3 / 4 группы, 0 ложных, ИНН ×2; e2e 98 passed, 7 skipped; код `worker.js` без ORT — 486 405 байт.
 
+**Третье ревью (27.10.2026).** Р1: после «Яндекс»/«голосовой помощник» имя помощника — человек и при должности или роли до конца предложения, в том числе после
+« — » (`POSITION_RE_SRC`, `isRoleNoun`: «Контакт со стороны Яндекс Алиса — менеджер проекта.», «…, менеджер проекта.» — в базе PERSON, после второй итерации
+открыты), и при глаголе связи перед «Яндекс» («Нужно позвонить в Яндекс Алисе завтра.», fail-closed). Файлы: `src/core/ner/product-context.js`,
+`tests/unit/kp-run-05.spec.js`, этот раздел. Проверки: lint чисто; `npm test` — Test Files 95 passed / 2 skipped, Tests 3179 passed / 113 skipped / 2 todo;
+`kp-run-05.spec.js` — 157 тестов (без модели 67, с `NER_MODEL_DIR` все 157 passed); `genres`, `heldout`, `model-coverage`, `wp11e`, `tests/unit/{ner,names}` с моделью —
+28 файлов, 805 passed / 1 skipped.
+
 ## Бэклог после 0.4
 
 Версия 0.4.0: политика маскирования, список компаний, корпус жанров, модель 1.1.0 (WP11-A…D). Отложено:

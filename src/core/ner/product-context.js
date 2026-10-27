@@ -11,7 +11,7 @@
 import { PRODUCT_NAMES, stopKey } from './stoplist.js';
 import { inStoplist } from './filters.js';
 import { bigFirstNameInfo, surnameLemmas } from '../detect/names/dict/index.js';
-import { lowerE } from '../detect/names/lexicon.js';
+import { lowerE, isRoleNoun, POSITION_RE_SRC } from '../detect/names/lexicon.js';
 
 /** Продукты для перечисления (ключи `stopKey`): программы, сервисы, модели ИИ — без обращений и бренда владельца. */
 const PRODUCTS = new Set(PRODUCT_NAMES.map(stopKey));
@@ -25,6 +25,10 @@ const VERB_AFTER_RE =
   /^[»"”]?[ \u00a0]+(?:не[ \u00a0]+)?\p{Ll}+(?:л|ла|ло|ли|лся|лась|лось|лись|ет|ёт|ют|ит|ят|ут|ат|ется|ётся|ются|ится|ятся|ет|ешь|ит)(?![\p{L}])/u;
 /** Глагол в личной форме или прошедшего времени — слово целиком (для просмотра до конца оборота). */
 const VERB_WORD_RE = /^\p{Ll}+(?:л|ла|ло|ли|лся|лась|лось|лись|ет|ёт|ют|ит|ят|ут|ется|ётся|ются|ится|ятся)$/u;
+/** Должность из словаря «в лице …» (директор, руководитель, представитель, начальник…) как отдельное слово. */
+const POSITION_IN_RE = new RegExp(`(?<![\\p{L}])${POSITION_RE_SRC}(?![\\p{L}])`, 'iu');
+/** Перед «Яндекс Алисой» — глагол связи с человеком: «позвонить в Яндекс Алисе», «написать Яндекс Алисе» (fail-closed). */
+const CONTACT_BEFORE_RE = /(?<![\p{L}])(?:по|при|со)?(?:звон|связ|пис|напис)\p{L}*[^.!?;\n]{0,30}$/iu;
 /** Конец оборота: точка, «!», «?», «;», двоеточие, тире с пробелами, перенос строки. */
 const CLAUSE_END_RE = /[.!?;:\n]|[ \u00a0][—–][ \u00a0]/u;
 /**
@@ -33,6 +37,17 @@ const CLAUSE_END_RE = /[.!?;:\n]|[ \u00a0][—–][ \u00a0]/u;
  * @param {string} after  текст сразу за именем
  */
 function personAfter(after) {
+  // должность или роль до конца предложения, и после « — »: «Яндекс Алиса — менеджер проекта», «Яндекс Алиса, менеджер проекта» (третье ревью)
+  const sentence = after.split(/[.!?;\n]/u)[0];
+  if (
+    POSITION_IN_RE.test(sentence) ||
+    sentence
+      .split(/[^\p{L}-]+/u)
+      .filter(Boolean)
+      .slice(0, 8)
+      .some((w) => isRoleNoun(w))
+  )
+    return true;
   const m = CLAUSE_END_RE.exec(after);
   const clause = m ? after.slice(0, m.index) : after;
   if (
@@ -69,7 +84,7 @@ export function productContext(text, start, end) {
   const after = text.slice(end, end + 40);
   if (VERB_AFTER_RE.test(after)) return false;
   // после «Яндекс», «голосовой помощник»…: глагол до конца оборота или «и + имя» — человек (fail-closed)
-  if (PRODUCT_LEAD_RE.test(before)) return !personAfter(text.slice(end, end + 120));
+  if (PRODUCT_LEAD_RE.test(before)) return !personAfter(text.slice(end, end + 120)) && !CONTACT_BEFORE_RE.test(before);
   const left = LIST_LEFT_RE.exec(before);
   if (!left || !isProduct(left[1])) return false;
   // в перечислении глагол оборота не в счёт («…, DeepSeek и другие модели» — «модели» похоже на глагол), только «и + имя»
