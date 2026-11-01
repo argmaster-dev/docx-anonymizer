@@ -312,6 +312,10 @@ CI (`.github/workflows/ci.yml`) запускается при push и pull reque
 
 Скриншоты панели и меню снимаются e2e-тестом: `E2E_SHOTS=<каталог> npx playwright test intercept.spec.js -g скриншоты`.
 
+## Автор
+
+Telegram-канал [@sitimlab](https://t.me/sitimlab) · сайт [sitimlab.ru](https://sitimlab.ru/?utm_source=github&utm_medium=profile)
+
 ## Лицензия
 
 MIT — см. [`LICENSE`](LICENSE). Сторонние компоненты — на условиях своих лицензий:
