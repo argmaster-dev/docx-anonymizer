@@ -372,6 +372,10 @@ CI (`.github/workflows/ci.yml`) запускается при push и pull reque
 
 Скриншоты README (`docs/screenshots/`) и магазинов (`docs/store/images/`) снимает `npm run store:shots` (`tests/shots/store.shots.js`): нейтральная локальная страница «Ассистент» без логотипов ИИ-сервисов, только синтетические фикстуры, подпись студии скрыта. Запускать под той же блокировкой сборки, что e2e: команда пересобирает `dist-e2e/`.
 
+## Автор
+
+Telegram-канал [@sitimlab](https://t.me/sitimlab) · сайт [sitimlab.ru](https://sitimlab.ru/?utm_source=github&utm_medium=profile)
+
 ## Лицензия
 
 MIT — см. [`LICENSE`](LICENSE). Сторонние компоненты — на условиях своих лицензий:
