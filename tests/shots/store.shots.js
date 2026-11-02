@@ -204,9 +204,9 @@ test('магазин: промо-плитки 440×280 и 1400×560, значо�
     await shot(p, join(STORE_DIR, `promo-${w}x${h}.png`));
     await p.close();
   }
-  // значок листинга — тот же знак, что icons/icon-128.png (assets/sitimlab-icon.svg, без подписи): Chrome Web Store советует
+  // значок листинга — тот же щит, что icons/icon-128.png (assets/icon-shield.svg, решение владельца 0.5): Chrome Web Store советует
   // рисунок 96×96 с прозрачными полями 16 px (store-icon-128.png), Edge — логотип 300×300 (logo-300x300.png)
-  const svg = readFileSync(resolve('assets/sitimlab-icon.svg'), 'utf8');
+  const svg = readFileSync(resolve('assets/icon-shield.svg'), 'utf8');
   for (const [file, size, art] of [
     ['store-icon-128.png', 128, 96],
     ['logo-300x300.png', 300, 300],

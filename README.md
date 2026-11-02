@@ -106,7 +106,7 @@
 
 ### Справка и подпись студии
 
-В меню, настройках и на странице восстановления есть ссылка «Справка» — страница `help/help.html`: что делает расширение, как им пользоваться, что данные не покидают компьютер. Расширение сделано в [Sitimlab](https://sitimlab.ru): иконка — знак студии (`assets/sitimlab-icon.svg`, PNG 16/32/48/128 в `icons/`, пересборка — `npm run icons`), строка «Сделано в Sitimlab» со ссылкой на сайт — в меню и на страницах расширения.
+В меню, настройках и на странице восстановления есть ссылка «Справка» — страница `help/help.html`: что делает расширение, как им пользоваться, что данные не покидают компьютер. Расширение сделано в [Sitimlab](https://sitimlab.ru): строка «Сделано в Sitimlab» со ссылкой на сайт — в меню и на страницах расширения. Иконка (с 0.5) — синий щит, как в шапке панели: `assets/icon-shield.svg` и упрощённый для 16/32 px `assets/icon-shield-small.svg`, PNG 16/32/48/128 в `icons/`, пересборка — `npm run icons`; знак студии — `assets/sitimlab-icon.svg`.
 
 <img src="docs/screenshots/help.png" width="520" alt="Справка">
 
@@ -333,7 +333,7 @@ CI (`.github/workflows/ci.yml`) запускается при push и pull reque
 | `npm run gen-heldout-fixtures` | отложенный набор `tests/fixtures/heldout/<жанр>/*.{docx,gold.json}` — 12 документов вне корпуса жанров (вымышленные данные, детерминированно) |
 | `npm run eval-genres` | отчёт по корпусу жанров: точность, полнота и число ложных по жанру × категории × режиму (обычный и коммерческий), утечки, отрицательные примеры; `-- --dir=tests/fixtures/heldout` — по отложенному набору, `-- --json` — в JSON, `-- --format=docx\|pdf`, `-- --verbose` — значения синтетических документов; модель — `NER_MODEL_DIR=<каталог>` или `-- --model=<каталог>`; `PRIVATE_FIXTURES=1` или `-- --private` — ещё и свои документы из `tests/fixtures/private/` |
 | `npm run bench-ner` | бенчмарк и оценка NER-модели в Node: холодная загрузка, мс/окно, токены/с, F1 по классам на `eval-{ru,en}.json` (`-- --dir=<каталог модели>`, по умолчанию `models-src/rubert-tiny2-ner-ruen`) |
-| `npm run icons` | иконки `icons/` из знака Sitimlab |
+| `npm run icons` | иконки `icons/` (синий щит) из `assets/icon-shield*.svg` |
 | `npm run sample` | образец договора `tests/fixtures/sample-contract.docx` (вымышленные стороны) |
 
 Проект делался по спецификации: рамки первой версии — [`docs/mvp-scope.md`](docs/mvp-scope.md), цели и критерии версий 0.2–0.5 — [`docs/concept-0.2.md`](docs/concept-0.2.md), [`docs/concept-0.3.md`](docs/concept-0.3.md), [`docs/concept-0.4.md`](docs/concept-0.4.md), [`docs/concept-0.5.md`](docs/concept-0.5.md), полное ТЗ — [`docs/spec-full.md`](docs/spec-full.md), контракты модулей — [`docs/contracts.md`](docs/contracts.md), рабочие пакеты — [`docs/tasks.md`](docs/tasks.md), магазины — [`docs/store/`](docs/store/checklist.md).

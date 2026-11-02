@@ -78,6 +78,9 @@ export function checkStorePackage(entries, { version, size, lite = false }) {
     const html = strFromU8(entries[n]);
     if (/<script[^>]+src\s*=\s*["']?(https?:)?\/\//i.test(html)) problems.push(`${n}: скрипт с внешнего адреса`);
   }
+  // служебный блок «Проверка конвейера (dev)» — только в e2e-сборке (решение владельца 0.5): в пакете магазина его быть не должно
+  if (entries['popup/popup.html'] && /dev-pipeline/.test(strFromU8(entries['popup/popup.html'])))
+    problems.push('popup.html: блок «Проверка конвейера (dev)» в пакете');
   const csp = m.content_security_policy?.extension_pages || '';
   if (/https?:|\*/.test(csp)) problems.push(`CSP допускает внешние источники: ${csp}`);
   // модель — данные пакета: ровно один проверенный пакет последней версии

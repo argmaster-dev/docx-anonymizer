@@ -1,7 +1,8 @@
 // Popup (§3.2a, FR-42): тумблер перехвата с состоянием для текущего сайта, недавние сессии, «Восстановить», «Настройки».
 // Доступ к сайту (К9): «Добавить сайт» и «Разрешить доступ» запрашивают host-разрешение синхронно в обработчике клика.
 // Адрес вкладки popup получает через activeTab (без разрешения tabs).
-// Блок «Проверка конвейера (dev)» оставлен для tests/e2e/pipeline.spec.js.
+// Блок «Проверка конвейера (dev)» есть только в e2e-сборке (--e2e): релизные сборки вырезают его из popup.html
+// (scripts/build.mjs, решение владельца 0.5, WP12-F), поэтому код ниже обращается к нему с проверкой наличия.
 import { connectClient } from '../shared/port-client.js';
 import { MSG } from '../shared/protocol.js';
 import { loadSettings, saveSettingsPatch, onSettingsChanged } from '../shared/settings-store.js';
@@ -46,7 +47,8 @@ function applyLanguage() {
   $('open-options').textContent = t('options');
   $('open-help').textContent = t('help');
   $('made-by').firstChild.textContent = `${t('madeBy')} `;
-  $('t-dev').textContent = t('devTitle');
+  const devTitle = document.getElementById('t-dev');
+  if (devTitle) devTitle.textContent = t('devTitle');
 }
 
 async function refreshAccess() {
@@ -197,7 +199,7 @@ async function init() {
     e.preventDefault();
     chrome.tabs.create({ url: chrome.runtime.getURL('restore/restore.html') });
   });
-  $('dev-file').addEventListener('change', onDevFile);
+  document.getElementById('dev-file')?.addEventListener('change', onDevFile);
   renderRecent();
 }
 

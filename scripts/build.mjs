@@ -170,6 +170,15 @@ if (bundled) {
 } else {
   console.log('без модели (лёгкая сборка)');
 }
+// Блок «Проверка конвейера (dev)» в popup — только в e2e-сборке: в релизе (dist/, архивы, пакет для магазинов) его нет
+// (решение владельца 0.5, WP12-F: ревьюер магазина принял бы его за незаконченную функцию). Сторож — pack.spec.js, pack-store.mjs.
+if (!e2e) {
+  const p = join(dist, 'popup/popup.html');
+  const html = await readFile(p, 'utf8');
+  const cut = html.replace(/\n[ \t]*<!-- Блок проверки конвейера[\s\S]*?<\/details>\n/, '\n');
+  if (cut === html || /dev-pipeline/.test(cut)) throw new Error('popup.html: не найден блок «Проверка конвейера (dev)» для релизной сборки');
+  await writeFile(p, cut);
+}
 // HTML ссылается на бандлы как на классические скрипты
 for (const f of ['offscreen/offscreen.html']) {
   const p = join(dist, f);

@@ -34,7 +34,7 @@ test('манифест: иконки 16/32/48/128, значок кнопки и 
     );
     expect(dim).toEqual([Number(size), Number(size)]);
   }
-  expect(m.homepage_url).toBe('https://sitimlab.ru');
+  expect(m.homepage_url).toBe('https://sitimlab.ru/?utm_source=extension&utm_medium=store'); // решение владельца 0.5 (WP12-F)
 });
 
 for (const path of PAGES) {

@@ -38,7 +38,7 @@ describe('архив релиза', () => {
     expect(m.version).toBe(pkg.version);
     expect(m.name).toBe('__MSG_extName__');
     expect(JSON.parse(strFromU8(zip['_locales/ru/messages.json'])).extName.message).toBe('DOCX Anonymizer');
-    expect(m.homepage_url).toBe('https://sitimlab.ru');
+    expect(m.homepage_url).toBe('https://sitimlab.ru/?utm_source=extension&utm_medium=store'); // решение владельца 0.5 (WP12-F)
   });
 
   it('все файлы, на которые ссылается манифест, есть в архиве: скрипты, страницы, иконки четырёх размеров', () => {
@@ -203,6 +203,13 @@ describe('архив релиза', () => {
     const names = Object.keys(zip);
     expect(names.filter((n) => /\.map$|^src\/|^tests\/|node_modules|^docs\/|^scripts\/|package/.test(n))).toEqual([]);
     expect(strFromU8(zip['help/help.js'])).not.toContain('sourceMappingURL');
+  });
+
+  it('в релизном popup нет блока «Проверка конвейера (dev)» — он только в e2e-сборке (решение владельца 0.5, WP12-F)', () => {
+    const html = strFromU8(zip['popup/popup.html']);
+    expect(html).not.toMatch(/dev-pipeline|dev-file|Проверка конвейера/);
+    expect(html).toContain('data-testid="help-link"'); // остальное меню на месте
+    expect(readFileSync('src/popup/popup.html', 'utf8')).toContain('id="dev-pipeline"'); // в исходнике — для e2e-сборки
   });
 
   it('страницы расширения подписаны «Сделано в Sitimlab» и ведут на sitimlab.ru', () => {

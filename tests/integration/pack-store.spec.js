@@ -57,8 +57,10 @@ describe('checkStorePackage', () => {
     e['_locales/en/messages.json'] = strToU8(JSON.stringify({ extName: { message: 'X' }, extDescription: { message: 'a'.repeat(133) } }));
     e['help/help.html'] = strToU8('<script src="https://cdn.example/x.js"></script>');
     e['src/core/index.js'] = new Uint8Array(1);
+    e['popup/popup.html'] = strToU8('<details class="dev" id="dev-pipeline"></details>');
     const problems = checkStorePackage(e, { version: pkg.version, size: STORE_LIMITS.sizeMax + 1 }).join('\n');
-    for (const s of ['key', 'описание 133', 'скрипт с внешнего адреса', 'host_permissions', 'лишние файлы', 'размер']) expect(problems).toContain(s);
+    for (const s of ['key', 'описание 133', 'скрипт с внешнего адреса', 'host_permissions', 'лишние файлы', 'размер', 'Проверка конвейера'])
+      expect(problems).toContain(s);
   });
 
   it('лёгкий пакет (--lite): модель не требуется, но и лишнего в models/ быть не должно', () => {

@@ -89,7 +89,7 @@ popup / content / options / restore ──port "docx"──► background (route
 | `scripts/bench-ner.mjs` | бенчмарк и span-F1 провайдера в Node (`npm run bench-ner`), помощники для тестов | WP9 |
 | `scripts/gen-ner-eval.mjs` | корпус оценки NER `tests/fixtures/ner/eval-{ru,en}.json` (`npm run gen-ner-eval`) | WP9 |
 | `scripts/gen-fixtures.mjs`, `make-sample.mjs` | документы-фикстуры с gold, образец договора | WP5; WP7 (`third-persons`) |
-| `scripts/make-icons.mjs` | иконки `icons/` из знака Sitimlab (`npm run icons`) | 0.1 |
+| `scripts/make-icons.mjs` | иконки `icons/` (`npm run icons`): с 0.5 — синий щит `assets/icon-shield.svg` (48, 128) и `assets/icon-shield-small.svg` (16, 32); до 0.5 — знак Sitimlab | 0.1; WP12-F |
 | `tools/ner-train/` | обучение модели (Python, uv): WikiANN ru+en, дистилляция, ONNX int8, калибровка порога, `models-src/<id>/` | WP9 |
 
 `src/core/**` — чистый JS: без `chrome.*`, DOM и сети (ESLint это проверяет). Тесты ядра — Vitest в Node 22.
