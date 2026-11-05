@@ -15,9 +15,12 @@ import { registerAdapter } from '../adapters.js';
 import { tableBlocks } from '../table-blocks.js';
 import { decodeText, encodeText } from './encoding.js';
 
-const EXTENSIONS = ['.txt', '.log', '.md', '.csv', '.json'];
+// .markdown и .text — с 0.5.1 (ревью 0.5.1): разбираются как .md и .txt
+const EXTENSIONS = ['.txt', '.log', '.md', '.markdown', '.text', '.csv', '.json'];
 const MAIN = 'word/document.xml';
 const MIME = { txt: 'text/plain', log: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json' };
+/** Расширение → формат: синонимы .markdown и .text (0.5.1) */
+const FORMAT_ALIAS = { markdown: 'md', text: 'txt' };
 
 /* ---------- кодировки ---------- */
 
@@ -34,8 +37,11 @@ export { decodeText, encodeText };
 
 /** Формат по имени файла; без имени — по содержимому (JSON, CSV, иначе текст). */
 function formatOf(name, text) {
-  const m = /\.(txt|log|md|csv|json)$/i.exec(String(name || ''));
-  if (m) return /** @type {'txt'|'log'|'md'|'csv'|'json'} */ (m[1].toLowerCase());
+  const m = /\.(txt|text|log|md|markdown|csv|json)$/i.exec(String(name || ''));
+  if (m) {
+    const ext = m[1].toLowerCase();
+    return /** @type {'txt'|'log'|'md'|'csv'|'json'} */ (FORMAT_ALIAS[ext] || ext);
+  }
   const head = text.trimStart()[0];
   if (head === '{' || head === '[') return 'json';
   return detectDelimiter(text) ? 'csv' : 'txt';
@@ -341,6 +347,8 @@ export function parsePlain(bytes, name) {
   const format = formatOf(name, text);
   /** @type {{code: string, count?: number, details?: object}[]} */
   const warnings = [];
+  // UTF-8 с немногими битыми байтами (0.5.1, encoding.js): разобран как UTF-8, в результате они станут «�» — предупреждение
+  if (enc.replaced) warnings.push({ code: 'TEXT_BAD_BYTES', count: enc.replaced });
   let blocks;
   let delimiter = null;
   if (format === 'json') {

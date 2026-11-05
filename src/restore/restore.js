@@ -52,7 +52,7 @@ let lockedTexts = null;
 let mode = 'text';
 /** encoding — кодировка текстового файла (0.5.1): .txt/.md/.log и CSV/JSON в Windows-1251 или UTF-16 сохраняются в ней же */
 /** @type {{name: string, size: number, kind: 'docx'|'xlsx'|'pptx'|'csv'|'json'|'text', bytes?: Uint8Array, text?: string,
- *   encoding?: {encoding: string, bom: boolean}} | null} */
+ *   encoding?: {encoding: string, bom: boolean}, replaced?: number} | null} */
 let aiFile = null;
 /** Склонять ФИО по контексту метки (FR-37) */
 let decline = true;
@@ -122,21 +122,13 @@ function render(lang) {
   const warn = h('div', { dataset: { testid: 'restore-warnings' } });
   /** Кодировка файла не UTF-8 (0.5.1): восстановленный файл сохранён в ней же — заметное предупреждение */
   const encWarn = h('div', { dataset: { testid: 'restore-encoding' } });
-  const showEncoding = (encoding, lost = 0) => {
+  // replaced — битые байты UTF-8 (0.5.1, ревью): файл прочитан как UTF-8, они стали «�» и так же сохранятся
+  const showEncoding = (encoding, lost = 0, replaced = 0) => {
     const enc = encodingLabel(encoding);
+    const box = (...kids) => h('div', { class: 'mixed', role: 'status' }, ...kids);
     encWarn.replaceChildren(
-      ...(enc
-        ? [
-            h(
-              'div',
-              { class: 'mixed', role: 'status' },
-              h('strong', {}, t('enc_h', { enc })),
-              ' ',
-              t('enc_saved'),
-              lost ? ` ${t('enc_lost', { n: lost, enc })}` : '',
-            ),
-          ]
-        : []),
+      ...(enc ? [box(h('strong', {}, t('enc_h', { enc })), ' ', t('enc_saved'), lost ? ` ${t('enc_lost', { n: lost, enc })}` : '')] : []),
+      ...(replaced ? [box(h('strong', {}, t('enc_broken_h')), ' ', t('enc_broken', { n: replaced }))] : []),
     );
   };
   /** Входные данные поменялись (файл от ИИ, карта, источник, обработка): прежний результат больше не скачивается. */
@@ -150,7 +142,7 @@ function render(lang) {
   const fileInfo = h('div', { class: 'hint', dataset: { testid: 'ai-file-info' } });
   const aiInput = h('input', {
     type: 'file',
-    accept: '.docx,.docm,.xlsx,.xlsm,.pptx,.pptm,.csv,.json,.md,.txt,.markdown,.log',
+    accept: '.docx,.docm,.xlsx,.xlsm,.pptx,.pptm,.csv,.json,.md,.txt,.markdown,.text,.log',
     dataset: { testid: 'ai-file' },
     'aria-label': t('ai_file_pick'),
     onchange: async () => {
@@ -164,14 +156,19 @@ function render(lang) {
       if (f.size > limits.maxFileSizeMB * 1024 * 1024) return (fileInfo.textContent = t('file_too_big', { limit: limits.maxFileSizeMB }));
       try {
         const bytes = new Uint8Array(await f.arrayBuffer());
-        // текст — байтами и decodeText (0.5.1): BOM, UTF-16, строгий UTF-8, иначе Windows-1251 — как у CSV и JSON
+        // текст — байтами и decodeText (0.5.1): BOM, UTF-16, строгий UTF-8, UTF-8 с немногими битыми байтами, иначе Windows-1251 —
+        // как у CSV и JSON
         if (kind === 'text') {
           const r = readAiText(bytes);
-          aiFile = { name: f.name, size: f.size, kind, text: r.text, encoding: r.encoding };
+          aiFile = { name: f.name, size: f.size, kind, text: r.text, encoding: r.encoding, replaced: r.replaced };
         } else {
           aiFile = { name: f.name, size: f.size, kind, bytes };
           // CSV и JSON кодировку сохраняет адаптер текстовых форматов; здесь — только для предупреждения
-          if (kind === 'csv' || kind === 'json') aiFile.encoding = readAiText(bytes).encoding;
+          if (kind === 'csv' || kind === 'json') {
+            const r = readAiText(bytes);
+            aiFile.encoding = r.encoding;
+            aiFile.replaced = r.replaced;
+          }
         }
       } catch (err) {
         return (fileInfo.textContent = t('error', { msg: String(err?.message || err) }));
@@ -463,7 +460,7 @@ function render(lang) {
       }
       showDocx(r);
       showWarnings(mapping, r.tokens);
-      showEncoding(file.encoding);
+      showEncoding(file.encoding, 0, file.replaced);
       lastDownload = { name, blob: new Blob([r.bytes], { type: mimeFor(name) }) };
     } else {
       const r = restoreText(file ? /** @type {string} */ (file.text) : input.value, mapping, { decline });
@@ -473,7 +470,7 @@ function render(lang) {
         // восстановленный текст — в исходной кодировке файла (и с BOM, если он был), как пишет адаптер текстовых форматов
         const enc = file.encoding || { encoding: 'utf-8', bom: false };
         const out = encodeRestored(r.text, enc);
-        showEncoding(enc, out.lost);
+        showEncoding(enc, out.lost, file.replaced);
         lastDownload = { name, blob: new Blob([out.bytes], { type: mimeFor(name, enc.encoding) }) };
       }
     }

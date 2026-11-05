@@ -32,6 +32,7 @@ export const WARN_KEYS = Object.freeze({
   MACROS_NOT_PROCESSED: 'warnMacros',
   JSON_NUMBER_AS_STRING: 'warnJsonNumber',
   JSON_INVALID: 'warnJsonInvalid',
+  TEXT_BAD_BYTES: 'warnTextBadBytes',
 });
 const SVG_NS = 'http://www.w3.org/2000/svg';
 

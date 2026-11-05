@@ -21,7 +21,7 @@ import { zipHasEntry, hasExtension } from './ooxml/adapter.js';
 
 const XLSX_EXT = ['.xlsx', '.xlsm'];
 const PPTX_EXT = ['.pptx', '.pptm'];
-const PLAIN_EXT = ['.txt', '.log', '.md', '.csv', '.json'];
+const PLAIN_EXT = ['.txt', '.log', '.md', '.markdown', '.text', '.csv', '.json']; // .markdown, .text — с 0.5.1
 
 /** @type {LazyAdapterEntry} */
 const XLSX_ENTRY = Object.freeze({

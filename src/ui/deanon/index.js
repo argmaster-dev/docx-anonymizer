@@ -155,7 +155,7 @@ export function aiFileKind(name) {
   if (ext === '.pptx' || ext === '.pptm') return 'pptx';
   if (ext === '.csv') return 'csv';
   if (ext === '.json') return 'json';
-  if (ext === '.md' || ext === '.markdown' || ext === '.txt' || ext === '.log') return 'text';
+  if (ext === '.md' || ext === '.markdown' || ext === '.txt' || ext === '.text' || ext === '.log') return 'text';
   return null;
 }
 
@@ -216,14 +216,15 @@ export function keyTextsFromBytes(list) {
 }
 
 /**
- * Текстовый файл от ИИ (.txt, .md, .markdown, .log) → текст и кодировка (0.5.1, FR-36а): как у адаптера текстовых форматов —
- * BOM, UTF-16, строгий UTF-8, иначе Windows-1251 (`file.text()` читал всё как UTF-8 и портил кириллицу в 1251).
+ * Текстовый файл от ИИ (.txt, .md, .markdown, .text, .log) → текст и кодировка (0.5.1, FR-36а): как у адаптера текстовых форматов —
+ * BOM, UTF-16, строгий UTF-8, UTF-8 с немногими битыми байтами (`replaced` — сколько стало «�»), иначе Windows-1251
+ * (`file.text()` читал всё как UTF-8 и портил кириллицу в 1251).
  * @param {Uint8Array} bytes
- * @returns {{text: string, encoding: {encoding: string, bom: boolean}}}
+ * @returns {{text: string, encoding: {encoding: string, bom: boolean}, replaced: number}}
  */
 export function readAiText(bytes) {
   const d = decodeText(bytes);
-  return { text: d.text, encoding: { encoding: d.encoding, bom: d.bom } };
+  return { text: d.text, encoding: { encoding: d.encoding, bom: d.bom }, replaced: d.replaced || 0 };
 }
 
 /**
@@ -265,6 +266,7 @@ function mimeForExt(name) {
     case '.markdown':
       return 'text/markdown;charset=utf-8';
     case '.txt':
+    case '.text':
     case '.log':
       return 'text/plain;charset=utf-8';
     case '.xlsx':

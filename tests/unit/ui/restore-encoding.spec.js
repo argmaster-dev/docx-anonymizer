@@ -33,7 +33,7 @@ describe('восстановление текстового файла в исх
     expect(out.lost).toBe(0);
     expect(Array.from(out.bytes)).toEqual(Array.from(encodeText(r.text, enc)));
     // байты читаются обратно в тот же текст и ту же кодировку: BOM сохранён, если был
-    expect(readAiText(out.bytes)).toEqual({ text: r.text, encoding: enc });
+    expect(readAiText(out.bytes)).toEqual({ text: r.text, encoding: enc, replaced: 0 });
     expect(encodingLabel(read.encoding)).toBe(label);
   });
 
@@ -42,6 +42,31 @@ describe('восстановление текстового файла в исх
     const broken = new TextDecoder('utf-8').decode(bytes);
     expect(broken).toContain('�');
     expect(restoreText(broken, MAPPING).replaced).toBeLessThan(restoreText(readAiText(bytes).text, MAPPING).replaced);
+  });
+
+  it('UTF-8 с битым байтом или обрезанный посреди символа — UTF-8 (а не 1251), метки находятся, битые байты считаются (ревью 0.5.1)', () => {
+    // основа — скрипт ревьюера rev051/enc.mjs
+    const map = { schemaVersion: 1, entries: [{ token: '[ФИО_1]', value: 'Иванов Иван Иванович', category: 'PERSON' }] };
+    const body = 'Договор с [ФИО_1] подписан. Ещё раз: [ФИО_1].';
+    const enc8 = new TextEncoder();
+    for (const [label, bytes] of [
+      ['utf8+0xFF', new Uint8Array([...enc8.encode(body), 0xff])],
+      ['utf8 обрезан посреди символа', enc8.encode(`${body}ж`).slice(0, -1)],
+      ['битый байт в середине', new Uint8Array([...enc8.encode('Договор с [ФИО_1] '), 0xc0, ...enc8.encode('подписан.')])],
+    ]) {
+      const r = readAiText(bytes);
+      expect(r.encoding, label).toEqual({ encoding: 'utf-8', bom: false });
+      expect(r.replaced, label).toBe(1);
+      const out = restoreText(r.text, map, { decline: false });
+      expect(out.text, label).toMatch(/^Договор с Иванов Иван Иванович \uFFFD?подписан\./);
+      expect(out.unresolved, label).toEqual([]);
+    }
+    // текст в 1251 по-прежнему 1251: битых «байтов UTF-8» много, правильных многобайтовых — нет
+    const r1251 = readAiText(encodeText(body, { encoding: 'windows-1251', bom: false }));
+    expect(r1251).toEqual({ text: body, encoding: { encoding: 'windows-1251', bom: false }, replaced: 0 });
+    // латиница с одним байтом 1251 («№» = 0xB9) — правильных многобайтовых нет, это 1251
+    expect(readAiText(encodeText('Invoice № 12', { encoding: 'windows-1251', bom: false })).encoding.encoding).toBe('windows-1251');
+    expect(RESTORE_DICT.ru.enc_broken).toContain('{n}');
   });
 
   it('символы, которых нет в Windows-1251, считаются: страница предупреждает', () => {
@@ -59,7 +84,8 @@ describe('восстановление текстового файла в исх
 
   it('тексты предупреждения ru/en', () => {
     for (const lang of ['ru', 'en'])
-      for (const k of ['enc_h', 'enc_saved', 'enc_lost', 'ai_file_encoding', 'key_encoding']) expect(RESTORE_DICT[lang][k], `${lang}.${k}`).toBeTruthy();
+      for (const k of ['enc_h', 'enc_saved', 'enc_lost', 'enc_broken_h', 'enc_broken', 'ai_file_encoding', 'key_encoding'])
+        expect(RESTORE_DICT[lang][k], `${lang}.${k}`).toBeTruthy();
     expect(RESTORE_DICT.ru.enc_h).toContain('{enc}');
     expect(Object.keys(RESTORE_DICT.en).sort()).toEqual(Object.keys(RESTORE_DICT.ru).sort());
   });

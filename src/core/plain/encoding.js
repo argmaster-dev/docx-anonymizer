@@ -14,9 +14,11 @@ function cp1251Table() {
 }
 
 /**
- * Байты → текст и кодировка: BOM UTF-8/UTF-16 — по нему; иначе строгий UTF-8; не прошёл — Windows-1251.
+ * Байты → текст и кодировка: BOM UTF-8/UTF-16 — по нему; иначе строгий UTF-8; не прошёл — UTF-8 с заменой битых байтов, если их
+ * мало (0.5.1, ревью: файл UTF-8 с одним битым байтом или обрезанный посреди символа — не Windows-1251); иначе Windows-1251.
+ * `replaced` — сколько символов «�» дала замена битых байтов (только в этом случае).
  * @param {Uint8Array} bytes
- * @returns {{text: string, encoding: 'utf-8'|'utf-16le'|'utf-16be'|'windows-1251', bom: boolean}}
+ * @returns {{text: string, encoding: 'utf-8'|'utf-16le'|'utf-16be'|'windows-1251', bom: boolean, replaced?: number}}
  */
 export function decodeText(bytes) {
   if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)
@@ -36,8 +38,28 @@ export function decodeText(bytes) {
   try {
     return { text: new TextDecoder('utf-8', { fatal: true }).decode(bytes), encoding: 'utf-8', bom: false };
   } catch {
+    const loose = new TextDecoder('utf-8').decode(bytes);
+    const replaced = looseUtf8Bad(loose);
+    if (replaced >= 0) return { text: loose, encoding: 'utf-8', bom: false, replaced };
     return { text: new TextDecoder('windows-1251').decode(bytes), encoding: 'windows-1251', bom: false };
   }
+}
+
+/**
+ * Нестрогий UTF-8 годится, если «�» мало (≤ 3 или ≤ 0,1 % символов) и правильных многобайтовых символов больше, чем битых: у текста
+ * в Windows-1251 почти каждая буква кириллицы даёт «�», а правильные последовательности UTF-8 получаются лишь случайно.
+ * Возвращает число «�» или -1 (не UTF-8).
+ * @param {string} text
+ */
+function looseUtf8Bad(text) {
+  let bad = 0;
+  let wide = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c === 0xfffd) bad++;
+    else if (c > 0x7f) wide++;
+  }
+  return wide > bad && (bad <= 3 || bad <= text.length * 0.001) ? bad : -1;
 }
 
 /**
