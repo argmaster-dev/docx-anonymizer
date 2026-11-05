@@ -189,8 +189,9 @@ export function createHost(env) {
     const pdf = isPdf(bytes) || /\.pdf$/i.test(name);
     const entry = pdf ? null : detectAdapter(bytes, name) || (name ? null : adapterForKind('docx'));
     if (!pdf && !entry) throw new CoreError('NOT_SUPPORTED', 'Формат файла не поддерживается');
-    // 0.5.1: ключ восстановления (карта замен со всеми настоящими значениями) не обрабатывается — его нельзя отправлять в ИИ;
-    // перехват узнаёт его раньше (content/flow.js), здесь — защита для любого клиента протокола (core/recovery-key.js)
+    // 0.5.1: ключ восстановления (карта замен со всеми настоящими значениями) не обрабатывается — его нельзя отправлять в ИИ.
+    // Полная проверка — здесь (core/recovery-key.js: правила по всему тексту, разбор JSON на любой глубине, JSON Lines) и для любого
+    // клиента протокола; перехват (content/flow.js) до хоста проверяет теми же правилами по тексту только начало файла
     if (entry?.kind === 'plain' && isRecoveryKeyFile(bytes, name)) throw new CoreError('RECOVERY_KEY', 'Файл — ключ восстановления');
     const kind = entry ? entry.kind : 'pdf';
     let doc;
@@ -462,7 +463,7 @@ export function toProtocolEntity(doc, g) {
 }
 
 /** Расширения файлов, которые обрабатывает расширение (результат — тот же формат, WP12-B). */
-const RESULT_EXT_RE = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|log|md|csv|json)$/i;
+const RESULT_EXT_RE = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|text|log|md|markdown|csv|json)$/i;
 
 /**
  * 'договор.docx' → 'договор.anon.docx', 'реестр.xlsx' → 'реестр.anon.xlsx'; с `ext` (PDF, версия 0.3): 'договор.pdf' → 'договор.anon.md'.

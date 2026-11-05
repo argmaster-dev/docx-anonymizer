@@ -1,52 +1,78 @@
-// Распознавание ключа восстановления (.mapping.json) по содержимому (версия 0.5.1, FR-27, FR-29, NFR-01): карта замен хранит ВСЕ
+// Распознавание ключа восстановления (.mapping.json) по содержимому (версия 0.5.1, spec FR-27, FR-29а, NFR-01): карта замен хранит ВСЕ
 // настоящие значения документа — отправить её в ИИ-чат значит отдать то, что расширение скрывало (и то, что пропустили детекторы).
-// Перехват (content/flow.js) и хост (offscreen/host.js) отказывают такому файлу кодом RECOVERY_KEY без «загрузить как есть».
-// Узнаём открытую карту (форма schemas/mapping.schema.json, в том числе урезанную до entries, как её принимает страница
-// «Восстановить») и зашифрованный паролем ключ (isEncryptedKey, core/key-crypto.js). Имя «*.mapping.json» — только дополнительный
-// признак: переименованный ключ (.txt, .md, .log, .csv) узнаётся так же. JSON с полем entries иной формы — не ключ.
-// Бинарные форматы (DOCX, PDF, Excel, PowerPoint, ZIP) не разбираются. Чистый JS, без DOM; значения из файла в логи не попадают (NFR-14).
+// Хост (offscreen/host.js) отказывает такому файлу кодом RECOVERY_KEY; перехват (content/flow.js) до хоста проверяет начало файла
+// теми же правилами по тексту (core/recovery-key-sniff.js). Здесь — полная проверка: правила по всему тексту, затем разбор JSON
+// (весь текст или JSON Lines построчно) и обход на любой глубине — открытая карта (форма schemas/mapping.schema.json, в том числе
+// урезанная до entries или голый массив записей) и зашифрованный ключ (isEncryptedKey, core/key-crypto.js). Имя «*.mapping.json» —
+// дополнительный признак. JSON с полем entries иной формы — не ключ. Бинарные форматы не разбираются. Чистый JS, без DOM;
+// значения из файла в логи не попадают (NFR-14).
 import { isEncryptedKey } from './key-crypto.js';
 import { TOOL_NAME } from './mapping.js';
 import { decodeText } from './plain/encoding.js';
+import { looksLikeKeyText } from './recovery-key-sniff.js';
 
-/** Метка вида «[ФИО_1]», «[КОМПАНИЯ_12]», «[custom:Код_3]» — как пишет PlaceholderAllocator. */
-const TOKEN_RE = /^\[[^\][]+_\d+\]$/;
-/** Поля верхнего уровня открытой карты (schemas/mapping.schema.json), кроме entries. */
-const TOP_FIELDS = ['schemaVersion', 'createdAt', 'tool', 'mode', 'language', 'documents'];
+/** Метка встроенной категории, как пишет PlaceholderAllocator: «[ФИО_1]», «[PERSON_12]». */
+const TOKEN_RE = /^\[\p{Lu}[\p{Lu}\p{N}_]*_\d+\]$/u;
+/** Любая метка «[…_N]» (свои категории: префикс может быть строчным) — только с категорией в формате карты. */
+const ANY_TOKEN_RE = /^\[[^[\]]{1,40}_\d+\]$/u;
+const CATEGORY_RE = /^(?:[A-Z][A-Z0-9_]*|custom:.+)$/;
 /** Сколько записей проверять: для решения хватает начала карты. */
 const SAMPLE = 200;
+/** Предел обхода разобранного JSON: глубина и число узлов (огромная выгрузка не должна подвесить хост). */
+const MAX_DEPTH = 8;
+const MAX_NODES = 50000;
 
 const isObj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
 
-/** Запись карты: метка и значение — строки; метка похожа на нашу или рядом есть категория/полная форма. */
+/** Запись карты: значение — строка, метка — наша («[ФИО_1]») или «[…_N]» с категорией карты. */
 function entryLike(e) {
   if (!isObj(e) || typeof e.token !== 'string' || typeof (e.value ?? e.original) !== 'string') return false;
-  return TOKEN_RE.test(e.token) || typeof e.category === 'string' || typeof e.placeholder === 'string';
+  return TOKEN_RE.test(e.token) || (ANY_TOKEN_RE.test(e.token) && typeof e.category === 'string' && CATEGORY_RE.test(e.category));
+}
+
+/** Массив записей карты: не меньше половины первых SAMPLE — записи карты; одна запись — только с категорией или полной формой. */
+function entriesLike(arr) {
+  const sample = arr.slice(0, SAMPLE);
+  const good = sample.filter(entryLike);
+  if (!good.length || good.length * 2 < sample.length) return false;
+  return good.length > 1 || typeof good[0].category === 'string' || typeof good[0].placeholder === 'string';
 }
 
 /**
- * Открытая карта замен: массив entries, где не меньше половины записей (и хотя бы одна) — записи карты. Пустая карта — ключ,
- * только если верхний уровень наш (schemaVersion, tool с нашим именем или документы): имена документов — тоже данные.
+ * Открытая карта замен: записи карты в entries (одной записи с меткой «[ФИО_1]» достаточно) или наш заголовок карты
+ * (`schemaVersion: 1` и `tool.name` расширения) — при любом режиме и даже без записей: имена документов — тоже данные.
  * @param {any} obj
  */
 export function isOpenMapping(obj) {
   if (!isObj(obj) || !Array.isArray(obj.entries)) return false;
-  const top = TOP_FIELDS.filter((k) => k in obj).length;
-  if (!obj.entries.length) return obj.schemaVersion === 1 && (obj.tool?.name === TOOL_NAME || (Array.isArray(obj.documents) && top >= 3));
+  if (obj.schemaVersion === 1 && obj.tool?.name === TOOL_NAME) return true;
   const sample = obj.entries.slice(0, SAMPLE);
   const good = sample.filter(entryLike).length;
-  if (!good || good * 2 < sample.length) return false;
-  // без полей верхнего уровня (карту урезали до entries) — только если метки наши: «[ФИО_1]», а не произвольные token
-  return top > 0 || sample.some((e) => entryLike(e) && TOKEN_RE.test(e.token));
+  return good > 0 && good * 2 >= sample.length;
 }
 
+/** Зашифрованный ключ: поля isEncryptedKey и их типы (у описания формата в JSON Schema те же имена полей, но это объекты). */
+const encryptedLike = (obj) => isEncryptedKey(obj) && typeof obj.ct === 'string' && isObj(obj.kdf);
+
 /**
- * Объект JSON — ключ восстановления: открытая карта, зашифрованный ключ или массив, где есть такой (склеенные вручную ключи).
- * @param {any} obj
+ * Значение JSON — ключ восстановления или содержит его на любой глубине (до MAX_DEPTH, MAX_NODES узлов): открытая карта,
+ * зашифрованный ключ, массив записей карты.
+ * @param {any} value
  */
-export function isRecoveryKeyObject(obj) {
-  if (Array.isArray(obj)) return obj.slice(0, SAMPLE).some((x) => isOpenMapping(x) || isEncryptedKey(x));
-  return isOpenMapping(obj) || isEncryptedKey(obj);
+export function isRecoveryKeyObject(value) {
+  let nodes = 0;
+  const walk = (v, depth) => {
+    if (!v || typeof v !== 'object' || depth > MAX_DEPTH || ++nodes > MAX_NODES) return false;
+    if (Array.isArray(v)) {
+      if (entriesLike(v)) return true;
+      for (const x of v.slice(0, SAMPLE)) if (walk(x, depth + 1)) return true;
+      return false;
+    }
+    if (isOpenMapping(v) || encryptedLike(v)) return true;
+    for (const k in v) if (walk(v[k], depth + 1)) return true;
+    return false;
+  };
+  return walk(value, 0);
 }
 
 function tryParse(text) {
@@ -57,20 +83,30 @@ function tryParse(text) {
   }
 }
 
+/** JSON Lines: строки, которые разбираются как JSON (объекты и массивы), — одним массивом. */
+function jsonLines(text) {
+  const out = [];
+  for (const line of text.split(/\r?\n/)) {
+    const t = line.trim();
+    if (t[0] !== '{' && t[0] !== '[') continue;
+    const r = tryParse(t);
+    if (r.ok) out.push(r.value);
+  }
+  return out;
+}
+
 /**
- * Текст файла — ключ восстановления. Весь текст как JSON; не разобрался (ключ вставлен в .md в блок кода или с подписью
- * в .txt) — кусок от первой «{» до последней «}». Быстрый отсев: без «"entries"» и «"ct"» JSON не разбирается.
+ * Текст файла — ключ восстановления: правила по тексту (core/recovery-key-sniff.js — обрезанный, склеенный, в Markdown); иначе
+ * весь текст как JSON или JSON Lines построчно и обход разобранного. Быстрый отсев: без «"entries"», «"token"» и «"ct"» — не ключ.
  * @param {string} text
  */
 export function isRecoveryKeyText(text) {
-  if (typeof text !== 'string' || !/"(?:entries|ct)"\s*:/.test(text)) return false;
+  if (typeof text !== 'string' || !/"(?:entries|token|ct)\\?"/.test(text)) return false; // \" — ключ строкой внутри JSON
+  if (looksLikeKeyText(text)) return true;
   const whole = tryParse(text.trim());
   if (whole.ok) return isRecoveryKeyObject(whole.value);
-  const from = text.indexOf('{');
-  const to = text.lastIndexOf('}');
-  if (from < 0 || to <= from) return false;
-  const inner = tryParse(text.slice(from, to + 1));
-  return inner.ok && isRecoveryKeyObject(inner.value);
+  const lines = jsonLines(text);
+  return lines.length > 0 && isRecoveryKeyObject(lines);
 }
 
 /**

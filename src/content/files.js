@@ -1,4 +1,5 @@
 // Чистые функции работы с файлами перехвата (FR-04, FR-05, FR-06). Без DOM-событий — тестируются в Node.
+import { KEY_SNIFF_BYTES, looksLikeKeyText, sniffDecode } from '../core/recovery-key-sniff.js';
 
 export const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 export const PDF_MIME = 'application/pdf';
@@ -34,7 +35,7 @@ const OTHER_KINDS = [
     mime: ['application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint.presentation.macroEnabled.12'],
   },
   // текстовые — только по расширению: формат (CSV, JSON, строки) хост определяет по имени
-  { kind: 'text', re: /\.(txt|log|md|csv|json)$/i, mime: [] },
+  { kind: 'text', re: /\.(txt|text|log|md|markdown|csv|json)$/i, mime: [] },
 ];
 
 /** Вид файла для перехвата: 'docx' | 'pdf' | 'xlsx' | 'pptx' | 'text' | null (остальное проходит как есть). */
@@ -62,6 +63,20 @@ export function isSupported(file, settings) {
  */
 export const isKeyFileName = (file) => /\.mapping\.json$/i.test(file?.name || '');
 
+/**
+ * Перехваченный текстовый файл похож на ключ восстановления — по первым KEY_SNIFF_BYTES байтам, без хоста (0.5.1, ревью):
+ * те же правила по тексту, что у хоста (core/recovery-key-sniff.js); кодировка — sniffDecode. Бинарные форматы не читаются.
+ * @param {File} file
+ */
+export async function sniffRecoveryKey(file) {
+  if (fileKind(file) !== 'text') return false;
+  try {
+    return looksLikeKeyText(sniffDecode(new Uint8Array(await file.slice(0, KEY_SNIFF_BYTES).arrayBuffer())));
+  } catch {
+    return false; // не прочитался — решит хост; файл с именем ключа и так не уйдёт без его ответа
+  }
+}
+
 /** Есть ли среди файлов хотя бы один обрабатываемый. */
 export function hasSupported(files, settings) {
   return Array.from(files || []).some((f) => isSupported(f, settings));
@@ -84,7 +99,7 @@ export function mergeInOrder(originals, replacements) {
 }
 
 /** Расширения результатов «тот же формат» (WP12-B): имя результата сохраняет расширение исходника. */
-const SAME_EXT_RE = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|log|md|csv|json)$/i;
+const SAME_EXT_RE = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|text|log|md|markdown|csv|json)$/i;
 
 /** Имя файла для скачивания маппинга: «договор.anon.docx» (или «.anon.md», «.anon.txt» из PDF, «.anon.xlsx»…) → «договор.mapping.json». */
 export function mappingFileName(resultName) {

@@ -18,6 +18,7 @@ import {
   neutralName,
   uniqueResultName,
   isKeyFileName,
+  sniffRecoveryKey,
 } from './files.js';
 import { Link, contextValid, readOpenShadowFlag } from './runtime.js';
 import { exclusionValue } from '../ui/preview/model.js';
@@ -80,6 +81,9 @@ async function runOnce(originals, deps) {
   const blocked = (i) => keys.has(i) || (isKeyFileName(originals[i]) && !analyzed.has(i));
   /** что можно отдать сайту: всё, кроме ключей восстановления */
   const sendable = (files) => files.filter((_, i) => !blocked(i));
+  // перехват сам, без хоста, проверяет начало каждого текстового файла (те же правила, что у хоста): сбой хоста, инвалидация
+  // контекста или лимит размера не откроют переименованному ключу путь «как есть» или «оригиналом»
+  for (const i of procIdx) if (await sniffRecoveryKey(originals[i])) keys.add(i);
   let closed = false;
   let finish;
   const result = new Promise((res) => (finish = res));
@@ -209,9 +213,9 @@ async function runOnce(originals, deps) {
   function fail(i, err) {
     if (isInvalidatedError(err) || !contextValid()) return invalidated();
     const code = err instanceof ProtocolError ? err.code : 'INTERNAL';
-    // ключ восстановления (отказ хоста) и файл с именем ключа при любом сбое — отказ без «загрузить как есть» и «повторить»:
-    // иначе сбой хоста предложил бы отправить ключ как есть
-    if (code === 'RECOVERY_KEY' || isKeyFileName(originals[i])) {
+    // ключ восстановления (узнан перехватом или хостом) и файл с именем ключа при любом сбое (и BATCH_BEGIN) — отказ без
+    // «загрузить как есть» и «повторить»: иначе сбой хоста предложил бы отправить ключ как есть
+    if (keys.has(i) || code === 'RECOVERY_KEY' || isKeyFileName(originals[i])) {
       keys.add(i);
       return failKey(i);
     }
@@ -235,6 +239,7 @@ async function runOnce(originals, deps) {
   async function analyzeOne(i) {
     const k = procIdx.indexOf(i);
     const file = originals[i];
+    if (keys.has(i)) return failKey(i); // ключ хосту не отправляется
     if (file.size > settings.maxFileSizeMB * 1024 * 1024) return fail(i, new ProtocolError('TOO_LARGE', 'too large'));
     try {
       panel.setProgress(k, 'receiving', 0);
@@ -319,7 +324,7 @@ async function runOnce(originals, deps) {
         // PDF уходит текстом .anon.md / .anon.txt (версия 0.3); остальные форматы — тем же форматом (0.5)
         // расширение от хоста — только у PDF: .txt и .md сами по себе (0.5) остаются собой
         // у файла без расширения (распознан хостом по содержимому) — расширение результата хоста
-        const own = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|log|md|csv|json)$/i.test(originals[i].name || '');
+        const own = /\.(docx|docm|xlsx|xlsm|pptx|pptm|txt|text|log|md|markdown|csv|json)$/i.test(originals[i].name || '');
         const ext = isPdfFile(originals[i]) ? /\.(md|txt)$/i.exec(res.name || '')?.[0] : own ? undefined : /\.(xlsx|pptx)$/i.exec(res.name || '')?.[0];
         // имя от хоста — если сессия этого же файла: в нём найденное в имени заменено метками (ревью WP12-B, п. 16);
         // fail-closed: имени хоста нет или оно от другой сессии — нейтральное «document.anon.<расширение>», а не исходное имя;
@@ -366,6 +371,7 @@ async function runOnce(originals, deps) {
     return result;
   }
   for (const i of procIdx) panel.addFile(originals[i].name, originals[i].size);
+  for (const i of procIdx) if (keys.has(i)) failKey(i); // отказ виден сразу
   (async () => {
     try {
       if (batchId) await link.get().request(MSG.BATCH_BEGIN, { batchId });

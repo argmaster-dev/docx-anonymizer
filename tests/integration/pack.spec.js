@@ -96,7 +96,7 @@ describe('архив релиза', () => {
     expect(Object.keys(zip).filter((n) => /ort-wasm.*\.mjs$/.test(n))).toEqual([]);
   });
 
-  it('словари ФИО — файлы vendor/dict/*.txt с NOTICE.md, ни в одном бандле; content.js < 163 КиБ (К14 0.5, К15 0.2)', () => {
+  it('словари ФИО — файлы vendor/dict/*.txt с NOTICE.md, ни в одном бандле; content.js < 165 КиБ (К14 0.5, К15 0.2)', () => {
     for (const n of DICT_FILES) {
       const f = `vendor/dict/${n}.txt`;
       expect(zip[f], f).toBeDefined();
@@ -113,7 +113,9 @@ describe('архив релиза', () => {
     // сторож от словарей в content.js (К15 0.2: словари — 350+ КБ); 150 → 163 КиБ в 0.5 (WP12-D): панель получила блок скрытых данных
     // документа (строка «В документе: …», переключатели, тексты ru/en; 163 773 байт), код не минифицируется (решение владельца 26.10.2026);
     // пароля и шифрования в content.js нет — ключ с паролем сохраняется на странице расширения (ревью WP12-D)
-    expect(zip['content.js'].length).toBeLessThan(163 * 1024);
+    // 163 → 165 КиБ в 0.5.1 (решение координатора по ревью 0.5.1): перехват сам, без хоста, проверяет начало текстового файла на ключ
+    // восстановления (core/recovery-key-sniff.js) и показывает отказ без «загрузить как есть» — ≈ 3,5 КБ кода и текстов
+    expect(zip['content.js'].length).toBeLessThan(165 * 1024);
     expect(strFromU8(zip['content.js'])).not.toMatch(/PBKDF2|encryptMapping|type: "password"|type: 'password'/);
     const bundles = Object.keys(zip).filter((n) => n.endsWith('.js'));
     expect(bundles).toContain('offscreen/worker.js');

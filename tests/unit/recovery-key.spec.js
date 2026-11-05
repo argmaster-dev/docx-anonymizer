@@ -8,7 +8,10 @@ import { join } from 'node:path';
 import { hasKeyFileName, isOpenMapping, isRecoveryKeyFile, isRecoveryKeyObject, isRecoveryKeyText } from '../../src/core/recovery-key.js';
 import { encryptMapping } from '../../src/core/key-crypto.js';
 import { encodeText } from '../../src/core/plain/encoding.js';
-import { isKeyFileName } from '../../src/content/files.js';
+import { isKeyFileName, sniffRecoveryKey } from '../../src/content/files.js';
+import { KEY_SNIFF_BYTES, looksLikeKeyText, sniffDecode } from '../../src/core/recovery-key-sniff.js';
+import { CATEGORIES_KIND, CONFIG_KIND } from '../../src/options/config-io.js';
+import { companiesFile } from '../../src/options/companies-io.js';
 import { createHost } from '../../src/offscreen/host.js';
 import { MSG, postChunked, ERROR_CODES } from '../../src/shared/protocol.js';
 import { ERROR_CODES as CORE_CODES } from '../../src/core/errors.js';
@@ -40,6 +43,81 @@ describe('распознавание ключа восстановления', (
       [utf8(KEY_TEXT), ''],
     ])
       expect(isRecoveryKeyFile(bytes, name), name).toBe(true);
+  });
+
+  it('обходы из ревью 0.5.1: вложенный, склеенный, обрезанный, в Markdown со скобками, голый массив, JSON Lines, большой', async () => {
+    const enc = await encryptMapping(MAPPING, 'Пароль-для-теста-1', { iterations: 600000 });
+    const E = JSON.stringify(enc);
+    const cases = [
+      ['вложенный {data: карта}', JSON.stringify({ data: MAPPING }), 'a.json'],
+      ['глубже {a: {b: карта}}', JSON.stringify({ a: { b: MAPPING } }), 'a.json'],
+      ['два ключа подряд', `${KEY_TEXT}\n${KEY_TEXT}`, 'a.txt'],
+      ['обрезанный .txt', KEY_TEXT.slice(0, Math.floor(KEY_TEXT.length * 0.7)), 'a.txt'],
+      ['Markdown со скобками до блока', `Пример {x}\n\`\`\`json\n${KEY_TEXT}\n\`\`\`\n`, 'a.md'],
+      ['Markdown со скобками после', `\`\`\`json\n${KEY_TEXT}\n\`\`\`\nи {y}`, 'a.markdown'],
+      ['голый массив entries', JSON.stringify(MAPPING.entries), 'a.json'],
+      ['JSON Lines записей', MAPPING.entries.map((e) => JSON.stringify(e)).join('\n'), 'a.log'],
+      ['JSON Lines ключей', [MAPPING, MAPPING].map((x) => JSON.stringify(x)).join('\n'), 'a.log'],
+      ['одна запись без полей карты', JSON.stringify({ entries: [{ token: '[ФИО_1]', value: 'Иванов' }] }), 'a.txt'],
+      ['ключ строкой внутри JSON', JSON.stringify({ note: KEY_TEXT }), 'a.json'],
+      ['зашифрованный, вложенный', JSON.stringify({ key: enc }), 'x.json'],
+      ['зашифрованный, обрезанный', E.slice(0, 200), 'x.txt'],
+      [
+        'режим mask (метки — не «[…_N]»)',
+        JSON.stringify({ ...MAPPING, mode: 'mask', entries: MAPPING.entries.map((e) => ({ ...e, token: 'XXXX', placeholder: 'XXXX' })) }),
+        'x.text',
+      ],
+    ];
+    for (const [label, text, name] of cases) expect(isRecoveryKeyFile(utf8(text), name), label).toBe(true);
+    // зашифрованный в 1251 и большой ключ (≈ 20 МБ): перехват видит его по первым 64 КБ
+    expect(isRecoveryKeyFile(cp1251(E), 'x.txt')).toBe(true);
+    const big = {
+      ...MAPPING,
+      entries: Array.from({ length: 200000 }, (_, i) => ({ ...MAPPING.entries[i % MAPPING.entries.length], token: `[ФИО_${i + 1}]` })),
+    };
+    const bigBytes = utf8(JSON.stringify(big));
+    expect(bigBytes.length).toBeGreaterThan(10e6);
+    expect(isRecoveryKeyFile(bigBytes, 'a.txt')).toBe(true);
+    expect(looksLikeKeyText(sniffDecode(bigBytes.subarray(0, KEY_SNIFF_BYTES)))).toBe(true);
+  });
+
+  it('похожие на карту, но не ключи (ревью 0.5.1): i18n-записи, дизайн-токены, HAR, схема карты', () => {
+    for (const [label, obj] of [
+      ['i18n token/value/category', { language: 'ru', entries: [{ token: 'hello', value: 'Привет', category: 'greet' }] }],
+      ['токены без меток', { entries: [{ token: 'abc', value: 'x', category: 'y' }] }],
+      ['HAR', { log: { entries: [{ request: {}, response: {} }] } }],
+      ['дизайн-токены', { entries: [{ token: '[color_1]', value: '#fff' }] }],
+      [
+        'дизайн-токены, два',
+        {
+          entries: [
+            { token: '[color_1]', value: '#fff' },
+            { token: '[color_2]', value: '#000' },
+          ],
+        },
+      ],
+    ])
+      expect(isRecoveryKeyText(JSON.stringify(obj)), label).toBe(false);
+  });
+
+  it('перехват (content/files.js): начало файла, кодировки, бинарные форматы не читаются', async () => {
+    const file = (bytes, name) => new File([bytes], name);
+    for (const [bytes, name] of [
+      [utf8(KEY_TEXT), 'заметки.txt'],
+      [cp1251(KEY_TEXT), 'ключ-1251.md'],
+      [utf16(KEY_TEXT), 'ключ.json'],
+      [encodeText(KEY_TEXT, { encoding: 'utf-16be', bom: false }), 'ключ.log'],
+      [utf8bom(KEY_TEXT), 'ключ.csv'],
+      [utf8(KEY_TEXT), 'ключ.markdown'],
+      [utf8(KEY_TEXT), 'ключ.text'],
+    ])
+      expect(await sniffRecoveryKey(file(bytes, name)), name).toBe(true);
+    // UTF-8, обрезанный на 64 КБ посреди буквы, — не Windows-1251
+    const cyr = utf8(JSON.stringify({ ...MAPPING, pad: 'Ж'.repeat(40000) }));
+    expect(looksLikeKeyText(sniffDecode(cyr.subarray(0, KEY_SNIFF_BYTES - 1)))).toBe(true);
+    expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ.docx'))).toBe(false);
+    expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ.zip'))).toBe(false);
+    expect(await sniffRecoveryKey(file(utf8(JSON.stringify({ entries: [{ id: 1 }] })), 'x.json'))).toBe(false);
   });
 
   it('ключ внутри текста: блок кода Markdown, подпись в .txt; массив ключей', () => {
@@ -89,10 +167,10 @@ describe('распознавание ключа восстановления', (
     const loose = JSON.stringify({ entries: [{ token: 'abc123', value: 'Иванов' }] });
     expect(isRecoveryKeyFile(utf8(loose), 'dogovor.mapping.json')).toBe(true);
     expect(isRecoveryKeyFile(utf8(loose), 'dogovor.json')).toBe(false);
-    // обрезанный ключ (битый JSON) с именем ключа — ключ; без имени — нет
+    // обрезанный ключ (битый JSON) — ключ и под любым именем (ревью 0.5.1: правила по тексту)
     const cut = KEY_TEXT.slice(0, Math.floor(KEY_TEXT.length / 2));
     expect(isRecoveryKeyFile(utf8(cut), 'x.mapping.json')).toBe(true);
-    expect(isRecoveryKeyFile(utf8(cut), 'x.txt')).toBe(false);
+    expect(isRecoveryKeyFile(utf8(cut), 'x.txt')).toBe(true);
     expect(hasKeyFileName('Договор.MAPPING.JSON')).toBe(true);
     expect(hasKeyFileName('mapping.json.txt')).toBe(false);
     expect(isKeyFileName({ name: 'a.anon.mapping.json' })).toBe(true);
@@ -111,9 +189,36 @@ describe('распознавание ключа восстановления', (
       }
     };
     walk('tests/fixtures');
-    expect(files.length).toBeGreaterThan(50);
-    // deanon.json содержит карту под полем mapping — это тестовые данные, а не файл ключа: верхний уровень не карта
-    for (const p of files) expect(isRecoveryKeyFile(new Uint8Array(readFileSync(p)), p), p).toBe(false);
+    expect(files.length).toBeGreaterThan(200);
+    // deanon.json и deanon-decline.json — тестовые данные с настоящей (вымышленной) картой под полем mapping: это ключ на глубине 1,
+    // его и должно ловить (ревью 0.5.1); остальное — не ключи
+    const KEYS = new Set(['tests/fixtures/deanon.json', 'tests/fixtures/deanon-decline.json']);
+    for (const p of files) {
+      const bytes = new Uint8Array(readFileSync(p));
+      expect(isRecoveryKeyFile(bytes, p), p).toBe(KEYS.has(p));
+      expect(looksLikeKeyText(sniffDecode(bytes.subarray(0, KEY_SNIFF_BYTES))), `перехват: ${p}`).toBe(KEYS.has(p));
+    }
+  });
+
+  it('схемы, package-lock, экспорт настроек, компаний и своих категорий — не ключи (и для перехвата)', () => {
+    const files = [
+      ...readdirSync('schemas').map((f) => [`schemas/${f}`, readFileSync(`schemas/${f}`)]),
+      ['package-lock.json', readFileSync('package-lock.json')],
+      ['package.json', readFileSync('package.json')],
+      ['manifest.json', readFileSync('manifest.json')],
+    ];
+    const s = { ...defaultSettings(), exclusions: [{ value: 'Иванов Пётр', category: 'PERSON' }], blocklist: ['https://chat.example'] };
+    const custom = JSON.parse(readFileSync('tests/fixtures/custom-categories.json', 'utf8')).categories.map((c) => c.category);
+    for (const [n, obj] of [
+      ['config', { kind: CONFIG_KIND, version: 1, schemaVersion: 4, exportedAt: '2026-11-05T00:00:00Z', settings: { ...s, customCategories: custom } }],
+      ['categories', { kind: CATEGORIES_KIND, version: 1, categories: custom }],
+      ['companies', companiesFile([{ name: 'ООО «Ромашка-Трейд»', aliases: ['Ромашка'] }])],
+    ])
+      files.push([n, utf8(JSON.stringify(obj, null, 2))]);
+    for (const [n, bytes] of files) {
+      expect(isRecoveryKeyFile(new Uint8Array(bytes), n), n).toBe(false);
+      expect(looksLikeKeyText(sniffDecode(new Uint8Array(bytes).subarray(0, KEY_SNIFF_BYTES))), `перехват: ${n}`).toBe(false);
+    }
   });
 });
 
