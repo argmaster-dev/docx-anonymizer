@@ -39,7 +39,23 @@
 
 **Development.** `npm test` (Vitest, ~3 300 tests), `npm run e2e` (Playwright, Chromium with the extension), `npm run lint`, `npm run pack` (reproducible lite and full release archives), `npm run pack:store` (store package without the `key` field, checked against store requirements), `npm run store:shots` (store and README screenshots), `npm run pack:model`, `npm run gen-pdf-fixtures`, `npm run gen-genre-fixtures` / `gen-heldout-fixtures` (genre corpus and held-out set), `npm run eval-genres` (precision/recall per genre, category and mode; `NER_MODEL_DIR=…` adds the model, `PRIVATE_FIXTURES=1` adds your own documents from the git-ignored `tests/fixtures/private/`, printing counts only), `tools/ner-train` (Python/uv training pipeline). MIT license; dictionaries, ONNX Runtime Web (MIT), pdf.js (Apache-2.0) and the model carry their own notices.
 
+**What's new in 0.5** ([release](https://github.com/argmaster-dev/docx-anonymizer/releases/tag/v0.5.0)). Excel and PowerPoint files, plain-text formats (`.txt`, `.md`, `.csv`, `.json`, `.log`), 50 categories instead of 21 (passport parts, driving licence, civil registry certificates, VIN, cadastral and case numbers, IP addresses, handles), hidden content (comments, tracked changes, hidden text) reported and removable before upload, password-protected recovery key, NER model 1.2.0 (fewer missed foreign names and lone surnames, fully int8).
+
 </details>
+
+## Что нового в 0.5
+
+Версия 0.5.0 вышла 2 ноября 2026 года — [релиз и архивы](https://github.com/argmaster-dev/docx-anonymizer/releases/tag/v0.5.0).
+
+- **Excel и PowerPoint.** `.xlsx`/`.xlsm` и `.pptx`/`.pptm` обезличиваются так же, как Word: в сервис уходит файл того же формата с листами, формулами, форматами ячеек, слайдами и заметками. ИНН, счёт или телефон, записанные в ячейке числом, находятся по формату и заголовку столбца. Ответ ИИ в `.xlsx`/`.pptx` восстанавливается.
+- **Текстовые файлы.** `.txt`, `.md`, `.csv`, `.json`, `.log` — с сохранением структуры: разделители CSV и ключи JSON не трогаются, JSON остаётся валидным.
+- **50 категорий вместо 21.** Паспорт по частям (серия и номер, кем и когда выдан, код подразделения), загранпаспорт, водительское, военный билет, ВНЖ, свидетельства ЗАГС, полис ОМС, СТС/ПТС, VIN, госномер, кадастровые номера, номера дел, IP-адреса и ники.
+- **Скрытое в документе.** Панель сообщает о комментариях, истории правок, скрытом тексте, скрытых листах и слайдах и предлагает удалить их перед отправкой ([«Скрытые данные»](#скрытые-данные)).
+- **Ключ восстановления под паролем.** Файл ключа можно зашифровать (AES-GCM-256, PBKDF2 600 000 итераций); без пароля он бесполезен.
+- **Модель NER 1.2.0.** Меньше пропусков иностранных имён, одиночных фамилий и имён в таблицах и на слайдах; полностью int8, 20 страниц — около 2 секунд. Полный архив ставит 1.2.0 сам поверх 1.1.0.
+- **Точнее в коммерческих предложениях:** составная подпись «ИНН/КПП» с двумя значениями, названия ИИ-помощников и программ («Алиса», «…-айзер») не принимаются за людей, метки из уже обезличенного текста не маскируются повторно.
+
+Что произойдёт с настройками и моделью при переходе с 0.4 — в разделе [«Что изменится после обновления с 0.4»](#что-изменится-после-обновления-с-04). Предыдущие версии — на странице [Releases](https://github.com/argmaster-dev/docx-anonymizer/releases).
 
 ## Зачем
 
