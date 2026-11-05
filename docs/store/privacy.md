@@ -2,7 +2,7 @@
 
 *English version below.*
 
-Редакция от 27 октября 2026 года, версия расширения 0.5.0.
+Редакция от 5 ноября 2026 года, версия расширения 0.5.1.
 
 DOCX Anonymizer — браузерное расширение, которое обезличивает документы перед загрузкой на сайт: находит в файле персональные данные и реквизиты и заменяет их метками. Вся обработка происходит на вашем компьютере.
 
@@ -37,7 +37,7 @@ DOCX Anonymizer — браузерное расширение, которое о
 
 ## Ссылки
 
-В меню и на страницах расширения есть ссылки на справку, на страницу релизов проекта и на сайт разработчика. Они открываются только по вашему щелчку, как обычные ссылки в новой вкладке; само расширение при этом ничего не отправляет.
+В меню и на страницах расширения есть ссылки на справку, на страницу релизов проекта, на сайт разработчика и на его Telegram-канал (@sitimlab, с 0.5.1). Они открываются только по вашему щелчку, как обычные ссылки в новой вкладке; само расширение при этом ничего не отправляет.
 
 ## Как удалить данные
 
@@ -64,7 +64,7 @@ DOCX Anonymizer — браузерное расширение, которое о
 
 # DOCX Anonymizer privacy policy
 
-Revision of 27 October 2026, extension version 0.5.0.
+Revision of 5 November 2026, extension version 0.5.1.
 
 DOCX Anonymizer is a browser extension that anonymizes documents before you upload them to a website: it finds personal data and identifiers in a file and replaces them with markers. All processing happens on your computer.
 
@@ -99,7 +99,7 @@ After installation the extension has access to no website. Access is requested f
 
 ## Links
 
-The menu and the extension's pages link to the help page, the project's releases page and the developer's website. They open only when you click them, as ordinary links in a new tab; the extension itself sends nothing.
+The menu and the extension's pages link to the help page, the project's releases page, the developer's website and the developer's Telegram channel (@sitimlab, since 0.5.1). They open only when you click them, as ordinary links in a new tab; the extension itself sends nothing.
 
 ## How to delete data
 

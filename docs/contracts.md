@@ -1536,29 +1536,41 @@ IV — `getRandomValues`, итераций 600 000 (меньше `KDF_MIN_ITERAT
 
 ### 9.10. Версия 0.5.1: ключ восстановления не уходит в чат, кодировка на странице восстановления, канал студии
 
-**Распознавание ключа** (`core/recovery-key.js`, spec FR-29а): `isRecoveryKeyFile(bytes, name?)` — текст по `decodeText` (BOM, UTF-16, UTF-8, Windows-1251),
-затем `isRecoveryKeyText(text)`: быстрый отсев без `"entries":`/`"ct":`; весь текст как JSON или кусок от первой «{» до последней «}» (ключ в блоке кода `.md`);
-`isRecoveryKeyObject(obj)` — `isOpenMapping` (массив `entries`, не меньше половины первых 200 записей — `{token, value|original}` с меткой `[…_N]`, `category` или
-`placeholder`; без полей верхнего уровня карты — только с метками `[…_N]`; пустая карта — при `schemaVersion: 1` и `tool.name` = `TOOL_NAME`), `isEncryptedKey`
-(`core/key-crypto.js`) или массив таких объектов. Имя `*.mapping.json` (`hasKeyFileName`) — дополнительный признак: с ним хватает записи с `token` или битого
-JSON с полями `token` и `value`/`original`. JSON с полем `entries` иной формы и фикстуры `tests/fixtures/**` (240 текстовых файлов) — не ключ.
+**Правила по тексту** (`core/recovery-key-sniff.js`, spec FR-29а; общие для перехвата и хоста, без зависимостей — входят в `content.js`):
+`looksLikeKeyText(text)` — две записи `"token": "[…_N]"` (метка встроенной категории: `\p{Lu}[\p{Lu}\p{N}_]*_N`) при `"value"`/`"original"`; одна запись
+(или любая метка `[…_N]`) — при признаке карты (`"placeholder"`, `"category"` формата карты, `"schemaVersion": 1`); заголовок `"tool": {"name": "DOCX Anonymizer"`
+при `"entries"`; зашифрованный ключ — `encVersion`/`"enc": "AES-GCM…"` + `"kdf": {` + base64 `ct`/`iv`/`salt`; экранированные кавычки (`\"`) — проверка и без
+экранирования. `sniffDecode(bytes)` — лёгкое декодирование начала файла для перехвата (UTF-16 по BOM или нулевому байту первой пары, строгий UTF-8 с `stream`,
+иначе Windows-1251), `KEY_SNIFF_BYTES` = 64 КБ.
+**Полная проверка** (`core/recovery-key.js`): `isRecoveryKeyFile(bytes, name?)` — текст по `decodeText`, затем `isRecoveryKeyText(text)`: отсев без
+`"entries"`/`"token"`/`"ct"` (и с `\"`); `looksLikeKeyText` по всему тексту; иначе разбор JSON (весь текст или JSON Lines построчно) и `isRecoveryKeyObject` —
+обход на любой глубине (≤ 8 уровней, ≤ 50 000 узлов): `isOpenMapping` (`schemaVersion: 1` и `tool.name` = `TOOL_NAME` — при любых записях и режиме; иначе
+не меньше половины первых 200 записей `entries` — `{token, value|original}` с меткой встроенной категории или `[…_N]` с `category` формата карты), массив
+записей (одна — только с `category`/`placeholder`), зашифрованный ключ (`isEncryptedKey`, `ct` — строка, `kdf` — объект: у JSON Schema ключа те же имена полей).
+Имя `*.mapping.json` (`hasKeyFileName`) — дополнительный признак (ослабленная форма). Не ключи: HAR, i18n-записи, дизайн-токены `[color_1]`, `schemas/*.json`,
+`package-lock.json`, экспорт настроек, компаний и своих категорий, 240 текстовых фикстур (кроме `deanon*.json` — в них вымышленная карта под полем `mapping`).
 **Хост** (`offscreen/host.js`): для адаптера `plain` до загрузки модуля формата — `CoreError('RECOVERY_KEY')`, код есть в `ERROR_CODES` ядра и протокола §5.4 и в
 `schemas/protocol.schema.json`; текст `err.RECOVERY_KEY` (ru/en, `ui/i18n/common.js`). Бинарные форматы не проверяются.
-**Перехват** (`content/flow.js`): отказ `RECOVERY_KEY` — `panel.setError(k, {blocked: true, retry: false})`: без «Загрузить как есть» и «Повторить», заметка
-`keyBlockedNote`; `canAnonymize` считает такой файл решённым; если все файлы заблокированы — «Загрузить оригинал» не показывается, Esc/«×» — отмена.
-Ключ не уходит сайту ни при каком выборе (`sendable`: обезличенные, «оригинал», уведомление об инвалидации); файл с именем `*.mapping.json`
-(`content/files.js` `isKeyFileName`) — так же при любом сбое хоста, пока хост не разобрал его без отказа. Интерсептор: `remember` — по членству, а не по индексу
-(список результата короче исходного), при «оригинале» без ключа список поля `input` переписывается. Детектора ключа в `content.js` нет — бюджет сторожа
-163 КиБ (`content.js` 165 768 байт).
-**Страница восстановления** (`restore.js`, `ui/deanon/index.js`): `.txt/.md/.markdown/.log` — `readAiText(bytes)` → `{text, encoding: {encoding, bom}}`,
-результат — `encodeRestored(text, encoding)` → `{bytes, lost}` (`encodeText` из `core/plain/encoding.js`, туда вынесены `decodeText`/`encodeText`/`unencodableCount`;
-`plain-adapter.js` их реэкспортирует), MIME — `mimeFor(name, charset)`; не UTF-8 — предупреждение `restore-encoding` («Кодировка файла — Windows-1251…», число
-символов вне 1251 → «?»), в строке файла — «кодировка …»; для CSV/JSON кодировку сохраняет адаптер, страница только предупреждает. Файлы ключа —
-`keyTextsFromBytes(list)`: UTF-8 (с BOM) и UTF-16 читаются, Windows-1251 → `{error: 'encoding'}` и текст `key_encoding`.
+**Перехват** (`content/flow.js`, `content/files.js`): в начале `runOnce` — `sniffRecoveryKey(file)` для каждого перехваченного текстового файла (первые 64 КБ,
+без хоста) → `keys`; такие файлы хосту не отправляются. Отказ — `panel.setError(k, {blocked: true, retry: false})`: без «Загрузить как есть» и «Повторить»,
+заметка `keyBlockedNote`; `canAnonymize` считает файл решённым; если все файлы заблокированы — «Загрузить оригинал» не показывается, Esc/«×» — отмена.
+Ключ не уходит сайту ни при каком выборе (`sendable`: обезличенные, «оригинал», уведомление об инвалидации). `fail()` для файла из `keys`, с кодом
+`RECOVERY_KEY` или с именем `*.mapping.json` (`isKeyFileName`) при любом сбое (и `BATCH_BEGIN`) — тот же отказ. Перехватываются `.txt`, `.text`, `.md`,
+`.markdown`, `.csv`, `.json`, `.log` (файлы без расширения и `.jsonl` — нет). Интерсептор: `remember` — по членству (список результата короче исходного),
+при «оригинале» без ключа список поля `input` переписывается. Бюджет: сторож `pack.spec.js` 163 → 165 КиБ (решение координатора по ревью 0.5.1),
+`content.js` 168 389 байт.
+**Кодировки** (`core/plain/encoding.js`; `decodeText`/`encodeText`/`unencodableCount`, `plain-adapter.js` их реэкспортирует): строгий UTF-8 не прошёл, но «�»
+мало (≤ 3 или ≤ 0,1 % символов) и правильных многобайтовых символов больше, — UTF-8 с `replaced: N` (обрезанный посреди символа файл, один битый байт), иначе
+Windows-1251. Адаптер текстовых форматов — предупреждение `TEXT_BAD_BYTES {count}` (панель: `warnTextBadBytes`).
+**Страница восстановления** (`restore.js`, `ui/deanon/index.js`): `.txt/.text/.md/.markdown/.log` — `readAiText(bytes)` → `{text, encoding: {encoding, bom},
+replaced}`, результат — `encodeRestored(text, encoding)` → `{bytes, lost}`, MIME — `mimeFor(name, charset)`; не UTF-8 — предупреждение `restore-encoding`
+(«Кодировка файла — Windows-1251…», число символов вне 1251 → «?»), битые байты UTF-8 — «Файл повреждён…»; для CSV/JSON кодировку сохраняет адаптер,
+страница только предупреждает. Файлы ключа — `keyTextsFromBytes(list)`: UTF-8 (с BOM) и UTF-16 читаются, Windows-1251 → `{error: 'encoding'}`, текст `key_encoding`.
 **Подпись студии** (`ui/brand.js`): `TELEGRAM_URL` = `https://t.me/sitimlab` рядом с `SITIMLAB_URL`; `madeByLine` — «Сделано в Sitimlab · @sitimlab»
 («Сделано в Sitimlab» — в своём `span`), `channelLink(lang)` — `data-testid="channel-link"`, `target=_blank`, `rel="noopener noreferrer"`, `title` — `common.channel`;
-меню (`popup.html`) — та же разметка, `href` и `title` выставляет `popup.js`. Тесты: `tests/unit/recovery-key.spec.js`, `tests/unit/ui/restore-encoding.spec.js`,
-e2e `release-051.spec.js`.
+меню (`popup.html`) — та же разметка, `href` и `title` выставляет `popup.js`. Тесты: `tests/unit/{recovery-key,text-formats-051}.spec.js`,
+`tests/unit/ui/restore-encoding.spec.js`, e2e `release-051.spec.js` и `flow-051.spec.js` (сценарий перехвата с поддельным `chrome`: хост недоступен,
+контекст инвалидирован; input, drop, paste).
 
 ### 9.11. Версия 0.5.1: лицензия Apache 2.0, NOTICE, пакет модели 1.2.1 (WP13-L)
 
