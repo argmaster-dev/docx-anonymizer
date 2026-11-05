@@ -1,13 +1,13 @@
 // WP10-C (К15, К17): полная сборка — модель NER из архива расширения ставится сама при установке, без сети и без импорта.
 // Гейт — dist-e2e/models/index.json (полная e2e-сборка):
-//   flock <lock> sh -c 'node scripts/build.mjs --e2e --with-model=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.0.zip && npx playwright test bundled-model.spec.js'
+//   flock <lock> sh -c 'node scripts/build.mjs --e2e --with-model=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.1.zip && npx playwright test bundled-model.spec.js'
 // Сценарий: чистый профиль → ≤ 30 с nerModel и bundledModelSha выставлены → файлы в OPFS → карточка «проверенный пакет» →
 // анализ даёт source:'ner' → повторный bootstrap файлы не переписывает → удаление не возвращает модель само → «Восстановить»
 // → «Сбросить настройки» модель не трогает. Второй сценарий — копия сборки с испорченным zip: «не удалось ({код})», «Повторить».
-// Третий (версия 0.4, WP11-C3, К9; 0.5, WP12-E — 1.1.0 → 1.2.0) — обновление поверх прежнего пакета, гейт NER_PACK_PREV (путь к zip
+// Третий (версия 0.4, WP11-C3, К9; 0.5, WP12-E — 1.1.0 → 1.2.0; 0.5.1, WP13-L — 1.2.0 → 1.2.1, те же веса) — обновление поверх прежнего пакета, гейт NER_PACK_PREV (путь к zip
 // прежнего пакета того же id):
-//   flock <lock> sh -c 'node scripts/build.mjs --e2e --with-model=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.0.zip &&
-//     NER_PACK_PREV=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.1.0.zip npx playwright test bundled-model.spec.js'
+//   flock <lock> sh -c 'node scripts/build.mjs --e2e --with-model=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.1.zip &&
+//     NER_PACK_PREV=release/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.0.zip npx playwright test bundled-model.spec.js'
 import { createHash } from 'node:crypto';
 import { cpSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -226,9 +226,9 @@ test.describe('испорченный zip встроенной модели', ()
   });
 });
 
-// Обновление встроенной модели (версия 0.4, WP11-C3, К9; версия 0.5, WP12-E): профиль, где стоит прежний пакет того же id (1.1.0 —
-// полный архив 0.4 или импорт через настройки; в 0.4 — 1.0.0) и bundledModelSha = его sha, после обновления расширения до полной сборки
-// с новой версией (1.2.0) получает её сам: новый sha → план install → MODEL_INSTALL → в OPFS один слот с новой версией,
+// Обновление встроенной модели (версия 0.4, WP11-C3, К9; версия 0.5, WP12-E; 0.5.1, WP13-L): профиль, где стоит прежний пакет того же id
+// (1.2.0 — полный архив 0.5.0 или импорт через настройки; в 0.5.0 — 1.1.0, в 0.4 — 1.0.0) и bundledModelSha = его sha, после обновления
+// расширения до полной сборки с новой версией (1.2.1 — те же веса под Apache-2.0, другой sha архива) получает её сам: новый sha → план install → MODEL_INSTALL → в OPFS один слот с новой версией,
 // bundledModelSha = её sha, сети нет.
 // Обновление — повторная команда CDP Extensions.loadUnpacked того же каталога (как кнопка «Обновить» на chrome://extensions:
 // onInstalled с reason 'update'); поэтому сценарий идёт с earlyCapture — расширение загружено той же командой.
@@ -258,7 +258,7 @@ const opfsSlots = (page) =>
   });
 
 test.describe('обновление поверх прежней версии', () => {
-  test.skip(!PREV, 'нужен NER_PACK_PREV — путь к zip прежней версии встроенного пакета (1.1.0)');
+  test.skip(!PREV, 'нужен NER_PACK_PREV — путь к zip прежней версии встроенного пакета (1.2.0)');
   test.use({ earlyCapture: true });
 
   test('прежний пакет из настроек и его sha в профиле → после обновления новая версия ставится сама, один слот, без сети', async ({

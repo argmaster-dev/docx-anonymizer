@@ -1,4 +1,4 @@
-# Магазины: комплект и чек-лист подачи (версия 0.5.0)
+# Магазины: комплект и чек-лист подачи (версия 0.5.1)
 
 Подготовка к магазинам по концепции 0.5 (п. 9 «Магазины», Ц7, К15). **Целевой магазин — Chrome Web Store** (решение владельца 0.5); материалы для Edge Add-ons (требования Edge в пунктах ниже, `edge-upload.md`, логотип 300×300, шестой снимок, `--lite`) оставлены как справочные — **подача в Edge не планируется**. **Статус: комплект собран и проверен, не подан.** Подачу, аккаунты разработчика и оплату делает владелец; из репозитория ничего никуда не отправляется. Требования сверены с официальной документацией 27.10.2026 (ссылки — в конце и у каждого пункта).
 
@@ -6,28 +6,29 @@
 
 | Что | Где | Как получить |
 |---|---|---|
-| Пакет для Chrome Web Store (полный, с моделью NER 1.2.0, манифест без `key`; годится и для Edge) | `release/docx-anonymizer-0.5.0-store.zip` (не в git) | `npm run pack:store` — сборка, автоматические проверки ниже; печатает размер и sha256 |
-| Справочно, Edge (не планируется): лёгкий пакет без модели — только чтобы создать продукт в Edge, если полный не грузится через браузер | `release/docx-anonymizer-0.5.0-store-lite.zip` | `npm run pack:store -- --lite`; [`edge-upload.md`](edge-upload.md) |
+| Пакет для Chrome Web Store (полный, с моделью NER 1.2.1, манифест без `key`; годится и для Edge) | `release/docx-anonymizer-0.5.1-store.zip` (не в git) | `npm run pack:store` — сборка, автоматические проверки ниже; печатает размер и sha256 |
+| Справочно, Edge (не планируется): лёгкий пакет без модели — только чтобы создать продукт в Edge, если полный не грузится через браузер | `release/docx-anonymizer-0.5.1-store-lite.zip` | `npm run pack:store -- --lite`; [`edge-upload.md`](edge-upload.md) |
 | Тексты листинга ru/en, категория, поисковые запросы, заметки для проверяющих | [`listing.md`](listing.md) | — |
 | Политика конфиденциальности ru/en | [`privacy.md`](privacy.md) | публичная ссылка — после push (раздел 5) |
 | Скриншоты 1280×800, ru и en | `docs/store/images/{ru,en}/0[1-6]-*.png` | `npm run store:shots` (под блокировкой сборки, как e2e) |
 | Промо-плитки 440×280 и 1400×560, значок 128×128, логотип 300×300 | `docs/store/images/` | то же |
 | Справочно, Edge (не планируется): загрузка крупного пакета в Edge Partner Center | [`edge-upload.md`](edge-upload.md) | — |
 
-Размеры 0.5.0 (02.11.2026, `npm run pack` и `npm run pack:store`): лёгкий архив релиза 6 616 449 байт (6,3 МиБ), полный 36 223 813 байт (34,5 МиБ), пакет для магазинов 36 223 459 байт (34,5 МиБ; от полного отличается только манифестом без `key`). Лимиты К14: лёгкий ≤ 12 МБ, полный ≤ 45 МБ — пройдены.
+Размеры 0.5.0 (02.11.2026, `npm run pack` и `npm run pack:store`): лёгкий архив релиза 6 616 449 байт (6,3 МиБ), полный 36 223 813 байт (34,5 МиБ), пакет для магазинов 36 223 459 байт (34,5 МиБ; от полного отличается только манифестом без `key`). Лимиты К14: лёгкий ≤ 12 МБ, полный ≤ 45 МБ — пройдены. Размеры 0.5.1 (05.11.2026, после смены лицензии, WP13-L): лёгкий 6 627 243 байт, полный 36 238 795 байт, пакет для магазинов 36 238 441 байт (34,6 МиБ), модель 1.2.1 внутри.
 
 ## 1. Пакет
 
-- [x] `manifest.json` — в корне архива ([Prepare your extension](https://developer.chrome.com/docs/webstore/prepare): «place the manifest file in the root directory»); Manifest V3; версия 0.5.0 (каждая следующая загрузка — с большей версией).
+- [x] `manifest.json` — в корне архива ([Prepare your extension](https://developer.chrome.com/docs/webstore/prepare): «place the manifest file in the root directory»); Manifest V3; версия 0.5.1 (каждая следующая загрузка — с большей версией).
 - [x] **Поля `key` нет.** Он нужен только распакованной установке (закрепляет ID при обновлении из папки, README «Обновление»); магазин назначает свой ID, а загрузку с `key`/`update_url` Chrome Web Store, по опыту разработчиков, отклоняет. Следствие: установка из магазина — другое расширение с другим ID; настройки и модель распакованной установки она не видит (при переходе — экспорт настроек → импорт).
 - [x] **Нет `update_url`**, обновления — только через магазин (Edge 1.2.4 «Extension updates»).
 - [x] Краткое описание (`extDescription`) ≤ 132 символов в обеих локалях: ru 127, en 119 ([Prepare your extension](https://developer.chrome.com/docs/webstore/prepare)); название ≤ 75.
 - [x] Название и описание — через `__MSG_…__` и `default_locale` (`ru`), локали `ru` и `en`: Partner Center находит языки листинга именно так ([Publish a Microsoft Edge extension](https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension), «If a single locale appears…»).
 - [x] Иконки 16/32/48/128 в пакете.
 - [x] В пакете нет исходников, тестов, `node_modules`, sourcemaps.
+- [x] **Лицензия** (с 0.5.1, WP13-L): `LICENSE` (Apache 2.0) и `NOTICE` — в корне пакета; лицензии сторонних компонентов — в `vendor/`.
 - [x] **Размер.** Chrome Web Store — до 2 ГБ ([Publish](https://developer.chrome.com/docs/webstore/publish)). Edge Add-ons официального лимита не публикует; пакет ≈ 34,5 МиБ у границы, где браузерная загрузка в Partner Center, по опыту разработчиков, падает → [`edge-upload.md`](edge-upload.md).
 
-Автоматически это проверяет `npm run pack:store` (`scripts/pack-store.mjs`, `checkStorePackage`) и тест `tests/integration/pack-store.spec.js`: манифест в корне, MV3, версия, нет `key`/`update_url`/`host_permissions`, длины описания и названия во всех локалях, иконки, нет `<script src>` с внешних адресов, нет служебного блока «Проверка конвейера (dev)» в `popup.html`, CSP без внешних источников, ровно один пакет модели — последний из `KNOWN_PACKS` с верным sha256, нет лишних файлов, размер ≤ 45 МБ.
+Автоматически это проверяет `npm run pack:store` (`scripts/pack-store.mjs`, `checkStorePackage`) и тест `tests/integration/pack-store.spec.js`: манифест в корне, MV3, версия, нет `key`/`update_url`/`host_permissions`, длины описания и названия во всех локалях, иконки, нет `<script src>` с внешних адресов, нет служебного блока «Проверка конвейера (dev)» в `popup.html`, CSP без внешних источников, `LICENSE` (Apache 2.0) и `NOTICE` в корне, ровно один пакет модели — последний из `KNOWN_PACKS` с верным sha256, нет лишних файлов, размер ≤ 45 МБ.
 
 ## 2. Удалённый код и читаемость
 
@@ -35,7 +36,7 @@
 
 - [x] **Удалённого кода нет.** Сетевых запросов нет вовсе: CSP `connect-src 'self'`, ESLint запрещает сетевые API в `src/`, e2e `nfr.spec.js` слушает трафик всех целей браузера.
 - [x] **WebAssembly — в пакете**: `vendor/ort-wasm-simd-threaded.wasm` (ONNX Runtime Web 1.30.0, MIT) грузится из пакета; `'wasm-unsafe-eval'` в CSP — минимум, который Chrome сам ставит страницам расширения для WASM ([CSP в манифесте](https://developer.chrome.com/docs/extensions/reference/manifest/content-security-policy)); `'unsafe-eval'` нет.
-- [x] **Модель NER — данные, не код**: `models/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.0.zip` — веса ONNX, конфигурация и словарь токенизатора; при первом запуске копируются из пакета (`chrome-extension://`, не сеть) в OPFS и исполняются ONNX Runtime из пакета. Ничего не скачивается, sha256 пакета зашит в код (`KNOWN_PACKS`).
+- [x] **Модель NER — данные, не код**: `models/docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.1.zip` — веса ONNX, конфигурация и словарь токенизатора; при первом запуске копируются из пакета (`chrome-extension://`, не сеть) в OPFS и исполняются ONNX Runtime из пакета. Ничего не скачивается, sha256 пакета зашит в код (`KNOWN_PACKS`).
 - [x] pdf.js (Apache-2.0) с CMaps и шрифтами — в `vendor/pdfjs/` пакета.
 - [x] **Обфускации нет** ([Code readability](https://developer.chrome.com/docs/webstore/program-policies/code-readability), Edge 1.1.7): код расширения не минифицируется; минифицированы только сторонние библиотеки ONNX Runtime Web и pdf.js в их официальных сборках npm (минификация разрешена: «Removal of whitespace… Shortening of variable and function names»). Исходники — в открытом репозитории.
 - **Ответ в форме:** «No, I am not using remote code» / «Нет, я не использую удалённый код».
@@ -110,7 +111,7 @@
 
 1. Аккаунт разработчика Chrome Web Store — регистрация (разовый сбор) и подтверждённый контактный e-mail.
 2. Push ветки, затем проверить публичную ссылку на `privacy.md` (раздел 5).
-3. `npm run pack:store` на коммите релиза; загрузить `release/docx-anonymizer-0.5.0-store.zip` в Chrome Web Store.
+3. `npm run pack:store` на коммите релиза; загрузить `release/docx-anonymizer-0.5.1-store.zip` в Chrome Web Store.
 4. Перед загрузкой — поставить пакет как распакованное расширение в чистом профиле: модель ставится сама (настройки → «Модель NER» → «проверенный пакет»), перехват на локальной странице работает.
 5. Заполнить формы Chrome Web Store по разделам 3–7: назначение, разрешения, «удалённого кода нет», раскрытие данных и подтверждения, ссылка на политику, листинг ru/en, категория (сверить названия категорий в форме), изображения (5 снимков `01`–`05`, `store-icon-128.png`, промо-плитки).
 6. Решить: категории раскрытия данных (раздел 5).

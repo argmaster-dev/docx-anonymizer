@@ -136,9 +136,15 @@ const statics = [
   ['icons', 'icons'],
   ['src/offscreen/offscreen.html', 'offscreen/offscreen.html'],
   ['src/_locales', '_locales'],
+  // Лицензия проекта (с 0.5.1 — Apache 2.0, WP13-L) и NOTICE — в корне каждой сборки и архива: раздел 4 лицензии требует
+  // копию лицензии и NOTICE при распространении (сторож — pack.spec.js, checkStorePackage в pack-store.mjs)
+  ['LICENSE', 'LICENSE'],
+  ['NOTICE', 'NOTICE'],
+  // fflate (MIT) встроен в бандлы — текст его лицензии рядом с остальными (на него ссылается NOTICE)
+  ['node_modules/fflate/LICENSE', 'vendor/fflate.LICENSE'],
   // ORT: только wasm-бинарь (glue встроен в worker.js) и лицензия (WP8)
   ['node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.wasm', 'vendor/ort-wasm-simd-threaded.wasm'],
-  // в npm-пакете ORT нет файла LICENSE — текст MIT лицензии проекта лежит в assets/licenses/
+  // в npm-пакете ORT нет файла LICENSE — текст MIT-лицензии проекта ONNX Runtime лежит в assets/licenses/
   ['assets/licenses/onnxruntime-web.LICENSE', 'vendor/onnxruntime-web.LICENSE'],
   // pdf.js (версия 0.3): не бандлится, грузится лениво из vendor/pdfjs/ (offscreen/pdf-loader.js). Legacy-сборка: современная
   // требует Map.prototype.getOrInsertComputed и Math.sumPrecise (Chrome новее minimum_chrome_version), в legacy они заполнены.

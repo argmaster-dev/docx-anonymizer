@@ -37,12 +37,26 @@ SOFTWARE.
 """
 
 
+# С пакета 1.2.1 (WP13-L, решение владельца 05.11.2026) дообученные веса и config.json — Apache 2.0, как код расширения
+# (полный текст — LICENSE в корне репозитория); базовая модель и vocab.txt — MIT, уведомление автора сохраняется.
+APACHE_LICENSE = (REPO / "LICENSE").read_text(encoding="utf-8")
+OWN_COPYRIGHT = "Copyright {year} argmaster-dev, Sitimlab, https://sitimlab.ru"
+
+
 def license_text(year: int) -> str:
-    own = BASE_LICENSE.replace("Copyright (c) 2021 David Dale (cointegrated)",
-                               f"Copyright (c) {year} argmaster-dev")
-    return ("This model pack contains two works, both under the MIT License.\n\n"
-            "1. Fine-tuned weights (model.onnx, config.json)\n"
-            "------------------------------------------------\n\n" + own +
+    assert APACHE_LICENSE.lstrip().startswith("Apache License"), "repository LICENSE must be the Apache License 2.0"
+    return ("This model pack contains two works under different licenses.\n\n"
+            "1. Fine-tuned weights and configuration (model.onnx, config.json)\n"
+            "------------------------------------------------------------------\n\n"
+            + OWN_COPYRIGHT.format(year=year) + "\n\n"
+            "Licensed under the Apache License, Version 2.0 (full text below), since pack\n"
+            "1.2.1. Packs 1.0.0-1.2.0 were released under the MIT License and remain under it.\n\n"
+            "The fine-tuned weights are a derivative work of the base model\n"
+            "cointegrated/rubert-tiny2 (MIT License, part 2): they were obtained by\n"
+            "fine-tuning its pre-trained weights. The copyright and permission notice of\n"
+            "the base model's author is retained in part 2 and applies to the portions of\n"
+            "the base model contained in the weights.\n\n"
+            + APACHE_LICENSE.rstrip("\n") + "\n"
             "\n\n2. Base model cointegrated/rubert-tiny2 (architecture, pre-trained weights, vocab.txt)\n"
             "-----------------------------------------------------------------------------------\n"
             "https://huggingface.co/cointegrated/rubert-tiny2 (license: MIT)\n\n" + BASE_LICENSE)
@@ -62,6 +76,10 @@ def used_sources(cfg: dict, data_info: dict) -> list[dict]:
 def notice_text(cfg: dict, sources: list[dict], extra: list[str]) -> str:
     lines = [
         f"{cfg['id']} {cfg['version']} — NER model pack for DOCX Anonymizer",
+        "Developed by Sitimlab, https://sitimlab.ru",
+        "",
+        "Fine-tuned weights (model.onnx, config.json)",
+        f"  License: Apache-2.0, {OWN_COPYRIGHT.format(year=dt.date.today().year)} (see LICENSE).",
         "",
         "Base model",
         "  cointegrated/rubert-tiny2 — https://huggingface.co/cointegrated/rubert-tiny2",
@@ -160,7 +178,7 @@ def main():
                       "pad": "[PAD]", "unk": "[UNK]"},
         "model": {"file": "model.onnx", "inputs": {"ids": "input_ids", "mask": "attention_mask", "types": "token_type_ids"},
                   "output": "logits", "indexType": "int64"},
-        "license": "MIT",
+        "license": "Apache-2.0 AND MIT",  # веса и config.json — Apache-2.0, vocab.txt и базовая модель — MIT (LICENSE пакета)
         "source": {"baseModel": cfg["base_model"],
                    "data": [f"{x['id']} ({x['license']}) {x['url']}"[:500] for x in sources][:20]
                    + (["synthetic: tools/ner-train/synth.py (fictitious data)"] if data_info.get("synth") else []),

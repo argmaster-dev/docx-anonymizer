@@ -205,6 +205,23 @@ describe('архив релиза', () => {
     expect(strFromU8(zip['help/help.js'])).not.toContain('sourceMappingURL');
   });
 
+  // WP13-L (0.5.1): код — Apache 2.0; LICENSE и NOTICE в корне архива байт в байт как в репозитории (раздел 4 лицензии)
+  it('LICENSE (Apache 2.0) и NOTICE (Sitimlab, сторонние компоненты) — в корне архива; лицензии сторонних — в vendor/', () => {
+    for (const f of ['LICENSE', 'NOTICE']) {
+      expect(zip[f], f).toBeDefined();
+      expect(Buffer.from(zip[f]).equals(readFileSync(f)), `${f} — байт в байт как в репозитории`).toBe(true);
+    }
+    expect(strFromU8(zip['LICENSE'])).toMatch(/^\s*Apache License\s+Version 2\.0, January 2004/);
+    expect(strFromU8(zip['LICENSE'])).not.toMatch(/MIT License/);
+    const notice = strFromU8(zip['NOTICE']);
+    expect(notice).toContain('Sitimlab');
+    expect(notice).toContain('https://sitimlab.ru');
+    expect(notice).toContain('TRADEMARKS.md');
+    // всё, на что ссылается NOTICE, лежит в архиве
+    for (const f of notice.match(/vendor\/[\w./-]+[\w]/g)) expect(zip[f], f).toBeDefined();
+    expect(strFromU8(zip['vendor/fflate.LICENSE'])).toMatch(/MIT License/);
+  });
+
   it('в релизном popup нет блока «Проверка конвейера (dev)» — он только в e2e-сборке (решение владельца 0.5, WP12-F)', () => {
     const html = strFromU8(zip['popup/popup.html']);
     expect(html).not.toMatch(/dev-pipeline|dev-file|Проверка конвейера/);

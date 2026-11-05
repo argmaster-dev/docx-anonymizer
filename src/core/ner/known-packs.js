@@ -12,6 +12,10 @@ export const KNOWN_PACKS = Object.freeze([
   // WP12-E (версия 0.5): тот же id; + NEREL и Nerus (без явной лицензии на тексты — NOTICE пакета), синтетика 0.5;
   // docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.0.zip, 29 606 008 байт (весь int8). 1.0.0 и 1.1.0 остаются «проверенными»; полный архив 0.5 ставит 1.2.0 поверх
   Object.freeze({ id: 'rubert-tiny2-ner-ruen', version: '1.2.0', sha256: 'a7e022266ae7c37d00988d546c702c299c8aa9a82af0fd9bdcc63404e3ce19e4' }),
+  // WP13-L (версия 0.5.1): те же веса, что 1.2.0 (model.onnx, config.json, vocab.txt — байт в байт), сменилась только лицензия
+  // весов — Apache-2.0 (LICENSE, NOTICE, pack.json); docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.1.zip, 29 610 197 байт.
+  // 1.2.0 и старше остаются «проверенными» (выпущены под MIT); полный архив 0.5.1 ставит 1.2.1 поверх 1.2.0 (новый sha того же id)
+  Object.freeze({ id: 'rubert-tiny2-ner-ruen', version: '1.2.1', sha256: 'c684d60f2645b35f1bf0cad718f32b160ca52dd443975828ed48879928603f04' }),
 ]);
 
 /**

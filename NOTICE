@@ -1,0 +1,29 @@
+DOCX Anonymizer
+Copyright 2026 argmaster-dev, Sitimlab, https://sitimlab.ru
+
+This product is developed by Sitimlab (https://sitimlab.ru).
+Продукт разработан в Sitimlab (https://sitimlab.ru).
+
+Since version 0.5.1 the extension code is licensed under the Apache License,
+Version 2.0 (see LICENSE). Versions 0.1.0-0.5.0 were released under the MIT
+License and remain under it.
+
+The names "DOCX Anonymizer" and "Sitimlab", the Sitimlab logo and the extension
+icon (the blue shield) are not licensed under the Apache License (section 6 of
+the License): see TRADEMARKS.md in the source repository,
+https://github.com/argmaster-dev/docx-anonymizer
+
+Third-party components are distributed under their own licenses; the license
+texts are included in the extension package:
+
+- pdf.js (pdfjs-dist), Copyright Mozilla Foundation - Apache License 2.0,
+  vendor/pdfjs/LICENSE (the pdfjs-dist package carries no NOTICE file).
+- ONNX Runtime Web (onnxruntime-web), Copyright (c) Microsoft Corporation -
+  MIT License, vendor/onnxruntime-web.LICENSE.
+- fflate, Copyright (c) Arjun Barrett - MIT License, vendor/fflate.LICENSE.
+- Name dictionaries: datacoon/russiannames (BSD-3-Clause), natasha (MIT),
+  U.S. Census Bureau (public domain) - vendor/dict/NOTICE.md.
+- NER model pack (models/*.zip in the full archive, or imported separately):
+  fine-tuned weights - Apache License 2.0 since pack 1.2.1; base model
+  cointegrated/rubert-tiny2 and its vocabulary - MIT License. See LICENSE and
+  NOTICE inside the pack.

@@ -1,6 +1,6 @@
 # Контракты модулей
 
-Документ описывает, **что есть** в коде и **как к этому подключаться** (версия 0.3.0: MVP WP1–WP5, пакеты 0.2 WP6–WP9 и 0.3 WP10-A…D — PDF §7, восстановление файла §1.6, встроенная модель §6.8; 0.4 — §8; 0.5 WP12-A — словари в `vendor/dict` §2, общий слой OOXML и `DocumentAdapter` §9; WP12-B — Excel, PowerPoint, текстовые форматы §9.8; 0.5.1 — ключ восстановления не уходит в чат, кодировка страницы восстановления §9.10).
+Документ описывает, **что есть** в коде и **как к этому подключаться** (версия 0.3.0: MVP WP1–WP5, пакеты 0.2 WP6–WP9 и 0.3 WP10-A…D — PDF §7, восстановление файла §1.6, встроенная модель §6.8; 0.4 — §8; 0.5 WP12-A — словари в `vendor/dict` §2, общий слой OOXML и `DocumentAdapter` §9; WP12-B — Excel, PowerPoint, текстовые форматы §9.8; 0.5.1 — ключ восстановления не уходит в чат, кодировка страницы восстановления §9.10, лицензия Apache 2.0 и пакет модели 1.2.1 §9.11).
 Источник истины — код с JSDoc; здесь — смысл и правила. Рамки MVP — `docs/mvp-scope.md`, цели 0.2 и 0.3 — `docs/concept-0.2.md`, `docs/concept-0.3.md`,
 ТЗ — `docs/spec-full.md`, рабочие пакеты — `docs/tasks.md`.
 
@@ -452,7 +452,7 @@ UI: popup — `siteState(settings, url, {granted})` даёт `needsAccess` (на
   "model": { "file": "model.onnx", "inputs": { "ids": "input_ids", "mask": "attention_mask", "types": "token_type_ids" /* необяз. */ },
              "output": "logits", "indexType": "int64" /* | int32 */ },
   "files": [{ "path": "model.onnx", "sha256": "<hex64>", "size": 31852495 }, …],  // ВСЕ записи zip, кроме pack.json
-  "license": "MIT", "source": { "baseModel": "…", "data": ["…"] },  // source: строки/числа/логические/массивы строк
+  "license": "MIT", "source": { "baseModel": "…", "data": ["…"] },  // строка ≤ 200 (с 1.2.1 — "Apache-2.0 AND MIT"); source: строки/числа/логические/массивы строк
   "minExtensionVersion": "0.2.0",
   "recommendedThreshold": 0.7               // необязательно
 }
@@ -655,7 +655,7 @@ factRuEval-2016 (×2), **NEREL** (×0.5) и **Nerus** (20 000 предложен
 см. `tools/ner-train/README.md` «Источники 1.2.0» и «1.2.0». `model.onnx` — 31 852 495 байт (30,4 МБ): все MatMul int8, как в 1.1.0 (первая сборка с fp32 в
 классификаторе и FFN последнего слоя снята по ревью, решение владельца 27.10.2026); согласие argmax с PyTorch — гейт на 2 000 предложениях: 99,62 % (50 предложений —
 98,96 %, справочно); `recommendedThreshold` 0.7; опубликованный zip `docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.0.zip`, 29 606 008 байт, sha256
-`a7e022266ae7c37d00988d546c702c299c8aa9a82af0fd9bdcc63404e3ce19e4` (`KNOWN_PACKS`; 1.0.0 и 1.1.0 остаются). WikiANN test (int8): ru — PER **0.912**, ORG **0.754**, LOC 0.863
+`a7e022266ae7c37d00988d546c702c299c8aa9a82af0fd9bdcc63404e3ce19e4` (`KNOWN_PACKS`; 1.0.0 и 1.1.0 остаются; с 0.5.1 последний — 1.2.1 с теми же весами, §9.11). WikiANN test (int8): ru — PER **0.912**, ORG **0.754**, LOC 0.863
 (гейты 0.91 / 0.75 ✓; ORG ниже 1.1.0 на 0,002–0,004 — 0.757 int8, 0.756 fp32 — в пределах разброса сидов); en — PER 0.811, ORG 0.663, LOC 0.775; factRuEval
 `test_factru` (fp32): PER 0.894, ORG 0.727 (1.1.0 — 0.861 / 0.704); отложенный набор имён К10 (`tests/fixtures/ner/heldout-names.json` + бэклог 0.4, 86 вхождений): полнота PER 0.930
 против 0.814 у 1.1.0 (+11,6 п. п.; на int8 обоих пакетов — 0.930 против 0.802; набор оптимистичен: имена новые, рамки фраз — как в шаблонах синтетики).
@@ -1559,3 +1559,25 @@ JSON с полями `token` и `value`/`original`. JSON с полем `entries`
 («Сделано в Sitimlab» — в своём `span`), `channelLink(lang)` — `data-testid="channel-link"`, `target=_blank`, `rel="noopener noreferrer"`, `title` — `common.channel`;
 меню (`popup.html`) — та же разметка, `href` и `title` выставляет `popup.js`. Тесты: `tests/unit/recovery-key.spec.js`, `tests/unit/ui/restore-encoding.spec.js`,
 e2e `release-051.spec.js`.
+
+### 9.11. Версия 0.5.1: лицензия Apache 2.0, NOTICE, пакет модели 1.2.1 (WP13-L)
+
+**Лицензия** (решение владельца 05.11.2026): с 0.5.1 код расширения — Apache License 2.0 (`LICENSE` — полный текст, `package.json` `"license": "Apache-2.0"`);
+`NOTICE` — правообладатель (`Copyright 2026 argmaster-dev, Sitimlab, https://sitimlab.ru`), что продукт разработан Sitimlab, ссылка на `TRADEMARKS.md` и перечень
+сторонних компонентов со ссылками на тексты их лицензий в пакете (`vendor/pdfjs/LICENSE` — у `pdfjs-dist` своего NOTICE нет, `vendor/onnxruntime-web.LICENSE`,
+`vendor/fflate.LICENSE`, `vendor/dict/NOTICE.md`, `LICENSE`/`NOTICE` пакета модели). `TRADEMARKS.md` (ru + en): название «DOCX Anonymizer», название и знак
+Sitimlab и значок расширения (`assets/icon-shield*.svg`, `icons/`) лицензией не передаются (раздел 6). Версии 0.1–0.5.0 и пакеты модели 1.0.0–1.2.0 вышли под MIT
+и под ней остаются.
+**Сборка:** `scripts/build.mjs` копирует `LICENSE` и `NOTICE` в корень сборки (так они попадают в `dist/`, `dist-e2e/`, лёгкий, полный архивы и пакет для
+магазинов), `node_modules/fflate/LICENSE` → `vendor/fflate.LICENSE`. Сторожа: `tests/integration/pack.spec.js` (оба файла в корне архива байт в байт, LICENSE —
+Apache 2.0, все пути `vendor/…` из NOTICE есть в архиве), `checkStorePackage` (`scripts/pack-store.mjs`: нет `LICENSE` с текстом Apache или `NOTICE` — пакет не годен).
+**Пакет модели 1.2.1** (`models-src/rubert-tiny2-ner-ruen/`, вне git; исходники 1.2.0 — `../ner-models-backup/rubert-tiny2-ner-ruen-1.2.0`): переобучения нет —
+`model.onnx`, `config.json`, `vocab.txt` байт в байт как в 1.2.0 (sha256 `ed0d7b6f…`, `7acca07e…`, `f056a69b…`); `pack.json`: `version` 1.2.1, `license`
+`"Apache-2.0 AND MIT"`. `LICENSE` пакета — две части: (1) веса и `config.json` — Apache 2.0, Copyright Sitimlab, веса — производная работа от MIT-модели,
+уведомление её автора сохранено; (2) база `cointegrated/rubert-tiny2` и `vocab.txt` — MIT (David Dale), полный текст. `NOTICE` пакета: версия 1.2.1, строка
+о лицензии весов, фраза «те же веса, что 1.2.0 (выпущенный под MIT), сменилась только лицензия»; остальное (данные обучения, предупреждение о NEREL/Nerus,
+дистилляция, синтетика) — без изменений. Генератор `tools/ner-train/make_pack_src.py` пишет ту же форму `LICENSE`/`NOTICE` и `license` для следующих пакетов.
+Опубликованный zip `docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.1.zip` — 29 610 197 байт, sha256 `c684d60f2645b35f1bf0cad718f32b160ca52dd443975828ed48879928603f04`
+(`KNOWN_PACKS`; 1.0.0–1.2.0 остаются проверенными). Обновление встроенной модели — по sha архива (§6.8): у 1.2.1 другой sha при тех же весах, поэтому полный архив
+0.5.1 ставит его поверх 1.2.0 (`planBootstrap` → `install`, хост — в неактивный слот, прежний удаляется). Тесты: `tests/unit/background/bundled-model.spec.js` и
+`tests/integration/host.spec.js` (пара 1.2.0 → 1.2.1 с одинаковыми весами), e2e `bundled-model.spec.js` с `NER_PACK_PREV` = 1.2.0. Метрики модели не пересчитывались.

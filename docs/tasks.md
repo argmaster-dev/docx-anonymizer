@@ -1560,6 +1560,30 @@ CSS zoom). 4) Реплика пользователя убрана из `chat-de
 
 **Тесты:** `tests/unit/recovery-key.spec.js`, `tests/unit/ui/restore-encoding.spec.js`, e2e `tests/e2e/release-051.spec.js`.
 
+## WP13-L — лицензия Apache 2.0 и пакет модели 1.2.1 (версия 0.5.1)
+
+Решение владельца 05.11.2026: с 0.5.1 код расширения и дообученная модель — Apache License 2.0, плюс `NOTICE` и `TRADEMARKS.md`. Версии 0.1–0.5.0 и пакет
+модели 1.2.0 выпущены под MIT и под ней остаются. Переобучения нет. Исполнитель — `wp-implementer`.
+
+**Сделано:**
+1. `LICENSE` — полный текст Apache 2.0; `NOTICE` (Copyright 2026 argmaster-dev, Sitimlab; разработано Sitimlab; ссылка на `TRADEMARKS.md`; сторонние компоненты
+   со ссылками на тексты лицензий в пакете); `TRADEMARKS.md` (ru + en). `package.json`/`package-lock.json` — `"license": "Apache-2.0"`.
+2. `scripts/build.mjs` кладёт `LICENSE`, `NOTICE` в корень каждой сборки и архива и `vendor/fflate.LICENSE` (fflate встроен в код, текст его MIT раньше
+   не распространялся). Сторожа: `tests/integration/pack.spec.js`, `checkStorePackage` + `tests/integration/pack-store.spec.js`.
+3. Пакет модели 1.2.1: `model.onnx`, `config.json`, `vocab.txt` байт в байт как в 1.2.0; `LICENSE` — Apache 2.0 для весов и `config.json` + MIT базовой модели;
+   `NOTICE` — версия, лицензия весов, «те же веса, что 1.2.0»; `pack.json` `license` `"Apache-2.0 AND MIT"`. `KNOWN_PACKS` +1.2.1 (1.2.0 остаётся).
+   Генератор `tools/ner-train/make_pack_src.py` пишет ту же форму. Исходники 1.2.0 — `../ner-models-backup/rubert-tiny2-ner-ruen-1.2.0`.
+4. Тексты: README (0.5.1, en-сводка, модель, «Лицензия»), справка `check_2` (1.2.1, Apache 2.0), `docs/spec-full.md`, `docs/contracts.md` §9.11,
+   `docs/store/checklist.md`, `tools/ner-train/README.md` («1.2.1»). MIT у сторонних компонентов (ORT, fflate, natasha, factRuEval, rubert-tiny2, XLM-R) не менялся.
+
+**Числа:** пакет `docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.1.zip` — 29 610 197 байт, sha256 `c684d60f2645b35f1bf0cad718f32b160ca52dd443975828ed48879928603f04`
+(две сборки совпали). Архивы 0.5.1 (две сборки совпали): лёгкий 6 627 243 байт (`39590fc2…`), полный 36 238 795 байт (`516e47d9…`, модель 1.2.1), для магазинов
+36 238 441 байт (`bddf9b59…`).
+
+**Тесты:** `tests/unit/background/bundled-model.spec.js`, `tests/integration/host.spec.js` (обновление 1.2.0 → 1.2.1 при одинаковых весах),
+`tests/unit/help-dict.spec.js` (строка о модели и лицензии), `pack.spec.js`/`pack-store.spec.js` (LICENSE и NOTICE в архивах); e2e `bundled-model.spec.js` с
+`NER_PACK_PREV` = 1.2.0, `ner.spec.js` с 1.2.1.
+
 ## Бэклог после 0.4
 
 Версия 0.4.0: политика маскирования, список компаний, корпус жанров, модель 1.1.0 (WP11-A…D). Отложено:

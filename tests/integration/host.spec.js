@@ -547,12 +547,13 @@ describe('host: MODEL_INSTALL поверх установленной прежн
   }
 
   const sha = (b) => createHash('sha256').update(b).digest('hex');
-  /** Вымышленный пакет id 'upd-pack' заданной версии: zip, sha архива. */
-  function fakePack(version) {
+  /** Вымышленный пакет id 'upd-pack' заданной версии: zip, sha архива, файлы. Веса зависят от минорной версии: у 1.2.0 и 1.2.1 они
+   * одинаковые, как у настоящих пакетов (WP13-L: 1.2.1 — те же веса под другой лицензией). */
+  function fakePack(version, license = 'MIT') {
     const files = {
       'model.onnx': new Uint8Array(500).map((_, i) => (i * 7 + version.length + Number(version.split('.')[1])) & 0xff),
       'vocab.txt': strToU8(`[PAD]\n[UNK]\n[CLS]\n[SEP]\nv${version}\n`),
-      LICENSE: strToU8('MIT'),
+      LICENSE: strToU8(license),
     };
     const manifest = {
       kind: 'docx-anonymizer-model-pack',
@@ -577,12 +578,12 @@ describe('host: MODEL_INSTALL поверх установленной прежн
       },
       model: { file: 'model.onnx', inputs: { ids: 'input_ids', mask: 'attention_mask' }, output: 'logits', indexType: 'int64' },
       files: Object.entries(files).map(([path, b]) => ({ path, sha256: sha(b), size: b.length })),
-      license: 'MIT',
+      license,
       source: {},
       minExtensionVersion: '0.1.0',
     };
     const zip = zipSync({ 'pack.json': strToU8(JSON.stringify(manifest)), ...files });
-    return { zip, sha256: sha(zip) };
+    return { zip, sha256: sha(zip), files };
   }
 
   let root;
@@ -597,14 +598,16 @@ describe('host: MODEL_INSTALL поверх установленной прежн
   });
   const slots = () => [...(root.c.get('models')?.c.keys() ?? [])].sort();
 
-  // 0.4 (WP11-C3): 1.0.0 → 1.1.0; 0.5 (WP12-E): 1.1.0 → 1.2.0 — тот же путь обновления встроенной модели
-  for (const [OLD_V, NEW_V, EXT_V] of [
-    ['1.0.0', '1.1.0', '0.4.0'],
-    ['1.1.0', '1.2.0', '0.5.0'],
+  // 0.4 (WP11-C3): 1.0.0 → 1.1.0; 0.5 (WP12-E): 1.1.0 → 1.2.0; 0.5.1 (WP13-L): 1.2.0 → 1.2.1 — те же веса, другая лицензия
+  // (новый sha архива того же id) — тот же путь обновления встроенной модели
+  for (const [OLD_V, NEW_V, EXT_V, NEW_LICENSE] of [
+    ['1.0.0', '1.1.0', '0.4.0', 'MIT'],
+    ['1.1.0', '1.2.0', '0.5.0', 'MIT'],
+    ['1.2.0', '1.2.1', '0.5.1', 'Apache-2.0 AND MIT'],
   ]) {
     it(`установлен {id, sha ${OLD_V}} → MODEL_INSTALL sha ${NEW_V} → installed; прежний слот удалён, активен новый`, async () => {
       const store = await import('../../src/shared/model-store.js');
-      const [v1, v2] = [fakePack(OLD_V), fakePack(NEW_V)];
+      const [v1, v2] = [fakePack(OLD_V), fakePack(NEW_V, NEW_LICENSE)];
       await store.install(v1.zip, { extensionVersion: EXT_V }); // как ручной импорт прежней версии
       expect(slots()).toEqual(['upd-pack']);
       expect((await store.listInstalled()).map((m) => [m.id, m.version, m.packSha256])).toEqual([['upd-pack', OLD_V, v1.sha256]]);
@@ -630,6 +633,12 @@ describe('host: MODEL_INSTALL поверх установленной прежн
       const list = await store.listInstalled();
       expect(list.map((m) => [m.id, m.version, m.packSha256])).toEqual([['upd-pack', NEW_V, v2.sha256]]);
       expect(new TextDecoder().decode(await store.readFile('upd-pack', 'vocab.txt'))).toContain(`v${NEW_V}`);
+      expect((await store.getManifest('upd-pack')).license).toBe(NEW_LICENSE);
+      expect(new TextDecoder().decode(await store.readFile('upd-pack', 'LICENSE'))).toBe(NEW_LICENSE);
+      // 1.2.0 → 1.2.1: одинаковые веса не мешают обновлению — решает sha архива, а не содержимое model.onnx
+      const sameWeights = Buffer.from(v1.files['model.onnx']).equals(Buffer.from(v2.files['model.onnx']));
+      expect(sameWeights).toBe(NEW_V === '1.2.1');
+      expect(Buffer.from(await store.readFile('upd-pack', 'model.onnx')).equals(Buffer.from(v2.files['model.onnx']))).toBe(true);
 
       // повторный запуск с тем же sha новой версии → present, файлы не переписываются
       await host.handle('bootstrap', { ...msg, requestId: 'up2' });

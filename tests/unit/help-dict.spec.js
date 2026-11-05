@@ -33,6 +33,19 @@ describe('строки справки и подписи', () => {
     expect(helpJs).toContain("list('ul', t, 'policy', 4)");
   });
 
+  // WP13-L (0.5.1): пакет модели 1.2.1 (те же веса, что 1.2.0) и лицензия Apache 2.0 кода и весов; предупреждение о корпусах — на месте
+  it('строка о модели: пакет 1.2.1, лицензия Apache 2.0 (база — MIT), предупреждение о NEREL/Nerus — ru/en', () => {
+    for (const lang of ['ru', 'en']) {
+      const s = HELP_DICT[lang].check_2;
+      expect(s, lang).toContain('1.2.1');
+      expect(s, lang).not.toContain('1.2.0');
+      expect(s, lang).toMatch(/Apache 2\.0/);
+      expect(s, lang).toMatch(/rubert-tiny2[^.]*MIT/);
+      expect(s, lang).toMatch(/NEREL/);
+      expect(s, lang).toMatch(/NOTICE/);
+    }
+  });
+
   it('«Сделано в Sitimlab» и «Справка» есть в общих строках на обоих языках, меню их наследует', () => {
     expect(common.ru.madeBy).toBe('Сделано в');
     expect(common.en.madeBy).toBe('Made at');

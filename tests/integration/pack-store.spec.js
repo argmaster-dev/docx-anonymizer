@@ -42,6 +42,8 @@ describe('checkStorePackage', () => {
       '_locales/en/messages.json': strToU8(JSON.stringify({ extName: { message: 'DOCX Anonymizer' }, extDescription: { message: 'Short.' } })),
       ...Object.fromEntries(Object.values(manifest.icons).map((p) => [p, new Uint8Array(4)])),
       'popup/popup.html': strToU8('<script src="popup.js"></script>'),
+      LICENSE: strToU8('Apache License Version 2.0, January 2004'),
+      NOTICE: strToU8('DOCX Anonymizer, Sitimlab'),
     };
   };
   const info = { version: pkg.version, size: 1000 };
@@ -66,6 +68,16 @@ describe('checkStorePackage', () => {
   it('лёгкий пакет (--lite): модель не требуется, но и лишнего в models/ быть не должно', () => {
     expect(checkStorePackage(base(), { ...info, lite: true })).toEqual([]);
     expect(checkStorePackage({ ...base(), 'models/x.zip': new Uint8Array(1) }, { ...info, lite: true })).toEqual([expect.stringContaining('лёгкий пакет')]);
+  });
+
+  // WP13-L (0.5.1): лицензия проекта — Apache 2.0; без LICENSE/NOTICE в корне или с прежним текстом MIT пакет не годен
+  it('нет LICENSE или NOTICE в корне, LICENSE не Apache — проблема', () => {
+    const e = base();
+    delete e.NOTICE;
+    expect(checkStorePackage({ ...e, LICENSE: strToU8('MIT License') }, { ...info, lite: true })).toEqual([
+      expect.stringContaining('LICENSE (Apache 2.0)'),
+      expect.stringContaining('NOTICE'),
+    ]);
   });
 
   it('нет manifest.json в корне — сразу проблема', () => {
@@ -102,6 +114,8 @@ describe.skipIf(!existsSync(MODEL_ZIP))('пакет для магазинов (n
     const entry = zip[`models/${index[0].file}`];
     expect(createHash('sha256').update(entry).digest('hex')).toBe(latestKnownPack().sha256);
     expect(Buffer.from(entry).equals(readFileSync(MODEL_ZIP))).toBe(true);
+    // WP13-L: LICENSE и NOTICE — как в репозитории
+    for (const f of ['LICENSE', 'NOTICE']) expect(Buffer.from(zip[f]).equals(readFileSync(f)), f).toBe(true);
   });
 
   it('воспроизводим', () => {
