@@ -1,6 +1,6 @@
 # Контракты модулей
 
-Документ описывает, **что есть** в коде и **как к этому подключаться** (версия 0.3.0: MVP WP1–WP5, пакеты 0.2 WP6–WP9 и 0.3 WP10-A…D — PDF §7, восстановление файла §1.6, встроенная модель §6.8; 0.4 — §8; 0.5 WP12-A — словари в `vendor/dict` §2, общий слой OOXML и `DocumentAdapter` §9; WP12-B — Excel, PowerPoint, текстовые форматы §9.8).
+Документ описывает, **что есть** в коде и **как к этому подключаться** (версия 0.3.0: MVP WP1–WP5, пакеты 0.2 WP6–WP9 и 0.3 WP10-A…D — PDF §7, восстановление файла §1.6, встроенная модель §6.8; 0.4 — §8; 0.5 WP12-A — словари в `vendor/dict` §2, общий слой OOXML и `DocumentAdapter` §9; WP12-B — Excel, PowerPoint, текстовые форматы §9.8; 0.5.1 — ключ восстановления не уходит в чат, кодировка страницы восстановления §9.10).
 Источник истины — код с JSDoc; здесь — смысл и правила. Рамки MVP — `docs/mvp-scope.md`, цели 0.2 и 0.3 — `docs/concept-0.2.md`, `docs/concept-0.3.md`,
 ТЗ — `docs/spec-full.md`, рабочие пакеты — `docs/tasks.md`.
 
@@ -1533,3 +1533,29 @@ IV — `getRandomValues`, итераций 600 000 (меньше `KDF_MIN_ITERAT
 
 **Бюджеты**: код `worker.js` без ORT ≤ 512 КиБ; `content.js` 163 773 байт — лимит сторожа `pack.spec.js` 150 → 163 КиБ (блок скрытых данных в панели;
 словарей, шифрования и полей пароля в нём нет).
+
+### 9.10. Версия 0.5.1: ключ восстановления не уходит в чат, кодировка на странице восстановления, канал студии
+
+**Распознавание ключа** (`core/recovery-key.js`, spec FR-29а): `isRecoveryKeyFile(bytes, name?)` — текст по `decodeText` (BOM, UTF-16, UTF-8, Windows-1251),
+затем `isRecoveryKeyText(text)`: быстрый отсев без `"entries":`/`"ct":`; весь текст как JSON или кусок от первой «{» до последней «}» (ключ в блоке кода `.md`);
+`isRecoveryKeyObject(obj)` — `isOpenMapping` (массив `entries`, не меньше половины первых 200 записей — `{token, value|original}` с меткой `[…_N]`, `category` или
+`placeholder`; без полей верхнего уровня карты — только с метками `[…_N]`; пустая карта — при `schemaVersion: 1` и `tool.name` = `TOOL_NAME`), `isEncryptedKey`
+(`core/key-crypto.js`) или массив таких объектов. Имя `*.mapping.json` (`hasKeyFileName`) — дополнительный признак: с ним хватает записи с `token` или битого
+JSON с полями `token` и `value`/`original`. JSON с полем `entries` иной формы и фикстуры `tests/fixtures/**` (240 текстовых файлов) — не ключ.
+**Хост** (`offscreen/host.js`): для адаптера `plain` до загрузки модуля формата — `CoreError('RECOVERY_KEY')`, код есть в `ERROR_CODES` ядра и протокола §5.4 и в
+`schemas/protocol.schema.json`; текст `err.RECOVERY_KEY` (ru/en, `ui/i18n/common.js`). Бинарные форматы не проверяются.
+**Перехват** (`content/flow.js`): отказ `RECOVERY_KEY` — `panel.setError(k, {blocked: true, retry: false})`: без «Загрузить как есть» и «Повторить», заметка
+`keyBlockedNote`; `canAnonymize` считает такой файл решённым; если все файлы заблокированы — «Загрузить оригинал» не показывается, Esc/«×» — отмена.
+Ключ не уходит сайту ни при каком выборе (`sendable`: обезличенные, «оригинал», уведомление об инвалидации); файл с именем `*.mapping.json`
+(`content/files.js` `isKeyFileName`) — так же при любом сбое хоста, пока хост не разобрал его без отказа. Интерсептор: `remember` — по членству, а не по индексу
+(список результата короче исходного), при «оригинале» без ключа список поля `input` переписывается. Детектора ключа в `content.js` нет — бюджет сторожа
+163 КиБ (`content.js` 165 768 байт).
+**Страница восстановления** (`restore.js`, `ui/deanon/index.js`): `.txt/.md/.markdown/.log` — `readAiText(bytes)` → `{text, encoding: {encoding, bom}}`,
+результат — `encodeRestored(text, encoding)` → `{bytes, lost}` (`encodeText` из `core/plain/encoding.js`, туда вынесены `decodeText`/`encodeText`/`unencodableCount`;
+`plain-adapter.js` их реэкспортирует), MIME — `mimeFor(name, charset)`; не UTF-8 — предупреждение `restore-encoding` («Кодировка файла — Windows-1251…», число
+символов вне 1251 → «?»), в строке файла — «кодировка …»; для CSV/JSON кодировку сохраняет адаптер, страница только предупреждает. Файлы ключа —
+`keyTextsFromBytes(list)`: UTF-8 (с BOM) и UTF-16 читаются, Windows-1251 → `{error: 'encoding'}` и текст `key_encoding`.
+**Подпись студии** (`ui/brand.js`): `TELEGRAM_URL` = `https://t.me/sitimlab` рядом с `SITIMLAB_URL`; `madeByLine` — «Сделано в Sitimlab · @sitimlab»
+(«Сделано в Sitimlab» — в своём `span`), `channelLink(lang)` — `data-testid="channel-link"`, `target=_blank`, `rel="noopener noreferrer"`, `title` — `common.channel`;
+меню (`popup.html`) — та же разметка, `href` и `title` выставляет `popup.js`. Тесты: `tests/unit/recovery-key.spec.js`, `tests/unit/ui/restore-encoding.spec.js`,
+e2e `release-051.spec.js`.

@@ -13,6 +13,7 @@ import { popup as popupDict } from '../ui/i18n/popup.js';
 import { h, clear } from '../ui/components/dom.js';
 import { matchOrigin } from '../core/sites.js';
 import { hasOriginAccess, requestOrigins, toMatchPattern } from '../shared/permissions.js';
+import { TELEGRAM_URL } from '../ui/brand.js';
 
 const $ = (id) => /** @type {HTMLElement} */ (document.getElementById(id));
 let settings;
@@ -46,7 +47,9 @@ function applyLanguage() {
   $('open-restore').textContent = t('restore');
   $('open-options').textContent = t('options');
   $('open-help').textContent = t('help');
-  $('made-by').firstChild.textContent = `${t('madeBy')} `;
+  $('made-by-studio').firstChild.textContent = `${t('madeBy')} `;
+  $('channel-link').title = t('channel');
+  $('channel-link').href = TELEGRAM_URL; // адрес канала — одна константа в ui/brand.js (0.5.1)
   const devTitle = document.getElementById('t-dev');
   if (devTitle) devTitle.textContent = t('devTitle');
 }

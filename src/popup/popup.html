@@ -56,8 +56,15 @@
         <a id="dev-download" hidden>Скачать результат</a>
       </details>
 
+      <!-- подпись студии и Telegram-канал (0.5.1); адреса — SITIMLAB_URL и TELEGRAM_URL в src/ui/brand.js -->
       <p class="made-by" id="made-by">
-        Сделано в <a href="https://sitimlab.ru" target="_blank" rel="noopener noreferrer" data-testid="made-by-link">Sitimlab</a>
+        <span id="made-by-studio"
+          >Сделано в <a href="https://sitimlab.ru" target="_blank" rel="noopener noreferrer" data-testid="made-by-link">Sitimlab</a></span
+        >
+        ·
+        <a href="https://t.me/sitimlab" id="channel-link" target="_blank" rel="noopener noreferrer" title="Telegram-канал Sitimlab" data-testid="channel-link"
+          >@sitimlab</a
+        >
       </p>
     </main>
     <script src="popup.js"></script>

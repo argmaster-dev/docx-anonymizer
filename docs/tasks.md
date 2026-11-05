@@ -1543,6 +1543,23 @@ CSS zoom). 4) Реплика пользователя убрана из `chat-de
 **Осталось владельцу:** аккаунт разработчика Chrome Web Store; push → публичная ссылка на `docs/store/privacy.md`; заполнить формы Chrome Web Store
 по `docs/store/checklist.md` (категории раскрытия данных); загрузка `release/docx-anonymizer-0.5.0-store.zip`.
 
+## WP13 — выпуск 0.5.1 (исправления по отзыву пользователя)
+
+Ветка `v0.5.1` от `main` = `f09ab2a`. Исполнитель — `wp-implementer`. Схема настроек не меняется.
+
+**Сделано:**
+1. **Ключ восстановления не уходит в чат** (spec FR-29а, §3.5; contracts §9.10): `src/core/recovery-key.js` — открытая карта (форма
+   `schemas/mapping.schema.json`, в том числе урезанная до `entries`) и зашифрованный ключ (`isEncryptedKey`) по содержимому, в любой кодировке, под любым
+   текстовым расширением, в блоке кода `.md`; имя `*.mapping.json` — дополнительный признак. Хост — `RECOVERY_KEY` (ядро, протокол, схема, тексты ru/en);
+   панель — отказ без «Загрузить как есть» и «Повторить», ключ исключается из результата при любом выборе, файл `*.mapping.json` — и при сбое хоста.
+   Детектор — в хосте, не в `content.js`: бюджет сторожа 163 КиБ сохранён (`content.js` 165 768 байт).
+2. **Кодировка на странице «Восстановить»** (FR-36а): `.txt/.md/.markdown/.log` — байтами через `decodeText` (вынесен с `encodeText` в
+   `src/core/plain/encoding.js`), результат — в исходной кодировке и с BOM, если был; предупреждение для не UTF-8; ключ в Windows-1251 — понятная ошибка.
+3. **Telegram-канал** `@sitimlab` (`TELEGRAM_URL` в `src/ui/brand.js`) в подписи студии: меню, настройки, восстановление, справка.
+4. **Версия 0.5.1** — `manifest.json`, `package.json`, `package-lock.json`; README, `docs/spec-full.md`, `docs/contracts.md` §9.10.
+
+**Тесты:** `tests/unit/recovery-key.spec.js`, `tests/unit/ui/restore-encoding.spec.js`, e2e `tests/e2e/release-051.spec.js`.
+
 ## Бэклог после 0.4
 
 Версия 0.4.0: политика маскирования, список компаний, корпус жанров, модель 1.1.0 (WP11-A…D). Отложено:
