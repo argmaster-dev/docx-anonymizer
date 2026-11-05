@@ -22,7 +22,11 @@ import {
   aiFileAdapterKind,
   aiFileKind,
   countUnresolved,
+  encodeRestored,
+  encodingLabel,
+  keyTextsFromBytes,
   mimeFor,
+  readAiText,
   mixedValueWarnings,
   readMappingFiles,
   pickSession,
@@ -46,7 +50,9 @@ let fileMapping = null;
 let lockedTexts = null;
 /** Что восстанавливаем: вставленный текст или файл от ИИ (FR-36а) */
 let mode = 'text';
-/** @type {{name: string, size: number, kind: 'docx'|'xlsx'|'pptx'|'csv'|'json'|'text', bytes?: Uint8Array, text?: string} | null} */
+/** encoding — кодировка текстового файла (0.5.1): .txt/.md/.log и CSV/JSON в Windows-1251 или UTF-16 сохраняются в ней же */
+/** @type {{name: string, size: number, kind: 'docx'|'xlsx'|'pptx'|'csv'|'json'|'text', bytes?: Uint8Array, text?: string,
+ *   encoding?: {encoding: string, bom: boolean}} | null} */
 let aiFile = null;
 /** Склонять ФИО по контексту метки (FR-37) */
 let decline = true;
@@ -114,6 +120,25 @@ function render(lang) {
   /** @type {{name: string, blob: Blob} | null} */
   let lastDownload = null;
   const warn = h('div', { dataset: { testid: 'restore-warnings' } });
+  /** Кодировка файла не UTF-8 (0.5.1): восстановленный файл сохранён в ней же — заметное предупреждение */
+  const encWarn = h('div', { dataset: { testid: 'restore-encoding' } });
+  const showEncoding = (encoding, lost = 0) => {
+    const enc = encodingLabel(encoding);
+    encWarn.replaceChildren(
+      ...(enc
+        ? [
+            h(
+              'div',
+              { class: 'mixed', role: 'status' },
+              h('strong', {}, t('enc_h', { enc })),
+              ' ',
+              t('enc_saved'),
+              lost ? ` ${t('enc_lost', { n: lost, enc })}` : '',
+            ),
+          ]
+        : []),
+    );
+  };
   /** Входные данные поменялись (файл от ИИ, карта, источник, обработка): прежний результат больше не скачивается. */
   const invalidate = () => {
     lastDownload = null;
@@ -138,15 +163,23 @@ function render(lang) {
       if (!kind) return (fileInfo.textContent = t('ai_file_bad'));
       if (f.size > limits.maxFileSizeMB * 1024 * 1024) return (fileInfo.textContent = t('file_too_big', { limit: limits.maxFileSizeMB }));
       try {
-        aiFile =
-          kind !== 'text'
-            ? { name: f.name, size: f.size, kind, bytes: new Uint8Array(await f.arrayBuffer()) }
-            : { name: f.name, size: f.size, kind, text: await f.text() };
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        // текст — байтами и decodeText (0.5.1): BOM, UTF-16, строгий UTF-8, иначе Windows-1251 — как у CSV и JSON
+        if (kind === 'text') {
+          const r = readAiText(bytes);
+          aiFile = { name: f.name, size: f.size, kind, text: r.text, encoding: r.encoding };
+        } else {
+          aiFile = { name: f.name, size: f.size, kind, bytes };
+          // CSV и JSON кодировку сохраняет адаптер текстовых форматов; здесь — только для предупреждения
+          if (kind === 'csv' || kind === 'json') aiFile.encoding = readAiText(bytes).encoding;
+        }
       } catch (err) {
         return (fileInfo.textContent = t('error', { msg: String(err?.message || err) }));
       }
       fileInfo.className = 'hint';
-      fileInfo.textContent = t('ai_file_loaded', { name: f.name, kb: Math.max(1, Math.round(f.size / 1024)) });
+      const enc = encodingLabel(aiFile.encoding);
+      fileInfo.textContent =
+        t('ai_file_loaded', { name: f.name, kb: Math.max(1, Math.round(f.size / 1024)) }) + (enc ? ` · ${t('ai_file_encoding', { enc })}` : '');
     },
   });
   const fileField = h('div', { class: 'field' }, h('span', { class: 'lbl' }, t('ai_file_pick')), aiInput, fileInfo);
@@ -227,6 +260,7 @@ function render(lang) {
         else if (r.needPassword) info.textContent = t('key_encrypted');
         else if (r.error === 'password') info.textContent = t('key_password_bad');
         else if (r.error === 'invalid') info.textContent = t('key_invalid');
+        else if (r.error === 'encoding') info.textContent = t('key_encoding');
         else info.textContent = t('file_bad', { why: t(r.error === 'json' ? 'file_bad_json' : 'file_bad_shape') });
       };
       const password = h('input', {
@@ -264,7 +298,13 @@ function render(lang) {
         'aria-label': t('file_pick'),
         onchange: async () => {
           invalidate();
-          const texts = await Promise.all([...file.files].map((f) => f.text()));
+          // ключ расширение пишет в UTF-8; файл, пересохранённый в Windows-1251, — понятная ошибка, а не карта с «�» (0.5.1)
+          const read = keyTextsFromBytes(await Promise.all([...file.files].map(async (f) => new Uint8Array(await f.arrayBuffer()))));
+          if (!read.texts) {
+            lockedTexts = null;
+            return show({ error: read.error });
+          }
+          const texts = read.texts;
           lockedTexts = texts;
           show(await readMappingFiles(texts));
           if (lockedTexts && !unlock.hidden) password.focus();
@@ -384,6 +424,7 @@ function render(lang) {
     msg.textContent = '';
     invalidate();
     warn.replaceChildren();
+    encWarn.replaceChildren();
     const file = mode === 'file' ? aiFile : null;
     if (mode === 'text' && !input.value.trim()) {
       msg.textContent = t('need_text');
@@ -422,12 +463,19 @@ function render(lang) {
       }
       showDocx(r);
       showWarnings(mapping, r.tokens);
+      showEncoding(file.encoding);
       lastDownload = { name, blob: new Blob([r.bytes], { type: mimeFor(name) }) };
     } else {
       const r = restoreText(file ? /** @type {string} */ (file.text) : input.value, mapping, { decline });
       showText(r);
       showWarnings(mapping, r.tokens);
-      if (file) lastDownload = { name, blob: new Blob([r.text], { type: mimeFor(name) }) };
+      if (file) {
+        // восстановленный текст — в исходной кодировке файла (и с BOM, если он был), как пишет адаптер текстовых форматов
+        const enc = file.encoding || { encoding: 'utf-8', bom: false };
+        const out = encodeRestored(r.text, enc);
+        showEncoding(enc, out.lost);
+        lastDownload = { name, blob: new Blob([out.bytes], { type: mimeFor(name, enc.encoding) }) };
+      }
     }
     downloadBtn.disabled = !lastDownload;
   };
@@ -473,6 +521,7 @@ function render(lang) {
           h('div', { class: 'row between', style: 'margin-top:10px' }, stat, h('div', { class: 'row' }, copyBtn, downloadBtn)),
           unres,
           warn,
+          encWarn,
           h('p', { class: 'hint' }, t('declension_hint')),
         ),
         h('div', { class: 'row between' }, helpLink(lang), madeByLine(lang)),

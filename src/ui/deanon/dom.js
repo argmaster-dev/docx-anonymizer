@@ -60,7 +60,3 @@ export function confirmDialog(text, { ok = 'OK', cancel = 'Cancel', danger = fal
     dlg.showModal();
   });
 }
-
-export function readFileText(file) {
-  return file.text();
-}

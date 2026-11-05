@@ -2,6 +2,7 @@
 // с подсветкой нераспознанного и склонённого (FR-36, FR-37), файл от ИИ — вид, имя результата, MIME, предвыбор сессии (FR-36а, WP10-B).
 import { mergeMappings } from '../../core/mapping.js';
 import { decryptMapping, isEncryptedKey } from '../../core/key-crypto.js';
+import { decodeText, encodeText, unencodableCount } from '../../core/plain/encoding.js';
 
 /**
  * Разбирает содержимое .mapping.json (или нескольких файлов) в один маппинг.
@@ -198,8 +199,63 @@ export function pickSession(sessions, wantDocId) {
   return sessions.reduce((a, b) => (b.createdAt > a.createdAt ? b : a)).docId;
 }
 
-/** MIME восстановленного файла для Blob. */
-export function mimeFor(name) {
+/**
+ * Файлы ключа (байты) → тексты для readMappingFiles (0.5.1). Ключ расширение пишет в UTF-8; UTF-8 с BOM и UTF-16 читаются без
+ * потерь, а файл не в UTF-8 (пересохранён как ANSI / Windows-1251) — понятная ошибка `encoding` вместо карты с «�» в значениях.
+ * @param {Uint8Array[]} list
+ * @returns {{texts?: string[], error?: 'encoding'}}
+ */
+export function keyTextsFromBytes(list) {
+  const texts = [];
+  for (const bytes of list) {
+    const d = decodeText(bytes);
+    if (d.encoding === 'windows-1251') return { error: 'encoding' };
+    texts.push(d.text);
+  }
+  return { texts };
+}
+
+/**
+ * Текстовый файл от ИИ (.txt, .md, .markdown, .log) → текст и кодировка (0.5.1, FR-36а): как у адаптера текстовых форматов —
+ * BOM, UTF-16, строгий UTF-8, иначе Windows-1251 (`file.text()` читал всё как UTF-8 и портил кириллицу в 1251).
+ * @param {Uint8Array} bytes
+ * @returns {{text: string, encoding: {encoding: string, bom: boolean}}}
+ */
+export function readAiText(bytes) {
+  const d = decodeText(bytes);
+  return { text: d.text, encoding: { encoding: d.encoding, bom: d.bom } };
+}
+
+/**
+ * Восстановленный текст → байты в исходной кодировке (и с BOM, если он был); `lost` — сколько символов не записать в Windows-1251
+ * (стали «?»).
+ * @param {string} text
+ * @param {{encoding: string, bom: boolean}} encoding
+ */
+export function encodeRestored(text, encoding) {
+  return { bytes: encodeText(text, encoding), lost: unencodableCount(text, encoding) };
+}
+
+/** Название кодировки для предупреждения; для UTF-8 (с BOM и без) — null: предупреждать не о чем. */
+export function encodingLabel(encoding) {
+  const e = encoding?.encoding;
+  if (!e || e === 'utf-8') return null;
+  if (e === 'windows-1251') return 'Windows-1251';
+  return e === 'utf-16be' ? 'UTF-16 BE' : 'UTF-16';
+}
+
+/**
+ * MIME восстановленного файла для Blob. `charset` — кодировка текстового результата (0.5.1): файл в Windows-1251 не помечается
+ * как UTF-8.
+ * @param {string} name
+ * @param {string} [charset]
+ */
+export function mimeFor(name, charset) {
+  const m = mimeForExt(name);
+  return charset && /;charset=/.test(m) ? m.replace(/;charset=.*$/, `;charset=${charset}`) : m;
+}
+
+function mimeForExt(name) {
   switch (extOf(name)) {
     case '.docx':
       return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
