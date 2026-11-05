@@ -21,6 +21,7 @@ import { hiddenFlagsFrom } from '../core/ooxml/hidden.js';
 import { PlaceholderAllocator, resolvePlaceholderLanguage } from '../core/placeholders.js';
 import { registerBuiltinDetectors } from '../core/detect/index.js';
 import { CoreError } from '../core/errors.js';
+import { isRecoveryKeyFile } from '../core/recovery-key.js';
 import { MSG, ChunkAssembler, postChunked, errorMessage, sha256Hex } from '../shared/protocol.js';
 import { ModelStoreError } from '../shared/model-store.js';
 import { loadDicts } from '../core/detect/names/dict/load.js';
@@ -188,6 +189,9 @@ export function createHost(env) {
     const pdf = isPdf(bytes) || /\.pdf$/i.test(name);
     const entry = pdf ? null : detectAdapter(bytes, name) || (name ? null : adapterForKind('docx'));
     if (!pdf && !entry) throw new CoreError('NOT_SUPPORTED', 'Формат файла не поддерживается');
+    // 0.5.1: ключ восстановления (карта замен со всеми настоящими значениями) не обрабатывается — его нельзя отправлять в ИИ;
+    // перехват узнаёт его раньше (content/flow.js), здесь — защита для любого клиента протокола (core/recovery-key.js)
+    if (entry?.kind === 'plain' && isRecoveryKeyFile(bytes, name)) throw new CoreError('RECOVERY_KEY', 'Файл — ключ восстановления');
     const kind = entry ? entry.kind : 'pdf';
     let doc;
     let adapter = null;

@@ -48,9 +48,8 @@ export function createInterceptor(flow, env = {}) {
   }
 
   function remember(originals, res) {
-    res.files.forEach((f, i) => {
-      if (f !== originals[i]) produced.add(fileSignature(f));
-    });
+    // по членству, а не по индексу: ключ восстановления выпадает из списка (0.5.1), индексы результата сдвигаются
+    for (const f of res.files) if (!originals.includes(f)) produced.add(fileSignature(f));
   }
 
   /* ---------- input[type=file] ---------- */
@@ -78,10 +77,9 @@ export function createInterceptor(flow, env = {}) {
           input.value = ''; // повторный выбор того же файла снова вызовет change
           return;
         }
-        if (res.action === 'anonymized') {
-          remember(files, res);
-          setInputFiles(input, res.files);
-        }
+        if (res.action === 'anonymized') remember(files, res);
+        // «оригинал» без ключа восстановления (0.5.1) — список тоже меняется: ключ не должен остаться в поле
+        if (res.action === 'anonymized' || res.files.length !== files.length) setInputFiles(input, res.files);
         fireInputEvents(input);
       })
       .catch(() => {

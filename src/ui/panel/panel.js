@@ -243,6 +243,8 @@ export class Panel {
     if (this.phase === 'mapping-hint') return this.o.handlers.onCancel();
     if (this.phase === 'applying') return;
     if (this.phase === 'notice') return this.o.handlers.onCancel();
+    // все файлы — ключи восстановления (0.5.1): загружать нечего, закрытие — просто отмена
+    if (this.files.length && this.files.every((f) => f.error?.blocked)) return this.o.handlers.onCancel();
     this.showConfirm('close');
   }
 
@@ -476,6 +478,16 @@ export class Panel {
 
   renderError(f, i) {
     const t = this.t;
+    // ключ восстановления (0.5.1, RECOVERY_KEY): ни «Загрузить как есть», ни «Повторить» — файл не уходит на сайт ни при каком выборе
+    if (f.error.blocked) {
+      this.setCenter(
+        f,
+        h('div', { class: 'err-ic', text: '!' }),
+        h('h3', { text: f.error.message, 'data-testid': 'error-message' }),
+        h('p', { text: t('keyBlockedNote'), 'data-testid': 'key-blocked-note' }),
+      );
+      return;
+    }
     const asIs = h('button', {
       class: `btn btn-sm${f.asIs ? ' btn-primary' : ''}`,
       type: 'button',
@@ -542,7 +554,8 @@ export class Panel {
   get canAnonymize() {
     if (this.phase !== 'review') return false;
     if (this.files.some((f) => f.state === 'queued' || f.state === 'analyzing')) return false;
-    if (this.files.some((f) => f.state === 'error' && !f.asIs)) return false;
+    // заблокированный файл (ключ восстановления, 0.5.1) — решение уже принято: он просто не загружается
+    if (this.files.some((f) => f.state === 'error' && !f.asIs && !f.error?.blocked)) return false;
     // «Загрузить как есть» у всех файлов (например, один скан PDF, К5) — тоже решение: уйдут оригиналы
     return this.readyCount > 0 || this.files.some((f) => f.asIs);
   }
@@ -565,13 +578,17 @@ export class Panel {
 
   renderFooter() {
     const t = this.t;
+    // все файлы — ключи восстановления (0.5.1): загружать нечего, «Загрузить оригинал» не показываем
     clear(this.footer);
     const total = this.files.reduce((n, f) => n + (f.preview ? f.preview.plannedReplacements() : 0), 0);
     // все файлы решено загрузить как есть (скан PDF, К5) — замен не будет, кнопка только загружает
-    const uploadOnly = this.files.length > 0 && this.files.every((f) => f.asIs);
+    // (ключ восстановления, 0.5.1, в счёт не идёт: он не загружается)
+    const uploadOnly = this.files.some((f) => f.asIs) && this.files.every((f) => f.asIs || f.error?.blocked);
     this.footer.append(
       h('button', { class: 'btn', type: 'button', text: t('btnCancel'), 'data-testid': 'btn-cancel', onClick: () => this.o.handlers.onCancel() }),
-      h('button', { class: 'btn', type: 'button', text: t('btnOriginal'), 'data-testid': 'btn-original', onClick: () => this.showConfirm('original') }),
+      this.files.length && this.files.every((f) => f.error?.blocked)
+        ? null
+        : h('button', { class: 'btn', type: 'button', text: t('btnOriginal'), 'data-testid': 'btn-original', onClick: () => this.showConfirm('original') }),
       h('button', {
         class: 'btn btn-primary',
         type: 'button',

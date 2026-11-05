@@ -3,6 +3,7 @@ export const common = {
   ru: {
     appName: 'DOCX Anonymizer',
     madeBy: 'Сделано в',
+    channel: 'Telegram-канал Sitimlab',
     help: 'Справка',
     'stage.receiving': 'Чтение файла…',
     'stage.unzip': 'Распаковка…',
@@ -28,6 +29,7 @@ export const common = {
     'err.PDF_EMPTY': 'В PDF нет страниц',
     'err.PDF_NO_TEXT':
       'В PDF нет текстового слоя — похоже, это скан. Распознавание сканов — в следующей версии; пока распознайте текст (OCR) сами или загрузите как есть',
+    'err.RECOVERY_KEY': 'Это ключ восстановления (карта замен) — в нём настоящие значения. Его нельзя отправлять в ИИ-сервис.',
     'err.INTERNAL': 'Внутренняя ошибка обработки',
     'tooltip.on': 'DOCX Anonymizer — перехват включён на {host}',
     'tooltip.off': 'DOCX Anonymizer — перехват выключен',
@@ -39,6 +41,7 @@ export const common = {
   en: {
     appName: 'DOCX Anonymizer',
     madeBy: 'Made at',
+    channel: 'Sitimlab Telegram channel',
     help: 'Help',
     'stage.receiving': 'Reading file…',
     'stage.unzip': 'Unpacking…',
@@ -65,6 +68,7 @@ export const common = {
     'err.PDF_EMPTY': 'The PDF has no pages',
     'err.PDF_NO_TEXT':
       'The PDF has no text layer — it looks like a scan. Scan recognition is coming in the next version; for now run OCR yourself or upload it as is',
+    'err.RECOVERY_KEY': 'This is a recovery key (replacement map) — it contains the real values. It must not be sent to an AI service.',
     'err.INTERNAL': 'Internal processing error',
     'tooltip.on': 'DOCX Anonymizer — interception is on for {host}',
     'tooltip.off': 'DOCX Anonymizer — interception is off',

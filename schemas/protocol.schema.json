@@ -54,6 +54,7 @@
         "PDF_NO_TEXT",
         "NOT_SUPPORTED",
         "FORMAT_LOAD_FAILED",
+        "RECOVERY_KEY",
         "INTERNAL"
       ]
     },

@@ -79,6 +79,7 @@ export const OPTIONS_SECTIONS = Object.freeze(['categories', 'companies', 'ner']
 // 'pdf' — извлечение текста PDF (версия 0.3)
 export const STAGES = Object.freeze(['receiving', 'unzip', 'parse', 'pdf', 'detect', 'ner', 'kb', 'apply', 'zip', 'sending']);
 
+// RECOVERY_KEY (0.5.1) — файл оказался ключом восстановления (core/recovery-key.js): отказ без «загрузить как есть»
 export const ERROR_CODES = Object.freeze([
   'NOT_DOCX',
   'ENCRYPTED',
@@ -94,6 +95,7 @@ export const ERROR_CODES = Object.freeze([
   // форматы 0.5 (WP12-B): не поддерживается; модуль формата не загрузился
   'NOT_SUPPORTED',
   'FORMAT_LOAD_FAILED',
+  'RECOVERY_KEY',
   'INTERNAL',
 ]);
 

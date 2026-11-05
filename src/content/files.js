@@ -56,6 +56,12 @@ export function isSupported(file, settings) {
   return kind !== null;
 }
 
+/**
+ * Имя ключа восстановления, как его сохраняет расширение: «договор.mapping.json» (0.5.1). Сам ключ узнаёт по содержимому хост
+ * (core/recovery-key.js, код RECOVERY_KEY); по имени перехват не отдаёт файл сайту, пока хост не подтвердил, что это не ключ.
+ */
+export const isKeyFileName = (file) => /\.mapping\.json$/i.test(file?.name || '');
+
 /** Есть ли среди файлов хотя бы один обрабатываемый. */
 export function hasSupported(files, settings) {
   return Array.from(files || []).some((f) => isSupported(f, settings));

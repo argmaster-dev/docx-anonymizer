@@ -8,7 +8,17 @@ import { common } from '../ui/i18n/common.js';
 import { panel as panelDict } from '../ui/i18n/panel.js';
 import { MSG, ProtocolError, makeRequestId } from '../shared/protocol.js';
 import { saveSettingsPatch } from '../shared/settings-store.js';
-import { isSupported, isPdfFile, resultType, mappingFileName, isInvalidatedError, makeResultName, neutralName, uniqueResultName } from './files.js';
+import {
+  isSupported,
+  isPdfFile,
+  resultType,
+  mappingFileName,
+  isInvalidatedError,
+  makeResultName,
+  neutralName,
+  uniqueResultName,
+  isKeyFileName,
+} from './files.js';
 import { Link, contextValid, readOpenShadowFlag } from './runtime.js';
 import { exclusionValue } from '../ui/preview/model.js';
 import { shouldShowOrgPolicyHint, withMaskedCompany } from '../ui/panel/org-policy.js';
@@ -63,6 +73,13 @@ async function runOnce(originals, deps) {
 
   /** @type {Map<number, {docId: string, k: number}>} */
   const analyzed = new Map();
+  // 0.5.1: ключ восстановления (карта замен с настоящими значениями) по содержимому узнаёт хост — код RECOVERY_KEY
+  // (core/recovery-key.js). Такой файл не уходит на сайт ни при каком выборе: ни обезличенным, ни «как есть», ни «оригиналом»
+  // (в том числе при инвалидации контекста). Файл с именем ключа (*.mapping.json) не уходит, пока хост не разобрал его без отказа.
+  const keys = new Set();
+  const blocked = (i) => keys.has(i) || (isKeyFileName(originals[i]) && !analyzed.has(i));
+  /** что можно отдать сайту: всё, кроме ключей восстановления */
+  const sendable = (files) => files.filter((_, i) => !blocked(i));
   let closed = false;
   let finish;
   const result = new Promise((res) => (finish = res));
@@ -97,7 +114,9 @@ async function runOnce(originals, deps) {
     },
     onOriginal: () => {
       discardAll();
-      decide('original', originals);
+      // ключи восстановления не уходят и «оригиналом»; если загружать нечего — как отмена
+      const rest = sendable(originals);
+      decide(rest.length ? 'original' : 'cancel', rest.length ? rest : originals);
       closePanel();
     },
     onAnonymize: () => applyAll(),
@@ -190,6 +209,12 @@ async function runOnce(originals, deps) {
   function fail(i, err) {
     if (isInvalidatedError(err) || !contextValid()) return invalidated();
     const code = err instanceof ProtocolError ? err.code : 'INTERNAL';
+    // ключ восстановления (отказ хоста) и файл с именем ключа при любом сбое — отказ без «загрузить как есть» и «повторить»:
+    // иначе сбой хоста предложил бы отправить ключ как есть
+    if (code === 'RECOVERY_KEY' || isKeyFileName(originals[i])) {
+      keys.add(i);
+      return failKey(i);
+    }
     const limit = settings.maxFileSizeMB;
     // TOO_LARGE от разбора PDF — лимит страниц (details.pages), а не мегабайт (core/pdf/extract.js)
     const pages = code === 'TOO_LARGE' ? err.details?.pages : undefined;
@@ -200,6 +225,11 @@ async function runOnce(originals, deps) {
       // модуль формата не загрузился (0.5, WP12-B) — можно повторить: сбой загрузки не кэшируется
       retry: code === 'HOST_UNAVAILABLE' || code === 'INTERNAL' || code === 'FORMAT_LOAD_FAILED',
     });
+  }
+
+  /** Ключ восстановления (0.5.1): отказ без «загрузить как есть» и без «повторить» — по образцу отказа для скана PDF. */
+  function failKey(i) {
+    panel.setError(procIdx.indexOf(i), { code: 'RECOVERY_KEY', message: tt('err.RECOVERY_KEY'), retry: false, blocked: true });
   }
 
   async function analyzeOne(i) {
@@ -311,7 +341,7 @@ async function runOnce(originals, deps) {
       }
       if (batchId) client.request(MSG.BATCH_END, { batchId }).catch(() => {});
       const merged = mappings.length ? mergeMappings(mappings) : null;
-      const sent = originals.map((f, i) => out[i].name);
+      const sent = sendable(out).map((f) => f.name);
       panel.showDone({
         replacements,
         names: sent,
@@ -321,7 +351,7 @@ async function runOnce(originals, deps) {
         hintMappingShown: deps.getSettings().hintMappingShown,
         docIds,
       });
-      decide('anonymized', out);
+      decide('anonymized', sendable(out));
     } catch (err) {
       if (isInvalidatedError(err) || !contextValid()) return invalidated();
       panel.backToReview();

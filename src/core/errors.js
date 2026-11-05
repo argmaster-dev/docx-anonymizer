@@ -15,6 +15,8 @@ export const ERROR_CODES = Object.freeze({
   // не загрузился модуль формата по требованию (offscreen/chunks/)
   NOT_SUPPORTED: 'NOT_SUPPORTED',
   FORMAT_LOAD_FAILED: 'FORMAT_LOAD_FAILED',
+  // 0.5.1: файл — ключ восстановления (карта замен с настоящими значениями, core/recovery-key.js): не обрабатывается и не отправляется
+  RECOVERY_KEY: 'RECOVERY_KEY',
   INTERNAL: 'INTERNAL',
 });
 
