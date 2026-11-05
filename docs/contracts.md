@@ -1552,7 +1552,7 @@ IV — `getRandomValues`, итераций 600 000 (меньше `KDF_MIN_ITERAT
 **Хост** (`offscreen/host.js`): для адаптера `plain` до загрузки модуля формата — `CoreError('RECOVERY_KEY')`, код есть в `ERROR_CODES` ядра и протокола §5.4 и в
 `schemas/protocol.schema.json`; текст `err.RECOVERY_KEY` (ru/en, `ui/i18n/common.js`). Бинарные форматы не проверяются.
 **Перехват** (`content/flow.js`, `content/files.js`): в начале `runOnce` — `sniffRecoveryKey(file)` для каждого перехваченного текстового файла (первые 64 КБ,
-без хоста) → `keys`; такие файлы хосту не отправляются. Отказ — `panel.setError(k, {blocked: true, retry: false})`: без «Загрузить как есть» и «Повторить»,
+без хоста; ключ дальше 64 КБ и UTF-16 без BOM с не-ASCII началом без хоста не узнаются — их узнаёт хост) → `keys`; такие файлы хосту не отправляются. Отказ — `panel.setError(k, {blocked: true, retry: false})`: без «Загрузить как есть» и «Повторить»,
 заметка `keyBlockedNote`; `canAnonymize` считает файл решённым; если все файлы заблокированы — «Загрузить оригинал» не показывается, Esc/«×» — отмена.
 Ключ не уходит сайту ни при каком выборе (`sendable`: обезличенные, «оригинал», уведомление об инвалидации). `fail()` для файла из `keys`, с кодом
 `RECOVERY_KEY` или с именем `*.mapping.json` (`isKeyFileName`) при любом сбое (и `BATCH_BEGIN`) — тот же отказ. Перехватываются `.txt`, `.text`, `.md`,
