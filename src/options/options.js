@@ -2,7 +2,7 @@
 // невалидное — подсвечивается и не сохраняется. Работает только через src/shared/settings-store.js.
 import './options.css';
 import { buildCatalog, CATEGORY_GROUPS } from '../core/categories.js';
-import { defaultSettings, validateSettingsPatch, parseExtensionList, SETTINGS_SCHEMA_VERSION } from '../core/settings.js';
+import { defaultSettings, validateSettingsPatch, parseExtensionList, SUPPORTED_EXTENSIONS, SETTINGS_SCHEMA_VERSION } from '../core/settings.js';
 import { findCustomMatches } from '../core/detect/custom/index.js';
 import { checkRegexSource, validateCustomCategory, CUSTOM_VALIDATORS, SHAPES } from '../core/detect/custom/rules.js';
 import { loadSettings, onSettingsChanged, saveSettingsPatch } from '../shared/settings-store.js';
@@ -561,7 +561,7 @@ function skipExtensionsField() {
     h('label', { for: 'skip-ext' }, t('skip_ext')),
     input,
     err,
-    h('p', { class: 'sec-hint', dataset: { testid: 'skip-ext-hint' } }, t('skip_ext_hint')),
+    h('p', { class: 'sec-hint', dataset: { testid: 'skip-ext-hint' } }, t('skip_ext_hint', { list: SUPPORTED_EXTENSIONS.map((x) => `.${x}`).join(', ') })),
   );
 }
 

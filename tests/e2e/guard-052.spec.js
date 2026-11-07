@@ -161,9 +161,41 @@ test.describe('неподдерживаемый файл не уходит мо�
     const [got] = await dump(page);
     expect([got.name, sha(Buffer.from(got.b64, 'base64'))]).toEqual([pdf.name, sha(pdf.bytes)]);
   });
+
+  test("pdfMode 'off': ключ восстановления, переименованный в .pdf (нет сигнатуры %PDF-), — отказ без «как есть»", async ({ context, extensionId }) => {
+    const page = await setup(context, extensionId, { pdfMode: 'off' });
+    await attach(page, 'paste', [{ name: 'отчёт.pdf', type: 'application/pdf', bytes: Buffer.from(KEY) }]);
+    await expect(page.getByTestId('error-message')).toContainText('ключ восстановления');
+    await expect(page.getByTestId('btn-asis')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(root(page)).toHaveCount(0);
+    expect(await dump(page)).toEqual([]);
+  });
 });
 
 test.describe('смешанный выбор и поле выбора (К3, К5)', () => {
+  test('вторая выборка в #multi, пока открыта панель (ревью 0.5.2): поле пустое до решения, вторая панель — после первой, «Отмена» — 0 файлов', async ({
+    context,
+    extensionId,
+  }) => {
+    const page = await setup(context, extensionId);
+    await attach(page, 'input', [{ name: 'договор.docx', type: DOCX_MIME, bytes: docxBytes() }]);
+    await expect(page.getByTestId('btn-anonymize')).toBeEnabled({ timeout: 30000 });
+    await attach(page, 'input', [UNSUPPORTED[0]]);
+    expect(await inputCount(page)).toBe(0);
+    expect(await dump(page)).toEqual([]);
+    await page.getByTestId('btn-cancel').click();
+    if (await page.getByTestId('btn-confirm-cancel').count()) await page.getByTestId('btn-confirm-cancel').click();
+    // вторая выборка ждала своей очереди — теперь её панель
+    await expect(page.getByTestId('error-message')).toHaveText(UNSUPPORTED[0].text);
+    expect(await inputCount(page)).toBe(0);
+    await page.getByTestId('btn-cancel').click();
+    await expect(root(page)).toHaveCount(0);
+    expect(await inputCount(page)).toBe(0);
+    expect(await dump(page)).toEqual([]);
+    expect(await page.evaluate(() => window.__events)).toBe(0);
+  });
+
   for (const asIs of [false, true])
     test(`input [договор.docx, паспорт.jpg]: ${asIs ? 'с «как есть» — обезличенный договор и картинка' : 'без «как есть» — только обезличенный договор'}`, async ({
       context,
@@ -275,6 +307,7 @@ test.describe('список «не спрашивать» (К4)', () => {
     await page.reload();
     const field = page.getByTestId('skip-ext');
     await expect(page.getByTestId('skip-ext-hint')).toContainText('Поддерживаемые форматы');
+    await expect(page.getByTestId('skip-ext-hint')).toContainText('.docm, .pdf, .xlsx, .xlsm, .pptx, .pptm, .txt, .text, .log, .md, .markdown, .csv, .json)');
     await field.fill('.PNG, jpg; *.zip');
     await field.press('Enter');
     await expect(field).toHaveValue('png, jpg, zip');

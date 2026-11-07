@@ -16,6 +16,7 @@ import { fileKind, isSkipped, isSupported, extOf } from '../../src/content/files
 import { createInterceptor } from '../../src/content/interceptor.js';
 import { panel } from '../../src/ui/i18n/panel.js';
 import { OPTIONS_DICT } from '../../src/ui/i18n/options.js';
+import { HELP_DICT } from '../../src/ui/i18n/help.js';
 
 const f = (name, type = '') => new File(['x'], name, { type });
 
@@ -109,6 +110,11 @@ describe('список «не спрашивать» (FR-04в)', () => {
     }
     expect(panel.ru.unsupportedExt.replace('{ext}', 'jpg')).toBe('Формат .jpg не проверяется на персональные данные');
     expect(panel.ru.unsupportedPdfOff).toMatch(/PDF выключен в настройках/);
+    // список поддерживаемых в подсказке поля — из SUPPORTED_EXTENSIONS (options.js подставляет {list}), в справке — все 14
+    for (const lang of ['ru', 'en']) {
+      expect(OPTIONS_DICT[lang].skip_ext_hint).toContain('({list})');
+      for (const ext of SUPPORTED_EXTENSIONS) expect(HELP_DICT[lang].guard_2, `${lang} .${ext}`).toMatch(new RegExp(`\\.${ext}[,)]`));
+    }
   });
 });
 
@@ -171,12 +177,12 @@ function setup(skip = () => false) {
   const input = new FakeInput();
   const got = []; // что получил «сайт»: списки имён по событиям change
   input.addEventListener('change', () => got.push(input.files.map((x) => x.name)));
-  let resolveRun;
+  const resolvers = [];
   const calls = [];
   const flow = {
     run(files, pass) {
       calls.push({ files, pass, duringRun: input.files.length });
-      return new Promise((r) => (resolveRun = r));
+      return new Promise((r) => resolvers.push(r));
     },
   };
   createInterceptor(flow, { win, isSkipped: skip }).attach();
@@ -188,7 +194,8 @@ function setup(skip = () => false) {
     if (!e.stopped) input.dispatchEvent(new Event('change'));
     return e.stopped;
   };
-  return { input, got, calls, choose, decide: (res) => resolveRun(res) };
+  /** решение по выборке k (по умолчанию — последней) */
+  return { input, got, calls, choose, decide: (res, k = resolvers.length - 1) => resolvers[k](res) };
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
@@ -252,6 +259,30 @@ describe('интерсептор 0.5.2: любой файл, пустое пол
     expect(t.calls).toHaveLength(0);
     expect(t.choose([f('a.png'), f('договор.docx'), f('скан.jpg')])).toBe(true);
     expect(t.calls[0].pass).toEqual([true, false, false]);
+  });
+
+  it('вторая выборка в то же поле, пока открыта панель (ревью 0.5.2): забирается из поля, ждёт очереди; «Отмена» первой поле не наполняет', async () => {
+    const t = setup();
+    t.choose([f('договор.docx')]);
+    expect(t.choose([f('паспорт.jpg')])).toBe(true);
+    expect(t.calls).toHaveLength(2);
+    expect(t.calls[1].files.map((x) => x.name)).toEqual(['паспорт.jpg']);
+    expect(t.calls[1].duringRun).toBe(0);
+    expect(t.input.files).toHaveLength(0);
+    // второе событие той же (второй) выборки — с уже пустым полем — гасится, во flow не идёт
+    expect(t.choose([])).toBe(true);
+    expect(t.calls).toHaveLength(2);
+    t.decide({ action: 'cancel', files: [] }, 0);
+    await tick();
+    expect(t.input.files).toHaveLength(0);
+    expect(t.got).toEqual([]);
+    const img = t.calls[1].files[0];
+    t.decide({ action: 'anonymized', files: [img] }, 1);
+    await tick();
+    expect(t.got).toEqual([['паспорт.jpg']]);
+    // обе выборки решены — поле больше не «в обработке»: новая выборка снова идёт во flow
+    expect(t.choose([f('ещё.png')])).toBe(true);
+    expect(t.calls).toHaveLength(3);
   });
 
   it('сбой сценария — поле остаётся пустым, сайт ничего не получил', async () => {

@@ -99,7 +99,7 @@ export const OPTIONS_DICT = {
     skip_ext: 'Не спрашивать о файлах с расширениями',
     skip_ext_placeholder: 'например: png, jpg',
     skip_ext_hint:
-      'Файлы, которые расширение не проверяет (картинки, архивы, .doc, .rtf), уходят в чат только после «Загрузить как есть» в панели. Перечислите через запятую расширения, о которых не спрашивать: такие файлы будут уходить сразу и без проверки. Поддерживаемые форматы (.docx, .xlsx, .pptx, .pdf, .txt, .md, .csv, .json, .log) добавить нельзя — они проверяются всегда.',
+      'Файлы, которые расширение не проверяет (картинки, архивы, .doc, .rtf), уходят в чат только после «Загрузить как есть» в панели. Перечислите через запятую расширения, о которых не спрашивать: такие файлы будут уходить сразу и без проверки. Поддерживаемые форматы ({list}) добавить нельзя — они проверяются всегда.',
     skip_ext_supported: 'Эти форматы расширение проверяет, их нельзя добавить в список: {list}',
     skip_ext_invalid: 'Не похоже на расширение файла: {list}',
     ui_language: 'Язык интерфейса',
@@ -336,7 +336,7 @@ export const OPTIONS_DICT = {
     skip_ext: "Don't ask about files with these extensions",
     skip_ext_placeholder: 'for example: png, jpg',
     skip_ext_hint:
-      'Files the extension does not check (images, archives, .doc, .rtf) go to the chat only after "Upload as is" in the panel. List the extensions not to ask about, separated by commas: such files will go right away, without any check. Supported formats (.docx, .xlsx, .pptx, .pdf, .txt, .md, .csv, .json, .log) cannot be added — they are always checked.',
+      'Files the extension does not check (images, archives, .doc, .rtf) go to the chat only after "Upload as is" in the panel. List the extensions not to ask about, separated by commas: such files will go right away, without any check. Supported formats ({list}) cannot be added — they are always checked.',
     skip_ext_supported: 'The extension checks these formats, they cannot be added to the list: {list}',
     skip_ext_invalid: 'Does not look like a file extension: {list}',
     ui_language: 'Interface language',

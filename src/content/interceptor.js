@@ -21,7 +21,7 @@ export function createInterceptor(flow, env = {}) {
   // исходные файлы, которые мы сами отдали сайту («как есть», «оригинал», файлы мимо панели): если сайт перешлёт те же объекты
   // в своё поле выбора, панель не откроется второй раз. Повторный выбор того же файла с диска даёт новые объекты — спросим снова
   const handed = new WeakSet();
-  const held = new WeakSet(); // inputs, по которым идёт обработка
+  const held = new WeakMap(); // input → число выборок в обработке (вторая выборка в то же поле ждёт в очереди flow)
   const hooked = new WeakSet();
   const roots = [];
   let observer = null;
@@ -74,29 +74,40 @@ export function createInterceptor(flow, env = {}) {
     // файлом уйдёт странице мимо перехвата (FR-01, NFR-01).
     const root = input.getRootNode?.();
     if (root && root !== doc && root.host) hookRoot(root);
-    if (held.has(input)) {
-      e.stopImmediatePropagation(); // input → change: второе событие той же выборки
+    const files = Array.from(input.files || []);
+    // поле уже очищено при перехвате: пустой список у поля в обработке — второе событие той же выборки (input → change)
+    if (held.has(input) && !files.length) {
+      e.stopImmediatePropagation();
       return;
     }
-    const files = Array.from(input.files || []);
     const pass = plan(files);
     if (!pass) return;
     e.stopImmediatePropagation();
-    held.add(input);
+    // новая выборка в то же поле, пока открыта панель (ревью 0.5.2), — тоже забирается из поля сразу и ждёт своей очереди во flow
+    held.set(input, (held.get(input) || 0) + 1);
     // 0.5.2 (FR-01а): поле очищается сразу — сайт, читающий input.files напрямую, пока идёт обработка, видит пустое поле;
     // повторный выбор того же файла после «Отмены» снова вызовет change
     input.value = '';
     flow
       .run(files, pass)
       .then((res) => {
-        if (res.action === 'cancel') return;
+        if (res.action === 'cancel') {
+          input.value = ''; // «Отмена» — в поле ничего (в том числе файлов, выбранных во время обработки)
+          return;
+        }
         remember(files, res);
         // результат подставляется явно при любом решении: обезличенные файлы, «как есть», «оригинал» (без ключа восстановления)
         setInputFiles(input, res.files);
         fireInputEvents(input);
       })
-      .catch(() => {})
-      .finally(() => held.delete(input));
+      .catch(() => {
+        input.value = '';
+      })
+      .finally(() => {
+        const n = held.get(input) - 1;
+        if (n > 0) held.set(input, n);
+        else held.delete(input);
+      });
   }
 
   /* ---------- drop ---------- */

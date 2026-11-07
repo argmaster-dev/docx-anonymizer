@@ -22,7 +22,7 @@ export function isPdfFile(file) {
   return /\.pdf$/i.test(file.name || '') || file.type === PDF_MIME;
 }
 
-/** Форматы 0.5 (WP12-B): расширение без учёта регистра или MIME. Сканы и изображения не перехватываются (OCR — версия 0.6). */
+/** Форматы 0.5 (WP12-B): расширение без учёта регистра или MIME. Сканы и изображения не обрабатываются (OCR — версия 0.6); с 0.5.2 они идут в панель строкой-отказом (FR-04б). */
 const OTHER_KINDS = [
   {
     kind: 'xlsx',
@@ -38,7 +38,7 @@ const OTHER_KINDS = [
   { kind: 'text', re: /\.(txt|text|log|md|markdown|csv|json)$/i, mime: [] },
 ];
 
-/** Вид файла для перехвата: 'docx' | 'pdf' | 'xlsx' | 'pptx' | 'text' | null (остальное проходит как есть). */
+/** Вид файла для обработки: 'docx' | 'pdf' | 'xlsx' | 'pptx' | 'text' | null (неподдерживаемый: с 0.5.2 — строка-отказ в панели или список «не спрашивать»). */
 export function fileKind(file) {
   if (isDocx(file)) return 'docx';
   if (isPdfFile(file)) return 'pdf';
@@ -77,15 +77,19 @@ export const isKeyFileName = (file) => /\.mapping\.json$/i.test(file?.name || ''
 
 /**
  * Перехваченный текстовый файл похож на ключ восстановления — по первым KEY_SNIFF_BYTES байтам, без хоста (0.5.1, ревью):
- * те же правила по тексту, что у хоста (core/recovery-key-sniff.js); кодировка — sniffDecode. Форматы Office и PDF не читаются;
- * неподдерживаемые (0.5.2, FR-04б) — читаются: переименованный в «.dat» ключ не получит «Загрузить как есть».
+ * те же правила по тексту, что у хоста (core/recovery-key-sniff.js); кодировка — sniffDecode. Форматы Office не читаются;
+ * неподдерживаемые (0.5.2, FR-04б) — читаются: переименованный в «.dat» ключ не получит «Загрузить как есть». PDF (ревью 0.5.2) —
+ * если в первых 1024 байтах нет сигнатуры `%PDF-`: такой «PDF» при pdfMode 'off' получил бы «как есть», а при включённом — отказ
+ * PDF_INVALID с «как есть».
  * @param {File} file
  */
 export async function sniffRecoveryKey(file) {
   const kind = fileKind(file);
-  if (kind && kind !== 'text') return false;
+  if (kind && kind !== 'text' && kind !== 'pdf') return false;
   try {
-    return looksLikeKeyText(sniffDecode(new Uint8Array(await file.slice(0, KEY_SNIFF_BYTES).arrayBuffer())));
+    const head = new Uint8Array(await file.slice(0, KEY_SNIFF_BYTES).arrayBuffer());
+    if (kind === 'pdf' && String.fromCharCode(...head.subarray(0, 1024)).includes('%PDF-')) return false;
+    return looksLikeKeyText(sniffDecode(head));
   } catch {
     return false; // не прочитался — решит хост; файл с именем ключа и так не уйдёт без его ответа
   }

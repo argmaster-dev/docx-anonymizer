@@ -10,7 +10,7 @@
 | [`04-pasport-foto.png`](04-pasport-foto.png) | картинка «паспорт (образец)» | панель пишет «Формат .png не проверяется на персональные данные»; файл уходит только по кнопке «Загрузить как есть» и уходит без изменений |
 | [`05-trudnye-sluchai.docx`](05-trudnye-sluchai.docx) | служебная записка с двумя трудными случаями | обычные данные заменены; фамилия без имени и иностранное имя могут остаться — их маскируют вручную |
 
-Ожидания в машиночитаемом виде — [`expected.json`](expected.json). Файлы создаёт скрипт [`scripts/gen-verify-docs.mjs`](../../scripts/gen-verify-docs.mjs).
+Ожидания в машиночитаемом виде — [`expected.json`](expected.json). Файлы создаёт скрипт [`scripts/gen-verify-docs.mjs`](../../scripts/gen-verify-docs.mjs) (`npm run gen-verify-docs`); при той же версии Playwright из `package-lock.json` он воспроизводит их байт в байт.
 
 ## Как проверить
 

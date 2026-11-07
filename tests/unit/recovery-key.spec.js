@@ -120,7 +120,10 @@ describe('распознавание ключа восстановления', (
     // переименованный в .zip/.dat/без расширения ключ остаётся заблокированным; форматы Office и PDF по-прежнему не читаются
     expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ.zip'))).toBe(true);
     expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ'))).toBe(true);
-    expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ.pdf'))).toBe(false);
+    // PDF без сигнатуры %PDF- (ревью 0.5.2): при pdfMode 'off' получил бы «как есть», при включённом — PDF_INVALID с «как есть»
+    expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ.pdf'))).toBe(true);
+    expect(await sniffRecoveryKey(file(utf8(`%PDF-1.7\n${KEY_TEXT}`), 'настоящий.pdf'))).toBe(false);
+    expect(await sniffRecoveryKey(file(utf8(`\n\n%PDF-1.4\n${KEY_TEXT}`), 'с-мусором.pdf'))).toBe(false);
     expect(await sniffRecoveryKey(file(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]), 'фото.png'))).toBe(false);
     expect(await sniffRecoveryKey(file(utf8(JSON.stringify({ entries: [{ id: 1 }] })), 'x.json'))).toBe(false);
   });

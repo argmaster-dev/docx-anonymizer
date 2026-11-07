@@ -6,7 +6,8 @@
 //
 // Пишет в docs/verify/ сами документы и expected.json — что должно замаскироваться (`mayMiss: true` — трудный случай, расширение
 // может его пропустить; такое маскируют вручную на вкладке «Текст» панели). README с таблицами — docs/verify/README.md (вручную).
-// PDF и PNG рисует Chromium Playwright (page.pdf / screenshot): байты PDF недетерминированы (дата создания), это не важно.
+// PDF и PNG рисует Chromium Playwright (page.pdf / screenshot); даты в PDF фиксируются (fixPdfDates) — при той же версии Chromium
+// (Playwright из package-lock) файлы совпадают байт в байт от запуска к запуску.
 //
 // Использование:
 //   node scripts/gen-verify-docs.mjs            — записать документы и expected.json
@@ -195,6 +196,16 @@ function hardCases() {
   };
 }
 
+/**
+ * Воспроизводимый PDF: Chromium пишет в /CreationDate и /ModDate время генерации (/ID не пишет) — заменяем фиксированной датой той же
+ * длины, смещения в таблице xref не сдвигаются. Остальные байты page.pdf у одной версии Chromium совпадают от запуска к запуску.
+ */
+function fixPdfDates(bytes) {
+  const s = Buffer.from(bytes).toString('latin1');
+  const out = s.replace(/\/(CreationDate|ModDate) \(D:\d{14}/g, (_m, k) => `/${k} (D:20261107000000`);
+  return new Uint8Array(Buffer.from(out, 'latin1'));
+}
+
 async function renderBrowserDocs() {
   const browser = await chromium.launch();
   try {
@@ -204,7 +215,7 @@ async function renderBrowserDocs() {
     await page.setViewportSize({ width: 640, height: 400 });
     await page.setContent(PNG_HTML);
     const png = await page.locator('#card').screenshot();
-    return { pdf: new Uint8Array(pdf), png: new Uint8Array(png) };
+    return { pdf: fixPdfDates(new Uint8Array(pdf)), png: new Uint8Array(png) };
   } finally {
     await browser.close();
   }
