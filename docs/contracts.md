@@ -46,7 +46,7 @@ popup / content / options / restore ──port "docx"──► background (route
 | `src/core/deanon.js` | `deanonymize()` (FR-36), опция `decline` (FR-37); `deanonymizeSpans()`, `findUnresolved()` — то же в координатах входа | фундамент; WP6; WP10-B |
 | `src/core/restore-doc.js` | `restoreDocx()` — восстановление файла DOCX от ИИ с сохранением форматирования, `restoreText` (FR-36а, §1.6); `restoreDocument()` — любой формат через адаптер (§9.8) | WP10-B; WP12-B |
 | `src/core/deanon-morph.js` | склонение ФИО при восстановлении: `parsePersonValue`, `detectCase`, `declineInContext` (FR-37) | WP6 |
-| `src/core/settings.js`, `sites.js` | схема настроек (`SETTINGS_SCHEMA_VERSION` 4 с 0.5, §3), дефолты, миграции; allowlist/blocklist | фундамент; WP6–WP9; WP11; WP12-C |
+| `src/core/settings.js`, `sites.js` | схема настроек (`SETTINGS_SCHEMA_VERSION` 4 с 0.5, 5 с 0.5.2, §3), дефолты, миграции; allowlist/blocklist | фундамент; WP6–WP9; WP11; WP12-C |
 | `src/core/search.js`, `text-view.js` | поиск всех вхождений; данные для вкладки «Текст» | фундамент |
 | `src/core/hash.js` | `sha256Hex` (WebCrypto; `shared/protocol.js` реэкспортирует) | WP8 |
 | `src/core/validators.js`, `detect/identifiers/` | валидаторы и детекторы идентификаторов: 18 категорий WP1; с 0.5 — части паспорта (`docs.js`) и 26 категорий `papers.js` (документы, транспорт, сеть, суды, недвижимость, коммерческие номера, здоровье и особые категории по метке, §8.7) | WP1; WP12-C |
@@ -287,6 +287,13 @@ registerDocumentDetector('kb', (doc, entities, ctx) => [{ streamId, category: 'P
   `SETTINGS_SCHEMA_VERSION` = 4 (0.5, WP12-C): миграция 3 → 4 дописывает в `categories` и `profiles[].values.categories` только категории 0.5
   (`CATEGORIES_05` в `settings.js`; `pii`/`ids` — `true`, `commercial` — `defaultOn`), которых там нет; заданные значения и отсутствующие ключи 0.4 частичного
   профиля не трогает; частичный объект без `categories` (патч импорта) — только версия (§8.7).
+  `SETTINGS_SCHEMA_VERSION` = 5 (0.5.2, WP14-A): миграция 4 → 5 — только версия (`toV5`); `skipExtensions` дополняет дефолтом `migrateSettings`.
+  Миграции — именованные функции `toV1`…`toV5` над `MIGRATIONS`, комментарии — над функциями: esbuild без minify сохраняет комментарии внутри литералов,
+  а `settings.js` входит в `content.js` с бюджетом размера (§9.12).
+- `skipExtensions` (`string[]`, по умолчанию `[]`; 0.5.2, spec FR-04в) — список «не спрашивать». `VALIDATORS.skipExtensions`: массив ≤ 50 строк `isSkipExtension`
+  (`/^[a-z0-9][a-z0-9_+-]{0,15}$/` и не из `SUPPORTED_EXTENSIONS` = docx, docm, pdf, xlsx, xlsm, pptx, pptm, txt, text, log, md, markdown, csv, json — равенство
+  с `fileKind` проверяет `tests/unit/guard-052.spec.js`). `parseExtensionList(text) → {list, supported, invalid}` — разбор поля настроек (разделители `,`, `;`,
+  пробелы; `.`/`*.` в начале снимаются; нижний регистр; без повторов). Не поле профиля, **экспортируется**.
 - `commercial` (boolean, по умолчанию `false`, поле профиля; 0.4) — группа «Коммерческая информация» (COMPANY, CONTRACT, AMOUNT). Экспортируется.
 - `maskedCompanies` (`[{name, aliases?: string[]}]`, ≤ 200 записей, `name` 1–120 символов, ≤ 20 псевдонимов; 0.4) — список компаний для маскирования; не поле профиля, экспортируется. Пишут страница настроек, панель («Маскировать всегда») и вкладка «Текст» («запомнить»).
 - `orgPolicyHintPending` (boolean, по умолчанию `false`; 0.4) — показать один раз подсказку «организации теперь по желанию» в панели; ставит миграция 2 → 3, снимает content script. **Не экспортируется**.
@@ -301,7 +308,8 @@ registerDocumentDetector('kb', (doc, entities, ctx) => [{ streamId, category: 'P
 - `bundledModelError` (string, по умолчанию `''`; иначе код `/^[A-Z_]{1,40}$/`; 0.3, WP10-C) — код последней неудачной автоустановки встроенного пакета
   (`MODEL_INSTALLED failed`, `ERROR` хоста, `HOST_UNAVAILABLE`). Пишет только background (§6.8): код — при неудаче, `''` — в начале новой попытки и при
   `installed|present`; страница настроек стирает его сама перед «Повторить». **Не экспортируется** (`NOT_EXPORTED`).
-- `pdfMode` (`markdown` | `text` | `off`, по умолчанию `markdown`; 0.3, WP10-A) — что уходит в чат вместо PDF; не поле профиля, **экспортируется** (§7.4).
+- `pdfMode` (`markdown` | `text` | `off`, по умолчанию `markdown`; 0.3, WP10-A) — что уходит в чат вместо PDF; не поле профиля, **экспортируется** (§7.4). С 0.5.2 `off` —
+  PDF не обрабатывается и идёт в панель строкой-отказом `unsupportedPdfOff` (§9.12).
 - `NOT_EXPORTED` (`options/config-io.js`) = `schemaVersion`, `panelPosition`, `nerModel`, `hintMappingShown`, `bundledModelSha`, `bundledModelError`, `orgPolicyHintPending`.
 - «Сбросить настройки» (`config-reset`) сохраняет `KEPT_ON_RESET` = `nerModel`, `bundledModelSha`, `bundledModelError` (`options/config-io.js`): это состояние
   браузера (установленная модель и её автоустановка), а не настройки; без этого полная сборка после сброса висела бы в «устанавливается…» без попытки установки.
@@ -890,7 +898,8 @@ content (files.js: fileKind/isSupported по pdfMode) ──► host.onAnalyze: 
 ### 7.4. Перехват, панель, настройки
 
 - `pdfMode` (`markdown` | `text` | `off`, по умолчанию `markdown`; не поле профиля, экспортируется): `content/files.js` — `fileKind(file) → 'docx'|'pdf'|null`,
-  `isSupported(file, settings)` (PDF — если `pdfMode !== 'off'`), `hasSupported`; `createInterceptor(flow, {isSupported})` (по умолчанию — только DOCX);
+  `isSupported(file, settings)` (PDF — если `pdfMode !== 'off'`), `hasSupported`; `createInterceptor(flow, {isSupported})` (по умолчанию — только DOCX; с 0.5.2 —
+  `createInterceptor(flow, {isSkipped})`, перехватывается любой файл, §9.12);
   `flow.js` обрабатывает все поддерживаемые файлы (`procIdx`), имя результата — по исходному файлу (`makeResultName(name, suffix, {ext})` из `content/files.js`, расширение — из
   `res.name`; `RESULT_BEGIN.name` хост строит своей `makeResultName` в `offscreen/host.js`), тип — `resultType(original, res.mime)` (для PDF — `text/markdown`/`text/plain`, для DOCX — MIME исходника); `mappingFileName('a.anon.md') → 'a.mapping.json'`.
 - Панель: для `ENTITIES.kind === 'pdf'` — заметка `pdfNote {ext}` (`data-testid="pdf-note"`; `ext` — `.md`/`.txt` по `pdfMode`, передаёт `flow.js`),
@@ -1594,3 +1603,37 @@ Apache 2.0, все пути `vendor/…` из NOTICE есть в архиве), 
 (`KNOWN_PACKS`; 1.0.0–1.2.0 остаются проверенными). Обновление встроенной модели — по sha архива (§6.8): у 1.2.1 другой sha при тех же весах, поэтому полный архив
 0.5.1 ставит его поверх 1.2.0 (`planBootstrap` → `install`, хост — в неактивный слот, прежний удаляется). Тесты: `tests/unit/background/bundled-model.spec.js` и
 `tests/integration/host.spec.js` (пара 1.2.0 → 1.2.1 с одинаковыми весами), e2e `bundled-model.spec.js` с `NER_PACK_PREV` = 1.2.0. Метрики модели не пересчитывались.
+
+
+### 9.12. Версия 0.5.2: сторож — любой файл, список «не спрашивать», пустое поле выбора, контрольные документы (WP14-A)
+
+Цели Ц1–Ц5, критерии К1–К9 `docs/concept-0.5.2.md`; spec FR-01а, FR-04б, FR-04в, FR-29а.
+**Перехват** (`content/interceptor.js`): `createInterceptor(flow, {win?, isSkipped?})` — `isSkipped(file)` (content.js: `isSkipped(f, settings)` из `files.js`,
+настройки читаются в момент события; по умолчанию — ничего). `plan(files) → pass[] | null`: `pass[i]` — файл уходит без панели (объект в `handed` — исходный файл,
+который мы сами отдали сайту; сигнатура в `produced` — наш обезличенный результат; `isSkipped`); все `true` (или файлов нет) — `null`, событие не трогаем.
+Иначе `flow.run(files, pass)`. Путь `input`: `stopImmediatePropagation`, `held`, **`input.value = ''` сразу** (FR-01а); после решения `remember(files, res)`
+(исходные объекты → `handed: WeakSet<File>`, новые → `produced` по сигнатуре) и **всегда** `setInputFiles(input, res.files)` + `input`/`change` в `withBypass`;
+`cancel` и сбой — поле остаётся пустым. Пути `drop`/`paste` — как раньше, `remember` при любом решении.
+**Файлы** (`content/files.js`): `extOf(file)` — расширение строчными без точки (`''` — без расширения); `isSkipped(file, settings)` — есть расширение, `fileKind(file) === null`
+и оно в `settings.skipExtensions` (поддерживаемый формат и PDF — никогда, даже при списке, поправленном мимо валидатора); `sniffRecoveryKey` читает начало
+текстовых **и неподдерживаемых** файлов (`fileKind` `null` или `'text'`).
+**Сценарий** (`content/flow.js`): `run(originals, pass = [])`; `procIdx` — файлы панели (`!pass[i]`), `unsup` — из них `!isSupported` (в том числе PDF при `pdfMode: 'off'`),
+`anaIdx` — остальные (анализ, батч — при `anaIdx.length > 1`, сбой `BATCH_BEGIN` — только по ним). `failUnsupported(i)` → `panel.setError(k, {code: 'UNSUPPORTED',
+message, retry: false, note: 'unsupportedNote', optional: true})`; текст — `unsupportedPdfOff` (PDF), `unsupportedExt {ext}`, `unsupportedNoExt` (`ui/i18n/panel.js`);
+ключ (`keys`) важнее: отказ `RECOVERY_KEY`. `applyAll`: результат — `out` без ключей (`blocked`) и без `unsup` без «как есть» (`panel.isAsIs(k)`);
+`onOriginal` — все исходные, кроме ключей (как в 0.5.1). Файлы `pass` в панели не показываются и уходят вместе с результатом на своих местах.
+**Панель** (`ui/panel/panel.js`): `error.optional` — файл без «как есть» не загружается и не блокирует `canAnonymize`; `uploadOnly` («Загрузить») — когда каждый
+файл «как есть», заблокирован или `optional`; заметка ошибки — `t(error.note || 'errNeedDecision')`, `data-testid="error-note"`.
+**Настройки** (`options/options.js`): «Обработка» → поле `skip-ext` (текст, сохранение по `change`), ошибка `skip-ext-err` (`skip_ext_supported {list}` /
+`skip_ext_invalid {list}`), подсказка `skip-ext-hint`; подпись `pdf_mode_off` — «Не обезличивать PDF (спрашивать, загружать ли как есть)».
+**Справка**: раздел `help-guard` (`guard_h`, `guard_1`–`guard_4`: неподдерживаемые файлы, список, пустое поле, что не закрыто), `check_4` — «только после «Загрузить как есть»».
+**Контрольные документы** (`docs/verify/`, генератор `scripts/gen-verify-docs.mjs`, `--check` — прогон через конвейер ядра, `NER_MODEL_DIR` — с моделью):
+`01-dogovor.docx`, `02-reestr-klientov.xlsx`, `03-spravka.pdf` (Chromium `page.pdf`), `04-pasport-foto.png` (скриншот Chromium), `05-trudnye-sluchai.docx`;
+`expected.json` — `{docs: [{file, title, expect: [{value, category, mayMiss?}], stays: [], unsupported?}]}`; README — таблицы масок и инструкция.
+**Бюджет** `content.js` (`tests/integration/pack.spec.js`, 165 КиБ = 168 960 байт): 167 588 байт (0.5.1 — 168 389): комментарии внутри литералов `settings.js`
+(MIGRATIONS, defaultSettings, VALIDATORS) перенесены в JSDoc над ними — esbuild без minify сохраняет комментарии в литералах и в вызовах.
+**Тесты:** unit `tests/unit/guard-052.spec.js` (валидатор, разбор, `isSkipped`, миграция 4 → 5, экспорт, интерсептор на поддельном `window`: пустое поле,
+явная подстановка «оригинала» и «как есть», `handed`); e2e `tests/e2e/guard-052.spec.js` (К2 на трёх путях × 5 видов файлов, PDF при `off`, К3, К5,
+К4 со списком и ключом, поле настроек, К7 — все пять контрольных документов одной отправкой). Изменённые ожидания (решение концепции 0.5.2):
+`intercept.spec.js` («.zip проходит без панели» → со списком), `formats.spec.js` (картинка — с предупреждением), `pdf.spec.js` (`pdfMode: off` — с предупреждением),
+`recovery-key.spec.js` (`ключ.zip` теперь проверяется по началу), схема 4 → 5 в `settings.spec.js` и `background/bundled-model.spec.js`.

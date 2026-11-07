@@ -1,6 +1,6 @@
-# Тексты листинга: Chrome Web Store и Edge Add-ons (версия 0.5.1)
+# Тексты листинга: Chrome Web Store и Edge Add-ons (версия 0.5.2)
 
-Подготовлено 27.10.2026 (WP12-F, концепция 0.5 п. 9, Ц7, К15). Подача — решение владельца. Целевой магазин — Chrome Web Store; поля Edge (поисковые запросы, «Notes for certification») — справочно, подача в Edge не планируется. Требования к полям и ссылки — [`checklist.md`](checklist.md).
+Подготовлено 27.10.2026 (WP12-F, концепция 0.5 п. 9, Ц7, К15); 07.11.2026 (WP14-A, концепция 0.5.2 Ц1) — первая фраза полного описания о стороже между человеком и ИИ-чатом, неподдерживаемые файлы — только после «Загрузить как есть». Подача — решение владельца. Целевой магазин — Chrome Web Store; поля Edge (поисковые запросы, «Notes for certification») — справочно, подача в Edge не планируется. Требования к полям и ссылки — [`checklist.md`](checklist.md).
 
 Принятые решения по текстам:
 
@@ -32,7 +32,7 @@
 ## Полное описание — ru (≈ 2 400 символов; Edge: от 250 до 10 000)
 
 ```
-Перед тем как договор, таблица или презентация попадёт в ИИ-чат, расширение перехватывает файл, прямо на вашем компьютере находит в нём персональные данные и реквизиты и заменяет их метками вида [ФИО_1], [ИНН_1], [СЧЕТ_1]. В чат уходит обезличенная копия того же формата, а ответ ИИ можно вернуть с настоящими значениями.
+Сторож между сотрудником и ИИ-чатом: защита встроена в саму отправку файла и срабатывает, даже если человек забыл обезличить документ. Перед тем как договор, таблица или презентация попадёт в чат, расширение перехватывает файл, прямо на вашем компьютере находит в нём персональные данные и реквизиты и заменяет их метками вида [ФИО_1], [ИНН_1], [СЧЕТ_1]. В чат уходит обезличенная копия того же формата, а ответ ИИ можно вернуть с настоящими значениями. Файл, который расширение проверить не может (картинка, архив, .doc), без вашего решения в чат не уходит.
 
 Что умеет
 • Форматы: Word (.docx, .docm), Excel (.xlsx, .xlsm), PowerPoint (.pptx, .pptm), PDF с текстовым слоем, текстовые файлы (.txt, .md, .csv, .json, .log). Форматирование, таблицы, формулы, слайды и заметки сохраняются; из PDF в чат уходит текст с метками.
@@ -47,7 +47,7 @@
 Расширение не делает ни одного сетевого запроса: документ, найденные значения и ключ восстановления не покидают компьютер. Доступ к сайтам выдаёте вы сами, по одному сайту; перехват выключен, пока вы его не включите.
 
 Ограничения
-Сканы и изображения не распознаются (такой файл можно загрузить как есть после подтверждения). Сведения о здоровье, вероисповедание и другие особые категории находятся только по явной метке («Диагноз:»). Автоматический поиск ошибается — перед отправкой просматривайте результат.
+Сканы и изображения не распознаются: такой файл уходит в чат только после кнопки «Загрузить как есть» (расширения, о которых не спрашивать, можно перечислить в настройках). Текст, набранный или вставленный в поле чата, не проверяется. Сведения о здоровье, вероисповедание и другие особые категории находятся только по явной метке («Диагноз:»). Автоматический поиск ошибается — перед отправкой просматривайте результат.
 
 Модель распознавания имён обучена в том числе на открытых корпусах без явной лицензии на тексты (NEREL, Nerus) и распространяется как есть; подробности — в справке расширения и в репозитории проекта.
 ```
@@ -55,7 +55,7 @@
 ## Полное описание — en (≈ 2 600 символов)
 
 ```
-Before a contract, spreadsheet or deck reaches an AI chat, the extension intercepts the file, finds personal data and company identifiers in it right on your computer and replaces them with markers such as [PERSON_1], [INN_1], [ACCOUNT_1]. The chat receives an anonymized copy in the same format, and the AI's answer can be restored with the real values.
+A gatekeeper between an employee and an AI chat: the protection is built into the file upload itself and works even if the person forgot to anonymize the document. Before a contract, spreadsheet or deck reaches the chat, the extension intercepts the file, finds personal data and company identifiers in it right on your computer and replaces them with markers such as [PERSON_1], [INN_1], [ACCOUNT_1]. The chat receives an anonymized copy in the same format, and the AI's answer can be restored with the real values. A file the extension cannot check (an image, an archive, a .doc) does not go to the chat without your decision.
 
 Features
 • Formats: Word (.docx, .docm), Excel (.xlsx, .xlsm), PowerPoint (.pptx, .pptm), PDF with a text layer, text files (.txt, .md, .csv, .json, .log). Formatting, tables, formulas, slides and notes are kept; for a PDF the chat receives its text with markers.
@@ -70,7 +70,7 @@ Privacy
 The extension makes no network requests: the document, the values found in it and the recovery key never leave your computer. You grant site access yourself, one site at a time; interception is off until you turn it on.
 
 Limitations
-Scans and images are not recognized (such a file can be uploaded as is after you confirm). Health data, religion and other special categories are found only by an explicit label ("Diagnosis:"). Automatic detection makes mistakes — review the result before sending. The interface and detection are Russian-first; English documents and an English interface are supported.
+Scans and images are not recognized: such a file goes to the chat only after "Upload as is" (extensions you never want to be asked about can be listed in the settings). Text typed or pasted into the chat box is not checked. Health data, religion and other special categories are found only by an explicit label ("Diagnosis:"). Automatic detection makes mistakes — review the result before sending. The interface and detection are Russian-first; English documents and an English interface are supported.
 
 The name recognition model was trained, among other data, on open corpora whose texts have no explicit license (NEREL, Nerus) and is provided as is; see the extension's help page and the project repository.
 ```

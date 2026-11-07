@@ -2,12 +2,40 @@
 
 Автор: Telegram-канал [@sitimlab](https://t.me/sitimlab) · сайт [sitimlab.ru](https://sitimlab.ru/?utm_source=github&utm_medium=profile)
 
+**Что это.** Сторож между сотрудником и чатом с ИИ. Расширение встроено в саму отправку файла: когда человек прикрепляет документ в ChatGPT, Claude или другом чате, файл сначала попадает к расширению, а в чат уходит копия без персональных данных. Защита срабатывает, даже если человек забыл обезличить документ, — она не зависит от того, помнит ли он о правилах.
+
+**Что это не.**
+
+- Не сервис, куда документы загружают вручную. Всё происходит в браузере на вашем компьютере: расширение не делает сетевых запросов, документ никуда, кроме выбранного вами чата, не уходит.
+- Не гарантия, что найдено всё. Распознавание пропускает часть случаев (одиночную фамилию без подписи, иностранное имя, которого нет в словарях), поэтому перед отправкой панель показывает, что найдено, а пропущенное можно замаскировать вручную. Распознавание мы улучшаем от версии к версии.
+- Не защита всего, что вводится в чат. Текст, набранный или вставленный в поле сообщения, расширение не проверяет — подробнее в разделе [«Что расширение не закрывает»](#что-расширение-не-закрывает).
+
+**Как это работает на деле.**
+
+1. Сотрудник открывает ChatGPT.
+2. Прикрепляет договор, чтобы попросить разобрать условия.
+3. Обезличить договор он забыл.
+4. Расширение перехватывает файл раньше, чем его получил сайт.
+5. Находит в договоре ФИО, паспортные данные, телефоны, ИНН, счета и заменяет их метками: `[ФИО_1]`, `[ПАСПОРТ_1]`, `[ИНН_1]`.
+6. В чат уходит только обезличенная копия. Оригинал и ключ восстановления остаются на компьютере.
+7. Ответ ИИ можно вернуть с настоящими именами на странице «Восстановить текст». Если расширение что-то пропустило, это видно в панели до отправки: выделите фрагмент на вкладке «Текст» и выберите «Анонимизировать как».
+
+Файл, который расширение проверить не может (картинка, архив, `.doc`), без вашего решения в чат тоже не уходит: панель предупреждает и ждёт кнопки «Загрузить как есть».
+
 Расширение для Chrome и Edge: перед тем как договор, таблица или презентация попадёт в ChatGPT, Claude или другой ИИ-сервис, оно **перехватывает файл, локально находит в нём персональные данные и реквизиты и заменяет их плейсхолдерами** (названия компаний, номера договоров и суммы — по желанию). Форматы (версия 0.5): Word `.docx`/`.docm`, Excel `.xlsx`/`.xlsm`, PowerPoint `.pptx`/`.pptm`, PDF с текстовым слоем, `.txt`, `.md`, `.csv`, `.json`, `.log`. В сервис уходит обезличенный файл того же формата с сохранённым форматированием (из PDF — его текст с плейсхолдерами); комментарии, история правок и скрытый текст удаляются по вашему выбору; ответ ИИ — текстом или файлом — можно вернуть обратно с настоящими названиями и именами, а ключ восстановления — защитить паролем.
 
 ![Панель перехвата над страницей чата](docs/screenshots/panel-intercept.png)
 
 <details>
 <summary><b>English summary</b></summary>
+
+**What it is.** A gatekeeper between an employee and an AI chat. It is built into the file upload itself: when someone attaches a document in ChatGPT, Claude or another chat, the file reaches the extension first, and the chat receives a copy without personal data. It works even if the person forgot to anonymize the document — the protection does not depend on anyone remembering the rules.
+
+**What it is not.** Not a service you upload documents to: everything happens in your browser, the extension makes no network requests. Not a guarantee that everything is found: recognition misses some cases (a lone surname without a label, a foreign name missing from the dictionaries), so the panel shows the findings before upload and you can mask a missed fragment by hand; recognition keeps improving from version to version. Not a protection for everything typed into a chat: text typed or pasted into the message box is not checked.
+
+**What it looks like.** (1) An employee opens ChatGPT. (2) Attaches a contract to ask about its terms. (3) Forgets to anonymize it. (4) The extension intercepts the file before the site gets it. (5) It finds names, passport details, phones, tax IDs and bank accounts and replaces them with markers like `[ФИО_1]`. (6) Only the anonymized copy goes to the chat; the original and the recovery key stay on the computer. (7) The AI's answer can be restored with the real names on the "Restore text" page; anything the extension missed is visible in the panel before upload — select it on the "Text" tab and choose "Anonymize as". A file the extension cannot check (an image, an archive, `.doc`) does not go to the chat without your decision either: the panel warns and waits for "Upload as is" (since 0.5.2; extensions you never want to be asked about can be listed in the settings).
+
+**What it does not cover.** Text typed or pasted into the chat box; uploads that bypass the file button, drag and drop and paste (`showOpenFilePicker`); desktop and mobile chat apps; sites you have not granted access to; unsupported formats — since 0.5.2 they do not leave silently, but they are not anonymized either; the contents of ZIP archives, embedded OLE objects, VBA macros and scans.
 
 **DOCX Anonymizer** is a Chrome/Edge extension that intercepts a document the moment you attach it to ChatGPT, Claude or another AI chat, finds personal data and company identifiers in it **locally** (company names, contract numbers and amounts — if you choose), and uploads an anonymized copy instead. Formats (0.5): Word `.docx`/`.docm`, Excel `.xlsx`/`.xlsm`, PowerPoint `.pptx`/`.pptm`, PDF with a text layer (the chat gets its text with placeholders), and text files `.txt`, `.md`, `.csv`, `.json`, `.log`. Formatting, tables, formulas, slides, notes, footnotes and headers are preserved; file metadata is wiped. The AI's answer — pasted text or a file the AI produced (`.docx`, `.xlsx`, `.pptx`, `.csv`, `.json`, `.md`, `.txt`) — can be de-anonymized back on the "Restore text" page using a replacement map (the recovery key) that never leaves your computer; a restored file keeps its formatting. In files only markers written exactly as in the map or in square brackets are replaced (so "Account 1" in the document text stays), names are declined by context, and the page warns about a marker that stood for several different values. The recovery key is saved from the panel's "More" menu — optionally protected with a password.
 
@@ -35,11 +63,13 @@
 
 **Update.** No auto-update: unpacked extensions are updated by hand. Unzip the new release over the same folder (or into a new one) and press "Update" at `chrome://extensions` (for a new folder: remove the old entry, load the new one). The extension ID is pinned by the `key` field in `manifest.json`, so settings, granted site access and the installed NER model survive an update from any folder; a new model package in the full archive installs itself on the first run. Versions 0.2 and older had no key: upgrading from them means a fresh install.
 
-**PDF.** A PDF with a text layer is intercepted too: pdf.js (bundled in the extension, no network) extracts the text, a layout step rebuilds paragraphs, headings, lists, two-column pages and tables and drops running headers and page numbers, and the chat receives `name.anon.md` (or `.txt`) with placeholders instead of the PDF. The setting "PDF with a text layer" switches the output to `.txt` or turns PDF interception off. Scans, password-protected, empty and damaged PDFs are refused with a hint and can be uploaded as is after an explicit choice.
+**PDF.** A PDF with a text layer is intercepted too: pdf.js (bundled in the extension, no network) extracts the text, a layout step rebuilds paragraphs, headings, lists, two-column pages and tables and drops running headers and page numbers, and the chat receives `name.anon.md` (or `.txt`) with placeholders instead of the PDF. The setting "PDF with a text layer" switches the output to `.txt` or turns PDF anonymization off (since 0.5.2 a PDF then waits for "Upload as is", like any file the extension does not check). Scans, password-protected, empty and damaged PDFs are refused with a hint and can be uploaded as is after an explicit choice.
 
 **Limits.** No scans or images (OCR is planned for 0.6), no PDF → PDF; PDF layout is tested on Chromium and LibreOffice PDFs; health data and special categories (religion, ethnicity, political views, criminal record) are found only by an explicit label or column header; all quality numbers come from synthetic data and a genre corpus written by one author — no real-world documents are in the measurements, so always review the result; AI files are restored from `.docx`/`.docm`/`.xlsx`/`.xlsm`/`.pptx`/`.pptm`/`.csv`/`.json`/`.md`/`.txt`, not PDF; embedded OLE objects are not anonymized (warned about or removed); single surnames of third parties without a label are found only by the NER model; the voice assistant name "Алиса" (Alice) is left unmasked only in an unambiguous context ("Яндекс Алиса", "voice assistant Алиса", a list of AI products) and is masked when a verb or "and + a name" follows it in the same clause; placeholder-like markers such as "⟦ORG_1⟧" or "⟦ORG_1.INN⟧" (category code, number and an optional requisite field from a closed list) are not turned into entities by the model, any other value in such brackets ("⟦ИВАНОВ⟧", "⟦ФИО_1.ПЕТРОВ⟧") is masked; Russian case restoration skips ambiguous prepositions. The UI is Russian-first with full English localization.
 
 **Development.** `npm test` (Vitest, ~3 300 tests), `npm run e2e` (Playwright, Chromium with the extension), `npm run lint`, `npm run pack` (reproducible lite and full release archives — locally for checking; releases are built by `release.yml` on a `v*` tag), `npm run pack:store` (store package without the `key` field, checked against store requirements), `npm run store:shots` (store and README screenshots), `npm run pack:model`, `npm run gen-pdf-fixtures`, `npm run gen-genre-fixtures` / `gen-heldout-fixtures` (genre corpus and held-out set), `npm run eval-genres` (precision/recall per genre, category and mode; `NER_MODEL_DIR=…` adds the model, `PRIVATE_FIXTURES=1` adds your own documents from the git-ignored `tests/fixtures/private/`, printing counts only), `tools/ner-train` (Python/uv training pipeline). License: Apache 2.0 since 0.5.1 (`LICENSE`, `NOTICE`; versions 0.1–0.5.0 and model pack 1.2.0 were released under MIT and stay under it); the names and icons are covered by [`TRADEMARKS.md`](TRADEMARKS.md); dictionaries, ONNX Runtime Web (MIT), fflate (MIT), pdf.js (Apache-2.0) and the model's base `rubert-tiny2` (MIT) carry their own notices.
+
+**What's new in 0.5.2.** Any attached file is intercepted, not only supported documents: an image, an archive, a `.doc` or a file without an extension gets a "The .jpg format is not checked for personal data" row in the panel and goes to the chat only after "Upload as is" (a PDF too, when PDF interception is off); a mixed selection is one panel — the contract is anonymized, the image waits for your decision. The settings get a "Don't ask about files with these extensions" list (empty by default; supported formats cannot be added, so a recovery key cannot slip through it). The file field on the site is cleared the moment a file is intercepted, so the site cannot read the original while it is being processed. Test documents with fictitious data and expected masks to check the extension yourself — [`docs/verify/`](docs/verify/README.md). Release archives are built by GitHub Actions with a provenance attestation (see "Verifying a release").
 
 **What's new in 0.5.1.** A recovery key (`*.mapping.json`, renamed or password-protected) attached to a chat is refused instead of uploaded; AI answers in `.txt`/`.md`/`.log` encoded in Windows-1251 or UTF-16 are restored and saved in the same encoding; a link to the [@sitimlab](https://t.me/sitimlab) Telegram channel in the extension menu; the code and the fine-tuned NER model are now licensed under Apache 2.0 (model pack 1.2.1 — the same weights as 1.2.0), with `NOTICE` and [`TRADEMARKS.md`](TRADEMARKS.md).
 
@@ -48,6 +78,13 @@
 </details>
 
 ## Что нового в 0.5
+
+**0.5.2** — сторож не пропускает файл молча:
+
+- **Предупреждение на любой файл.** Расширение останавливает любой прикреплённый файл, а не только поддерживаемые документы. Картинка, архив, `.doc` или файл без расширения получают в панели строку «Формат .jpg не проверяется на персональные данные» и уходят в чат только после кнопки «Загрузить как есть»; «Отмена» — не уходит ничего. Если перехват PDF выключен в настройках, PDF тоже ждёт решения. Договор и картинка в одной отправке — одна панель: договор обезличивается, картинка уходит, только если вы так решили.
+- **Список «не спрашивать».** В настройках, раздел «Обработка», можно перечислить расширения, о которых не спрашивать (например, `png, jpg`): такие файлы уходят сразу, как до 0.5.2. По умолчанию список пуст. Форматы, которые расширение проверяет, в список не добавляются — через него не уйдёт и ключ восстановления.
+- **Поле выбора файла очищается сразу.** Пока файл обрабатывается, поле на сайте пустое: сайт не может прочитать оригинал раньше, чем вы решите, что отправить.
+- **Контрольные документы** с вымышленными данными и списком ожидаемых масок — чтобы проверить расширение самому: [`docs/verify/`](docs/verify/README.md).
 
 **0.5.1** — исправления по отзывам:
 
@@ -84,6 +121,17 @@
 Перед отправкой можно проверить текст документа с подсвеченными находками:
 
 ![Предпросмотр с подсветкой](docs/screenshots/panel-preview.png)
+
+## Что расширение не закрывает
+
+Расширение проверяет файлы, которые вы прикрепляете в чате кнопкой выбора файла, перетаскиванием или вставкой. Вне этого пути оно ничего не видит:
+
+- **Текст в поле чата.** То, что вы набираете или вставляете в поле сообщения, уходит как есть. Маскирование вставленного текста запланировано на 0.6.
+- **Загрузку в обход поля выбора, перетаскивания и вставки.** Если сайт открывает файлы через системный диалог `showOpenFilePicker` (или берёт файл из перетаскивания через `getAsFileSystemHandle`), расширение файл не увидит. Распространённые чаты так сейчас не делают; перехват этих способов — в планах на 0.6.
+- **Приложения чатов для компьютера и телефона.** Расширение работает только в браузере Chrome или Edge.
+- **Сайты без выданного доступа.** На сайте, которому вы не разрешили доступ в меню расширения, перехвата нет.
+- **Неподдерживаемые форматы.** С 0.5.2 картинки, архивы, `.doc`, `.rtf` и файлы без расширения не уходят молча — панель предупреждает и ждёт «Загрузить как есть», — но и не обезличиваются. Расширения из списка «не спрашивать» уходят без вопроса и без проверки.
+- **Содержимое ZIP, встроенные объекты OLE, макросы VBA и сканы.** Архив не распаковывается, OLE-вложения и код макросов не обезличиваются (панель предупреждает, OLE можно удалить по настройке), текст на сканах и фотографиях не распознаётся (OCR — в 0.6).
 
 ## Установка
 
@@ -273,7 +321,7 @@
 
 ## PDF
 
-PDF с текстовым слоем перехватывается так же, как `.docx`, но в чат уходит **текст с плейсхолдерами** — `имя.anon.md` (Markdown, по умолчанию) или `имя.anon.txt` (настройка «PDF с текстовым слоем» в разделе «Обработка»; там же PDF можно не перехватывать). Подставить `[ФИО_1]` во вшитые шрифты PDF нельзя, а для разбора договора ИИ нужен текст, а не вёрстка.
+PDF с текстовым слоем перехватывается так же, как `.docx`, но в чат уходит **текст с плейсхолдерами** — `имя.anon.md` (Markdown, по умолчанию) или `имя.anon.txt` (настройка «PDF с текстовым слоем» в разделе «Обработка»; там же обезличивание PDF можно выключить — тогда PDF, как и другие непроверяемые файлы, уходит только после «Загрузить как есть»). Подставить `[ФИО_1]` во вшитые шрифты PDF нельзя, а для разбора договора ИИ нужен текст, а не вёрстка.
 
 - Текст извлекает pdf.js (Apache 2.0) из самого пакета расширения (`vendor/pdfjs/` вместе с CMaps и стандартными шрифтами) — без сети. Разметка восстанавливает абзацы, заголовки (`#`, `##`), маркированные списки, две колонки (слева направо), таблицы (`| … |`, таблица реквизитов сохраняет строки и столбцы, суммы и количества, выровненные вправо, — свои столбцы) и переносы слов (в том числе мягкий перенос внутри номера: «ИНН 7805-» + «003215» → `7805003215`; телефоны с группами по 2–3 цифры не склеиваются); колонтитулы и номера страниц убираются, граница страниц — `---`. Альбомные страницы, сохранённые «по-принтерному» (повёрнутый лист), читаются в той ориентации, в какой видны на экране; моноширинный шрифт и надписи (врезки) LibreOffice не разрывают реквизиты.
 - Находки те же, что для `.docx`: все детекторы, словари, модель NER, база знаний сторон, исключения. Карта замен и восстановление ответа — без изменений; «Скачать результат» отдаёт тот же `.anon.md`.
@@ -369,7 +417,7 @@ PDF с текстовым слоем перехватывается так же,
 - В восстановленном DOCX инициалы автора правки или комментария (`w:initials`) становятся полным именем; значения, заменённые в режимах «Маска» и «Удаление», не восстанавливаются; ФИО в косвенном падеже, получившее общий плейсхолдер, возвращается формой из карты или по правилам склонения. Восстанавливаются `.docx`/`.docm`, `.xlsx`/`.xlsm`, `.pptx`/`.pptm`, `.csv`, `.json`, `.md`, `.txt`; PDF от ИИ — нет.
 - Файловый `input`, который страница создаёт в памяти и не добавляет в DOM (detached input), не перехватывается: расширение видит только элементы в документе. Такой приём в чатах встречается редко; e2e-тест на него есть, но отключён флагом `E2E_WP3_DETACHED`.
 - Встроенные объекты (OLE-вложения) не обезличиваются — расширение предупреждает об этом или удаляет их по настройке.
-- **Сканы и изображения не распознаются** (OCR — версия 0.6): скан, фото документа, PDF без текстового слоя и картинки внутри документов не обезличиваются; такой PDF отклоняется с подсказкой и уходит только после явного «Загрузить как есть». Форматы `.doc`, `.xls`, `.ppt`, `.rtf`, `.odt` не поддерживаются. Пакетная обработка папок в 0.5 не входит — расширение работает в сценарии «файл в чат».
+- **Сканы и изображения не распознаются** (OCR — версия 0.6): скан, фото документа, PDF без текстового слоя и картинки внутри документов не обезличиваются; такой PDF отклоняется с подсказкой и уходит только после явного «Загрузить как есть». Форматы `.doc`, `.xls`, `.ppt`, `.rtf`, `.odt` не поддерживаются: с 0.5.2 они, как и картинки, уходят в чат только после «Загрузить как есть» или если их расширение есть в списке «не спрашивать». Пакетная обработка папок в 0.5 не входит — расширение работает в сценарии «файл в чат».
 - Код и строки макросов (VBA) в `.docm`, `.xlsm`, `.pptm` не обезличиваются и уходят как есть (панель предупреждает); если там могут быть данные — сохраните файл без макросов.
 - Широкие таблицы PDF (8+ колонок, ячейки с переносами) проверяйте глазами в панели: соседние ячейки могут склеиться («НовосибирскПетрушин», «2224061538998 999»), и часть значения останется открытой.
 - PDF превращается в текст, а не в обезличенный PDF: вёрстка, картинки, подписи и печати в результат не попадают. Сканы (OCR), формы PDF (поля без текстового слоя), вложения и формулы не обрабатываются. Разметка проверена на PDF из Chromium и LibreOffice; на PDF из других программ возможны склеенные слова или разорванные таблицы — просматривайте текст во вкладке «Текст» перед отправкой. Колонтитул обычного кегля, который встречается только на одной странице, распознаётся, если он отделён от текста увеличенным интервалом; иначе остаётся в тексте. Обратная сторона: первая или последняя строка страницы у самого края листа, отделённая от текста таким интервалом (не заголовок), считается колонтитулом и в результат не попадает. Таблица, разорванная границей страницы по одной-две строки, может уйти абзацем, а не таблицей.
