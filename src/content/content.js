@@ -5,7 +5,7 @@ import { defaultSettings } from '../core/settings.js';
 import { loadSettings, onSettingsChanged } from '../shared/settings-store.js';
 import { createInterceptor } from './interceptor.js';
 import { createFlow } from './flow.js';
-import { isSupported } from './files.js';
+import { isSkipped } from './files.js';
 import { contextValid } from './runtime.js';
 
 let settings = defaultSettings();
@@ -27,8 +27,8 @@ function sync() {
   const active = isInterceptActive(settings, location.origin);
   if (active && !interceptor) {
     const flow = createFlow({ getSettings: () => settings, onInvalidated: () => interceptor?.detach() }); // FR-09
-    // DOCX всегда, PDF — по настройке pdfMode (версия 0.3); настройки читаются в момент события
-    interceptor = createInterceptor(flow, { isSupported: (f) => isSupported(f, settings) });
+    // перехватывается любой файл (0.5.2, FR-04б), кроме списка «не спрашивать» (FR-04в); настройки читаются в момент события
+    interceptor = createInterceptor(flow, { isSkipped: (f) => isSkipped(f, settings) });
     interceptor.attach();
   } else if (!active && interceptor) {
     interceptor.detach();

@@ -2,7 +2,7 @@
 // chrome — хост недоступен (каждый запрос → ERROR HOST_UNAVAILABLE) или контекст расширения инвалидирован. Собирается esbuild в тесте.
 import { createFlow } from '../../../src/content/flow.js';
 import { createInterceptor } from '../../../src/content/interceptor.js';
-import { isSupported } from '../../../src/content/files.js';
+import { isSkipped } from '../../../src/content/files.js';
 import { defaultSettings } from '../../../src/core/settings.js';
 
 /** Порт к «background»: на всё, кроме кусков файла, отвечает ошибкой HOST_UNAVAILABLE. */
@@ -21,8 +21,8 @@ function unavailablePort() {
   };
 }
 
-/** @param {'unavailable'|'invalidated'} mode */
-window.__startFlow = (mode) => {
+/** @param {'unavailable'|'invalidated'} mode @param {object} [extra] поля настроек поверх дефолтов (0.5.2: skipExtensions, pdfMode) */
+window.__startFlow = (mode, extra = {}) => {
   const runtime = { id: mode === 'invalidated' ? undefined : 'fake-extension', connect: () => unavailablePort() };
   const chromeFake = { runtime, storage: { local: { get: async () => ({}), set: async () => {} } } };
   Object.defineProperty(window, 'chrome', { value: chromeFake, configurable: true, writable: true });
@@ -31,7 +31,7 @@ window.__startFlow = (mode) => {
   Element.prototype.attachShadow = function (o) {
     return attach.call(this, { ...o, mode: 'open' });
   };
-  const settings = { ...defaultSettings(), interceptEnabled: true, uiLanguage: 'ru', hintMappingShown: true };
+  const settings = { ...defaultSettings(), interceptEnabled: true, uiLanguage: 'ru', hintMappingShown: true, ...extra };
   const flow = createFlow({ getSettings: () => settings });
-  createInterceptor(flow, { win: window, isSupported: (f) => isSupported(f, settings) }).attach();
+  createInterceptor(flow, { win: window, isSkipped: (f) => isSkipped(f, settings) }).attach();
 };

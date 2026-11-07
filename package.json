@@ -1,6 +1,6 @@
 {
   "name": "docx-anonymizer",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "Браузерное расширение: локальная анонимизация документов Word, Excel, PowerPoint, PDF и текстовых файлов перед загрузкой в LLM-сервисы",
   "type": "module",
   "private": true,
@@ -28,6 +28,7 @@
     "gen-genre-fixtures": "node scripts/gen-genre-fixtures.mjs",
     "gen-heldout-fixtures": "node scripts/gen-heldout-fixtures.mjs",
     "gen-office-fixtures": "node scripts/gen-office-fixtures.mjs",
+    "gen-verify-docs": "node scripts/gen-verify-docs.mjs",
     "eval-genres": "node scripts/eval-genres.mjs",
     "bench": "node scripts/bench.mjs",
     "bench-ner": "node scripts/bench-ner.mjs",

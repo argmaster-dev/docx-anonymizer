@@ -19,6 +19,7 @@ import {
   uniqueResultName,
   isKeyFileName,
   sniffRecoveryKey,
+  extOf,
 } from './files.js';
 import { Link, contextValid, readOpenShadowFlag } from './runtime.js';
 import { exclusionValue } from '../ui/preview/model.js';
@@ -48,11 +49,12 @@ export function createFlow(deps) {
     /**
      * Перехваченные файлы → решение. Вызовы выстраиваются в очередь: панель одна.
      * @param {File[]} originals
+     * @param {boolean[]} [pass]  pass[i] — файл уходит без панели (наш результат, список «не спрашивать»; интерсептор)
      * @returns {Promise<FlowResult>}
      */
-    run(originals) {
+    run(originals, pass = []) {
       busy++;
-      const p = queue.then(() => runOnce(originals, deps)).finally(() => busy--);
+      const p = queue.then(() => runOnce(originals, deps, pass)).finally(() => busy--);
       queue = p.catch(() => {});
       return p;
     },
@@ -60,7 +62,7 @@ export function createFlow(deps) {
 }
 
 /** @returns {Promise<FlowResult>} */
-async function runOnce(originals, deps) {
+async function runOnce(originals, deps, pass) {
   const settings = deps.getSettings();
   const lang = resolveUiLanguage(settings.uiLanguage);
   const tt = createT({ ru: { ...common.ru, ...panelDict.ru }, en: { ...common.en, ...panelDict.en } }, lang);
@@ -68,9 +70,12 @@ async function runOnce(originals, deps) {
   const catalog = buildCatalog(settings);
   const link = new Link();
   const openShadow = await readOpenShadowFlag();
-  // обрабатываемые файлы: DOCX, PDF (если pdfMode не 'off', версия 0.3), Excel, PowerPoint и текстовые (0.5); остальные проходят как есть
-  const procIdx = originals.map((f, i) => (isSupported(f, settings) ? i : -1)).filter((i) => i >= 0);
-  const batchId = procIdx.length > 1 ? makeRequestId('b') : null;
+  // файлы панели — все, кроме pass (0.5.2, FR-04б): обрабатываются DOCX, PDF (если pdfMode не 'off', версия 0.3), Excel, PowerPoint и
+  // текстовые (0.5); остальные (unsup) — строка-отказ «Формат не проверяется» с «Загрузить как есть», без выбора не уходят
+  const procIdx = originals.map((_, i) => i).filter((i) => !pass[i]);
+  const unsup = new Set(procIdx.filter((i) => !isSupported(originals[i], settings)));
+  const anaIdx = procIdx.filter((i) => !unsup.has(i));
+  const batchId = anaIdx.length > 1 ? makeRequestId('b') : null;
 
   /** @type {Map<number, {docId: string, k: number}>} */
   const analyzed = new Map();
@@ -81,8 +86,8 @@ async function runOnce(originals, deps) {
   const blocked = (i) => keys.has(i) || (isKeyFileName(originals[i]) && !analyzed.has(i));
   /** что можно отдать сайту: всё, кроме ключей восстановления */
   const sendable = (files) => files.filter((_, i) => !blocked(i));
-  // перехват сам, без хоста, проверяет начало каждого текстового файла (те же правила, что у хоста): сбой хоста, инвалидация
-  // контекста или лимит размера не откроют переименованному ключу путь «как есть» или «оригиналом»
+  // перехват сам, без хоста, проверяет начало каждого текстового и неподдерживаемого файла (те же правила, что у хоста): сбой хоста,
+  // инвалидация контекста или лимит размера не откроют переименованному ключу путь «как есть» или «оригиналом»
   for (const i of procIdx) if (await sniffRecoveryKey(originals[i])) keys.add(i);
   let closed = false;
   let finish;
@@ -231,6 +236,17 @@ async function runOnce(originals, deps) {
     });
   }
 
+  /**
+   * Неподдерживаемый формат (0.5.2, FR-04б): строка-отказ с «Загрузить как есть», без «Повторить»; PDF при pdfMode 'off' — с указанием
+   * на настройку. Текст называет только расширение — имени файла нет (в нём могут быть данные; имя и так видно на вкладке).
+   */
+  function failUnsupported(i) {
+    const f = originals[i];
+    const ext = extOf(f);
+    const message = isPdfFile(f) ? tt('unsupportedPdfOff') : ext ? tt('unsupportedExt', { ext }) : tt('unsupportedNoExt');
+    panel.setError(procIdx.indexOf(i), { code: 'UNSUPPORTED', message, retry: false, note: 'unsupportedNote', optional: true });
+  }
+
   /** Ключ восстановления (0.5.1): отказ без «загрузить как есть» и без «повторить» — по образцу отказа для скана PDF. */
   function failKey(i) {
     panel.setError(procIdx.indexOf(i), { code: 'RECOVERY_KEY', message: tt('err.RECOVERY_KEY'), retry: false, blocked: true });
@@ -346,7 +362,9 @@ async function runOnce(originals, deps) {
       }
       if (batchId) client.request(MSG.BATCH_END, { batchId }).catch(() => {});
       const merged = mappings.length ? mergeMappings(mappings) : null;
-      const sent = sendable(out).map((f) => f.name);
+      // неподдерживаемый файл без «Загрузить как есть» (0.5.2, FR-04б) не уходит, остальные — уходят
+      const result = out.filter((_, i) => !blocked(i) && (!unsup.has(i) || panel.isAsIs(procIdx.indexOf(i))));
+      const sent = result.map((f) => f.name);
       panel.showDone({
         replacements,
         names: sent,
@@ -356,7 +374,7 @@ async function runOnce(originals, deps) {
         hintMappingShown: deps.getSettings().hintMappingShown,
         docIds,
       });
-      decide('anonymized', sendable(out));
+      decide('anonymized', result);
     } catch (err) {
       if (isInvalidatedError(err) || !contextValid()) return invalidated();
       panel.backToReview();
@@ -372,14 +390,15 @@ async function runOnce(originals, deps) {
   }
   for (const i of procIdx) panel.addFile(originals[i].name, originals[i].size);
   for (const i of procIdx) if (keys.has(i)) failKey(i); // отказ виден сразу
+  for (const i of unsup) if (!keys.has(i)) failUnsupported(i);
   (async () => {
     try {
       if (batchId) await link.get().request(MSG.BATCH_BEGIN, { batchId });
     } catch (err) {
-      for (const i of procIdx) fail(i, err);
+      for (const i of anaIdx) fail(i, err);
       return;
     }
-    for (const i of procIdx) {
+    for (const i of anaIdx) {
       if (closed) return;
       await analyzeOne(i);
     }

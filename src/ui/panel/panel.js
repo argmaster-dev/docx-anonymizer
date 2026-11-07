@@ -504,11 +504,12 @@ export class Panel {
     const retry = f.error.retry
       ? h('button', { class: 'btn btn-sm', type: 'button', text: t('btnRetry'), 'data-testid': 'btn-retry', onClick: () => this.o.handlers.onRetry(i) })
       : null;
+    // неподдерживаемый формат (0.5.2, FR-04б) — своя заметка (error.note): файл уйдёт только по «Загрузить как есть», список «не спрашивать» — в настройках
     this.setCenter(
       f,
       h('div', { class: 'err-ic', text: '!' }),
       h('h3', { text: f.error.message, 'data-testid': 'error-message' }),
-      h('p', { text: f.asIs ? t('asIsNote') : t('errNeedDecision') }),
+      h('p', { text: f.asIs ? t('asIsNote') : t(f.error.note || 'errNeedDecision'), 'data-testid': 'error-note' }),
       h('div', { class: 'actions-inline' }, asIs, retry),
     );
   }
@@ -555,8 +556,9 @@ export class Panel {
   get canAnonymize() {
     if (this.phase !== 'review') return false;
     if (this.files.some((f) => f.state === 'queued' || f.state === 'analyzing')) return false;
-    // заблокированный файл (ключ восстановления, 0.5.1) — решение уже принято: он просто не загружается
-    if (this.files.some((f) => f.state === 'error' && !f.asIs && !f.error?.blocked)) return false;
+    // заблокированный файл (ключ восстановления, 0.5.1) — решение уже принято: он просто не загружается; неподдерживаемый формат
+    // (0.5.2, error.optional) без «как есть» тоже не загружается и остальные файлы не задерживает
+    if (this.files.some((f) => f.state === 'error' && !f.asIs && !f.error?.blocked && !f.error?.optional)) return false;
     // «Загрузить как есть» у всех файлов (например, один скан PDF, К5) — тоже решение: уйдут оригиналы
     return this.readyCount > 0 || this.files.some((f) => f.asIs);
   }
@@ -584,7 +586,7 @@ export class Panel {
     const total = this.files.reduce((n, f) => n + (f.preview ? f.preview.plannedReplacements() : 0), 0);
     // все файлы решено загрузить как есть (скан PDF, К5) — замен не будет, кнопка только загружает
     // (ключ восстановления, 0.5.1, в счёт не идёт: он не загружается)
-    const uploadOnly = this.files.some((f) => f.asIs) && this.files.every((f) => f.asIs || f.error?.blocked);
+    const uploadOnly = this.files.some((f) => f.asIs) && this.files.every((f) => f.asIs || f.error?.blocked || f.error?.optional);
     this.footer.append(
       h('button', { class: 'btn', type: 'button', text: t('btnCancel'), 'data-testid': 'btn-cancel', onClick: () => this.o.handlers.onCancel() }),
       this.files.length && this.files.every((f) => f.error?.blocked)

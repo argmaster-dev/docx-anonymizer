@@ -2,7 +2,7 @@
 // невалидное — подсвечивается и не сохраняется. Работает только через src/shared/settings-store.js.
 import './options.css';
 import { buildCatalog, CATEGORY_GROUPS } from '../core/categories.js';
-import { defaultSettings, validateSettingsPatch, SETTINGS_SCHEMA_VERSION } from '../core/settings.js';
+import { defaultSettings, validateSettingsPatch, parseExtensionList, SETTINGS_SCHEMA_VERSION } from '../core/settings.js';
 import { findCustomMatches } from '../core/detect/custom/index.js';
 import { checkRegexSource, validateCustomCategory, CUSTOM_VALIDATORS, SHAPES } from '../core/detect/custom/rules.js';
 import { loadSettings, onSettingsChanged, saveSettingsPatch } from '../shared/settings-store.js';
@@ -510,6 +510,7 @@ function processingSection() {
       'pdf-mode',
     ),
     h('p', { class: 'sec-hint', dataset: { testid: 'pdf-mode-hint' } }, t('pdf_mode_hint')),
+    skipExtensionsField(),
     h(
       'div',
       { class: 'stack' },
@@ -519,6 +520,48 @@ function processingSection() {
       // WP7, FR-23: словарный детектор ФИО третьих лиц; не зависит от NER
       toggle(t('dict_names'), t('dict_names_hint'), settings.dictNames, (v, el) => save({ dictNames: v }, el), 'dict-names'),
     ),
+  );
+}
+
+/**
+ * Список «не спрашивать» (0.5.2, FR-04в): расширения через запятую; файлы с ними уходят в чат без панели, как до 0.5.2.
+ * Поддерживаемые форматы поле отклоняет с пояснением (ключ восстановления — .json/.txt — не должен уйти без проверки).
+ * Сохраняется по change (уход из поля, Enter); пустое поле — пустой список.
+ */
+function skipExtensionsField() {
+  const err = h('div', { class: 'err', dataset: { testid: 'skip-ext-err' } });
+  const input = h('input', {
+    type: 'text',
+    id: 'skip-ext',
+    value: settings.skipExtensions.join(', '),
+    placeholder: t('skip_ext_placeholder'),
+    dataset: { testid: 'skip-ext' },
+  });
+  input.addEventListener('change', async () => {
+    const r = parseExtensionList(input.value);
+    const why = r.supported.length
+      ? t('skip_ext_supported', { list: r.supported.map((x) => `.${x}`).join(', ') })
+      : r.invalid.length
+        ? t('skip_ext_invalid', { list: r.invalid.join(', ') })
+        : '';
+    err.textContent = why;
+    if (why) {
+      input.classList.add('invalid');
+      return;
+    }
+    if (await save({ skipExtensions: r.list }, input)) input.value = r.list.join(', ');
+  });
+  input.addEventListener('input', () => {
+    input.classList.remove('invalid');
+    err.textContent = '';
+  });
+  return h(
+    'div',
+    { class: 'field' },
+    h('label', { for: 'skip-ext' }, t('skip_ext')),
+    input,
+    err,
+    h('p', { class: 'sec-hint', dataset: { testid: 'skip-ext-hint' } }, t('skip_ext_hint')),
   );
 }
 

@@ -88,11 +88,16 @@ test.describe('перехват форматов 0.5', () => {
     expect(out.text.split('\r\n')).toHaveLength(decodeText(new Uint8Array(csv.bytes)).text.split('\r\n').length);
   });
 
-  test('изображение и неизвестный файл проходят без панели (распознавание сканов — в следующей версии)', async ({ context, extensionId }) => {
+  // 0.5.2 (FR-04б): изображение не обрабатывается (распознавание сканов — в следующей версии), но и не уходит молча:
+  // строка-отказ «Формат .png не проверяется», исходный файл — только по «Загрузить как есть» (все пути — guard-052.spec.js)
+  test('изображение не обрабатывается: предупреждение, без «как есть» сайт ничего не получил, с ним — исходный файл', async ({ context, extensionId }) => {
     const page = await setup(context, extensionId);
     await page.setInputFiles('#single', { name: 'скан.png', mimeType: 'image/png', buffer: Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) });
-    await expect.poll(async () => (await dump(page)).length).toBe(1);
-    expect(await page.evaluate(() => document.querySelector('docx-anonymizer-root'))).toBeNull();
+    await expect(page.getByTestId('error-message')).toHaveText('Формат .png не проверяется на персональные данные');
+    expect(await dump(page)).toEqual([]);
+    await page.getByTestId('btn-asis').click();
+    await page.getByTestId('btn-anonymize').click();
+    await expect.poll(async () => (await dump(page)).map((g) => g.name)).toEqual(['скан.png']);
   });
 });
 

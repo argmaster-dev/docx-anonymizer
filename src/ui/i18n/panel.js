@@ -95,6 +95,11 @@ export const panel = {
     errNeedDecision: 'Выберите, что сделать с файлом, который не удалось обработать.',
     asIsNote: 'Файл не будет обезличен.',
     keyBlockedNote: 'Файл не будет загружен.',
+    // 0.5.2, FR-04б
+    unsupportedExt: 'Формат .{ext} не проверяется на персональные данные',
+    unsupportedNoExt: 'Файл без расширения не проверяется на персональные данные',
+    unsupportedPdfOff: 'Перехват PDF выключен в настройках — файл не проверяется на персональные данные',
+    unsupportedNote: 'Без кнопки «Загрузить как есть» этот файл в чат не уйдёт. Форматы, о которых не спрашивать, можно указать в настройках.',
     disableSite: 'Отключить на этом сайте',
     siteDisabled: 'Перехват отключён на {host}',
     tabEntities: 'Сущности',
@@ -197,6 +202,11 @@ export const panel = {
     errNeedDecision: 'Choose what to do with the file that could not be processed.',
     asIsNote: 'The file will not be anonymized.',
     keyBlockedNote: 'The file will not be uploaded.',
+    // 0.5.2, FR-04b
+    unsupportedExt: 'The .{ext} format is not checked for personal data',
+    unsupportedNoExt: 'A file without an extension is not checked for personal data',
+    unsupportedPdfOff: 'PDF interception is turned off in the settings — the file is not checked for personal data',
+    unsupportedNote: 'Without "Upload as is" this file does not go to the chat. Formats not to ask about can be listed in the settings.',
     disableSite: 'Turn off on this site',
     siteDisabled: 'Interception turned off on {host}',
     tabEntities: 'Entities',

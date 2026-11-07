@@ -3,7 +3,7 @@
 import { ALWAYS_ON_IDS, BUILTIN_CATEGORIES } from './categories.js';
 
 export const SETTINGS_KEY = 'settings';
-export const SETTINGS_SCHEMA_VERSION = 4;
+export const SETTINGS_SCHEMA_VERSION = 5;
 
 export const DEFAULT_ALLOWLIST = Object.freeze([
   'https://chatgpt.com',
@@ -66,6 +66,33 @@ export function hiddenFlagsFrom(settings) {
   return Object.fromEntries(Object.entries(HIDDEN_SETTINGS).map(([flag, key]) => [flag, settings?.[key] === true]));
 }
 
+/**
+ * Расширения форматов, которые расширение проверяет (0.5.2, FR-04б): = `fileKind` из content/files.js (равенство — в тесте).
+ * В список «не спрашивать» (`skipExtensions`) не добавляются: иначе ключ восстановления (.json, .txt, *.mapping.json) ушёл бы без проверки.
+ */
+export const SUPPORTED_EXTENSIONS = Object.freeze('docx docm pdf xlsx xlsm pptx pptm txt text log md markdown csv json'.split(' '));
+
+/** Расширение для списка «не спрашивать»: строчные латиница и цифры (и `_+-`), без точки, до 16 символов, не поддерживаемый формат. */
+export const isSkipExtension = (x) => typeof x === 'string' && /^[a-z0-9][a-z0-9_+-]{0,15}$/.test(x) && !SUPPORTED_EXTENSIONS.includes(x);
+
+/**
+ * Разбор поля «не спрашивать» на странице настроек (0.5.2, FR-04в): «.JPG, png; *.zip» → ['jpg', 'png', 'zip'].
+ * @param {string} text
+ * @returns {{list: string[], supported: string[], invalid: string[]}} supported — поддерживаемые форматы (отклоняются), invalid — не расширения
+ */
+export function parseExtensionList(text) {
+  const list = [];
+  const supported = [];
+  const invalid = [];
+  for (const raw of String(text || '').split(/[\s,;]+/)) {
+    const x = raw.replace(/^\*?\.+/, '').toLowerCase();
+    if (!x) continue;
+    const to = SUPPORTED_EXTENSIONS.includes(x) ? supported : isSkipExtension(x) ? list : invalid;
+    if (!to.includes(x)) to.push(x);
+  }
+  return { list, supported, invalid };
+}
+
 /** Включает категории `pii`/`ids` в объекте категорий (миграция 2 → 3 и импорт старых конфигураций). */
 function forceAlwaysOn(categories) {
   return { ...categories, ...Object.fromEntries(ALWAYS_ON_IDS.map((id) => [id, true])) };
@@ -111,10 +138,22 @@ function forceAlwaysOn(categories) {
  * @property {string} activeProfile
  * @property {'folder'|'zip'|'files'} batchOutput
  * @property {string} outputSuffix
- * @property {'markdown'|'text'|'off'} pdfMode  PDF (версия 0.3): в чат уходит .anon.md / .anon.txt; 'off' — PDF не перехватывается
+ * @property {'markdown'|'text'|'off'} pdfMode  PDF (версия 0.3): в чат уходит .anon.md / .anon.txt; 'off' — PDF не обезличивается (с 0.5.2 — предупреждение, FR-04б)
+ * @property {string[]} skipExtensions  расширения «не спрашивать» (0.5.2, FR-04в): файлы уходят без предупреждения, как до 0.5.2; по умолчанию пусто
  */
 
-/** @returns {Settings} */
+/**
+ * Значения по умолчанию. Пояснения — здесь, а не внутри литерала (бюджет размера content.js, см. MIGRATIONS):
+ * - `commercial: false` — политика 0.4: названия организаций, номера договоров и суммы — по желанию; у всех после обновления выключено;
+ * - `nerThreshold: 0.7` = recommendedThreshold пакета rubert-tiny2-ner-ruen (WP9, калибровка tools/ner-train/calibrate.py; docs/contracts.md §6.7);
+ * - `nerThresholdOrg: 0.85` — порог для ORG выше: модель 1.0.0 на жанрах вне договоров давала десятки ложных организаций (концепция 0.4, п. 4);
+ * - `bundledModelSha` (WP10-C) пишет только background по ответу MODEL_INSTALLED; удаление модели пользователем поле не трогает (модель не вернётся сама);
+ * - `bundledModelError` (WP10-C) тоже пишет только background — код ошибки MODEL_INSTALLED failed (карточка «не удалось / повторить»); очищается успехом;
+ * - скрытые данные (`removeComments` … `removeHiddenSlides`; 0.5, WP12-D): документ меняется только по явному выбору в панели, выбор запоминается
+ *   здесь; новые ключи со значением по умолчанию — миграция схемы не нужна (migrateSettings дополняет дефолтами);
+ * - `skipExtensions: []` (0.5.2, FR-04в) — список «не спрашивать» пуст: о каждом неподдерживаемом файле панель спрашивает.
+ * @returns {Settings}
+ */
 export function defaultSettings() {
   return {
     schemaVersion: SETTINGS_SCHEMA_VERSION,
@@ -123,7 +162,6 @@ export function defaultSettings() {
     allowlist: [...DEFAULT_ALLOWLIST],
     blocklist: [],
     categories: defaultCategories(),
-    // политика 0.4: названия организаций, номера договоров и суммы — по желанию; у всех после обновления выключено
     commercial: false,
     maskedCompanies: [],
     orgPolicyHintPending: false,
@@ -131,20 +169,14 @@ export function defaultSettings() {
     language: 'auto',
     placeholderLanguage: 'document',
     nerEnabled: true,
-    // порог NER = recommendedThreshold пакета rubert-tiny2-ner-ruen (WP9, калибровка tools/ner-train/calibrate.py; docs/contracts.md §6.7)
     nerThreshold: 0.7,
-    // порог для ORG выше: модель 1.0.0 на жанрах вне договоров давала десятки ложных организаций (концепция 0.4, п. 4)
     nerThresholdOrg: 0.85,
     nerStoplist: [],
     nerModel: '',
-    // WP10-C: пишет только background по ответу MODEL_INSTALLED; удаление модели пользователем поле не трогает (модель не вернётся сама)
     bundledModelSha: '',
-    // WP10-C: тоже пишет только background — код ошибки MODEL_INSTALLED failed (карточка «не удалось / повторить»); очищается успехом
     bundledModelError: '',
     keepMetadata: false,
     stripEmbedded: false,
-    // скрытые данные (0.5, WP12-D): документ меняется только по явному выбору в панели, выбор запоминается здесь.
-    // Новые ключи со значением по умолчанию — миграция схемы не нужна (migrateSettings дополняет дефолтами)
     removeComments: false,
     acceptRevisions: false,
     removeHiddenText: false,
@@ -175,10 +207,16 @@ export function defaultSettings() {
     batchOutput: 'folder',
     outputSuffix: '.anon',
     pdfMode: 'markdown',
+    skipExtensions: [],
   };
 }
 
-/** Проверки полей: (value) => true если валидно. Используется миграцией и страницей настроек (FR-42). */
+/**
+ * Проверки полей: (value) => true если валидно. Используется миграцией и страницей настроек (FR-42).
+ * `nerModel` — = PACK_ID_RE из core/ner/pack.js (не импортируется, чтобы не тянуть разбор пакета в content.js; равенство — в тесте);
+ * `bundledModelError` — код ошибки как в schemas/protocol.schema.json (MODEL_INSTALLED.code): только A-Z и _, без значений документа;
+ * `skipExtensions` — до 50 расширений `isSkipExtension` (0.5.2, FR-04в): поддерживаемый формат список не принимает.
+ */
 export const VALIDATORS = Object.freeze({
   schemaVersion: (v) => Number.isInteger(v),
   interceptEnabled: (v) => typeof v === 'boolean',
@@ -196,10 +234,8 @@ export const VALIDATORS = Object.freeze({
   nerThreshold: (v) => typeof v === 'number' && v >= 0 && v <= 1,
   nerThresholdOrg: (v) => typeof v === 'number' && v >= 0 && v <= 1,
   nerStoplist: (v) => Array.isArray(v) && v.length <= 500 && v.every((x) => typeof x === 'string' && x.length <= 80),
-  // = PACK_ID_RE из core/ner/pack.js (не импортируется, чтобы не тянуть разбор пакета в content.js; равенство — в тесте)
   nerModel: (v) => v === '' || (typeof v === 'string' && /^[a-z0-9][a-z0-9-]{1,40}$/.test(v)),
   bundledModelSha: (v) => v === '' || (typeof v === 'string' && /^[0-9a-f]{64}$/.test(v)),
-  // код ошибки как в schemas/protocol.schema.json (MODEL_INSTALLED.code): только A-Z и _, без значений документа
   bundledModelError: (v) => v === '' || (typeof v === 'string' && /^[A-Z_]{1,40}$/.test(v)),
   keepMetadata: (v) => typeof v === 'boolean',
   stripEmbedded: (v) => typeof v === 'boolean',
@@ -221,54 +257,70 @@ export const VALIDATORS = Object.freeze({
   batchOutput: (v) => ['folder', 'zip', 'files'].includes(v),
   outputSuffix: (v) => typeof v === 'string' && v.length <= 32 && !/[\\/:*?"<>|]/.test(v),
   pdfMode: (v) => ['markdown', 'text', 'off'].includes(v),
+  skipExtensions: (v) => Array.isArray(v) && v.length <= 50 && v.every(isSkipExtension),
 });
+
+/** Применяет `fn` к `values.categories` каждого сохранённого профиля, где они есть; прочие записи не трогает. */
+function mapProfileCategories(profiles, fn) {
+  return profiles.map((p) =>
+    isPlainObject(p) && isPlainObject(p.values) && isPlainObject(p.values.categories)
+      ? { ...p, values: { ...p.values, categories: fn(p.values.categories) } }
+      : p,
+  );
+}
+
+// Комментарии к миграциям — над функциями, а не внутри объекта MIGRATIONS: esbuild без minify сохраняет комментарии внутри
+// литералов, а settings.js входит в content.js с бюджетом размера (pack.spec.js, 0.5.2).
+
+/** 0 → 1: исходная версия; объекты без schemaVersion считаются версией 0. */
+const toV1 = (s) => ({ ...s, schemaVersion: 1 });
+
+/**
+ * 1 → 2 (0.2, WP9): порог NER по умолчанию 0.6 → 0.7. В 0.1 модели не было, поэтому 0.6 — это всегда прежний
+ * дефолт, а не выбор пользователя; другие значения не трогаем. Профили со своим порогом тоже не трогаем.
+ */
+const toV2 = (s) => ({ ...s, schemaVersion: 2, ...(s.nerThreshold === 0.6 ? { nerThreshold: 0.7 } : {}) });
+
+/**
+ * 2 → 3 (0.4, политика маскирования): категории групп pii/ids включаются принудительно — и в настройках, и в
+ * сохранённых профилях; группа commercial у всех выключена (нового ключа в объекте нет → дефолт false, политика
+ * едина). Существующий профиль (есть `categories`) получает одноразовую подсказку о смене политики.
+ */
+function toV3(s) {
+  const out = { ...s, schemaVersion: 3 };
+  if (isPlainObject(s.categories)) {
+    out.categories = forceAlwaysOn(s.categories);
+    out.orgPolicyHintPending = true;
+  }
+  if (Array.isArray(s.profiles)) out.profiles = mapProfileCategories(s.profiles, forceAlwaysOn);
+  return out;
+}
+
+/**
+ * 3 → 4 (0.5, WP12-C): новые встроенные категории (части паспорта, документы, транспорт, сеть, суды, недвижимость,
+ * коммерческие номера) — в настройках и в сохранённых профилях по правилам групп; `pii`/`ids` всё равно всегда включены
+ * (`isCategoryEnabled`), а у `commercial` значение по умолчанию начинает действовать при включённом переключателе группы.
+ * Частичный объект без `categories` (патч импорта) — только версия.
+ */
+function toV4(s) {
+  const out = { ...s, schemaVersion: 4 };
+  if (isPlainObject(s.categories)) out.categories = addMissingCategories(s.categories);
+  if (Array.isArray(s.profiles)) out.profiles = mapProfileCategories(s.profiles, addMissingCategories);
+  return out;
+}
+
+/**
+ * 4 → 5 (0.5.2, FR-04б, FR-04в): неподдерживаемые файлы больше не уходят молча; новое поле `skipExtensions` — пустой список.
+ * Ключ дописывает migrateSettings (дефолт), здесь — только версия: частичный патч импорта не должен затирать список пользователя.
+ */
+const toV5 = (s) => ({ ...s, schemaVersion: 5 });
 
 /**
  * Миграции: MIGRATIONS[n] переводит объект версии n в версию n+1.
  * Чтобы добавить поле/переименовать — увеличьте SETTINGS_SCHEMA_VERSION и добавьте функцию.
  * @type {Record<number, (s: any) => any>}
  */
-export const MIGRATIONS = {
-  // 0 → 1: исходная версия; объекты без schemaVersion считаются версией 0
-  0: (s) => ({ ...s, schemaVersion: 1 }),
-  // 1 → 2 (0.2, WP9): порог NER по умолчанию 0.6 → 0.7. В 0.1 модели не было, поэтому 0.6 — это всегда прежний
-  // дефолт, а не выбор пользователя; другие значения не трогаем. Профили со своим порогом тоже не трогаем.
-  1: (s) => ({ ...s, schemaVersion: 2, ...(s.nerThreshold === 0.6 ? { nerThreshold: 0.7 } : {}) }),
-  // 2 → 3 (0.4, политика маскирования): категории групп pii/ids включаются принудительно — и в настройках, и в
-  // сохранённых профилях; группа commercial у всех выключена (нового ключа в объекте нет → дефолт false, политика
-  // едина). Существующий профиль (есть `categories`) получает одноразовую подсказку о смене политики.
-  2: (s) => {
-    const out = { ...s, schemaVersion: 3 };
-    if (isPlainObject(s.categories)) {
-      out.categories = forceAlwaysOn(s.categories);
-      out.orgPolicyHintPending = true;
-    }
-    if (Array.isArray(s.profiles)) {
-      out.profiles = s.profiles.map((p) =>
-        isPlainObject(p) && isPlainObject(p.values) && isPlainObject(p.values.categories)
-          ? { ...p, values: { ...p.values, categories: forceAlwaysOn(p.values.categories) } }
-          : p,
-      );
-    }
-    return out;
-  },
-  // 3 → 4 (0.5, WP12-C): новые встроенные категории (части паспорта, документы, транспорт, сеть, суды, недвижимость,
-  // коммерческие номера) — в настройках и в сохранённых профилях по правилам групп; `pii`/`ids` всё равно всегда включены
-  // (`isCategoryEnabled`), а у `commercial` значение по умолчанию начинает действовать при включённом переключателе группы.
-  // Частичный объект без `categories` (патч импорта) — только версия.
-  3: (s) => {
-    const out = { ...s, schemaVersion: 4 };
-    if (isPlainObject(s.categories)) out.categories = addMissingCategories(s.categories);
-    if (Array.isArray(s.profiles)) {
-      out.profiles = s.profiles.map((p) =>
-        isPlainObject(p) && isPlainObject(p.values) && isPlainObject(p.values.categories)
-          ? { ...p, values: { ...p.values, categories: addMissingCategories(p.values.categories) } }
-          : p,
-      );
-    }
-    return out;
-  },
-};
+export const MIGRATIONS = { 0: toV1, 1: toV2, 2: toV3, 3: toV4, 4: toV5 };
 
 /**
  * Прогоняет MIGRATIONS над объектом настроек версии `fromVersion` (целым или частичным — патчем из файла импорта,

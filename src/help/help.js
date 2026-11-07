@@ -35,6 +35,8 @@ function render(lang) {
       h('section', { class: 'card', dataset: { testid: 'help-policy' } }, h('h2', {}, t('policy_h')), list('ul', t, 'policy', 4)),
       // скрытые данные и ключ с паролем (0.5, WP12-D)
       h('section', { class: 'card', dataset: { testid: 'help-hidden' } }, h('h2', {}, t('hidden_h')), list('ul', t, 'hidden', 4)),
+      // сторож (0.5.2, WP14-A): неподдерживаемые файлы, список «не спрашивать», пустое поле выбора, что не закрыто
+      h('section', { class: 'card', dataset: { testid: 'help-guard' } }, h('h2', {}, t('guard_h')), list('ul', t, 'guard', 4)),
       h('section', { class: 'card', dataset: { testid: 'help-privacy' } }, h('h2', {}, t('privacy_h')), list('ul', t, 'privacy', 4)),
       h('section', { class: 'card', dataset: { testid: 'help-check' } }, h('h2', {}, t('check_h')), list('ul', t, 'check', 4)),
       h(

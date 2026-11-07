@@ -88,7 +88,12 @@ test.describe('PDF: перехват и результат (К9)', () => {
     expect(list[0].type).toBe('text/markdown');
   });
 
-  test("pdfMode: 'text' → .anon.txt (text/plain); pdfMode: 'off' → PDF проходит как есть, панели нет", async ({ context, extensionId, site }) => {
+  // 0.5.2 (FR-04б): при pdfMode 'off' PDF больше не уходит молча — строка-отказ «перехват PDF выключен», исходный файл — только по «как есть»
+  test("pdfMode: 'text' → .anon.txt (text/plain); pdfMode: 'off' → предупреждение, «Загрузить как есть» — исходный PDF", async ({
+    context,
+    extensionId,
+    site,
+  }) => {
     let page = await setup(context, extensionId, site, { pdfMode: 'text' });
     await page.setInputFiles('#multi-input', writeTemp('t.pdf', SAMPLE));
     // заметка называет расширение результата по pdfMode (FR-54)
@@ -100,10 +105,14 @@ test.describe('PDF: перехват и результат (К9)', () => {
 
     page = await setup(context, extensionId, site, { pdfMode: 'off' });
     await page.setInputFiles('#multi-input', writeTemp('off.pdf', SAMPLE));
+    const off = panel(page);
+    await expect(off.error).toHaveText('Перехват PDF выключен в настройках — файл не проверяется на персональные данные');
+    expect(await received(page)).toEqual([]);
+    await off.host.locator('[data-testid="btn-asis"]').click();
+    await off.anonymize.click();
     const [o] = await waitReceived(page, 1);
     expect(o.name).toBe('off.pdf');
     expect(o.sha256).toBe(sha256(SAMPLE));
-    await expect(panel(page).host).toHaveCount(0);
   });
 });
 

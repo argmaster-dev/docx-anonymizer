@@ -46,7 +46,7 @@ describe('settings', () => {
   });
   it('nerThreshold (WP9): по умолчанию 0.7 = recommendedThreshold пакета; миграция 1 → 2 меняет только прежний дефолт 0.6', () => {
     expect(defaultSettings().nerThreshold).toBe(0.7);
-    expect(SETTINGS_SCHEMA_VERSION).toBe(4); // 0.5: миграция 3 → 4 (новые категории)
+    expect(SETTINGS_SCHEMA_VERSION).toBe(5); // 0.5: миграция 3 → 4 (новые категории); 0.5.2: 4 → 5 (skipExtensions)
     expect(migrateSettings({ schemaVersion: 1, nerThreshold: 0.6 }).settings.nerThreshold).toBe(0.7);
     expect(migrateSettings({ schemaVersion: 1, nerThreshold: 0.45 }).settings.nerThreshold).toBe(0.45);
     expect(migrateSettings({ nerThreshold: 0.6 }).settings.nerThreshold).toBe(0.7); // v0 → 1 → 2
@@ -67,12 +67,13 @@ describe('settings', () => {
     expect(parseConfigFile(file({ schemaVersion: 99 }, { nerThreshold: 0.6 })).patch).toEqual({ nerThreshold: 0.6 });
     // общая функция чистая: вход не меняется, частичный объект остаётся частичным
     const patch = { nerThreshold: 0.6 };
-    expect(applyMigrations(patch, 1)).toEqual({ nerThreshold: 0.7, schemaVersion: 4 });
+    expect(applyMigrations(patch, 1)).toEqual({ nerThreshold: 0.7, schemaVersion: 5 });
     expect(patch).toEqual({ nerThreshold: 0.6 });
-    expect(applyMigrations({ nerThreshold: 0.6 })).toEqual({ nerThreshold: 0.7, schemaVersion: 4 });
-    expect(applyMigrations({ nerThreshold: 0.6 }, 2)).toEqual({ nerThreshold: 0.6, schemaVersion: 4 });
-    expect(applyMigrations({ nerThreshold: 0.6 }, 3)).toEqual({ nerThreshold: 0.6, schemaVersion: 4 });
-    expect(applyMigrations({ nerThreshold: 0.6 }, 4)).toEqual({ nerThreshold: 0.6 });
+    expect(applyMigrations({ nerThreshold: 0.6 })).toEqual({ nerThreshold: 0.7, schemaVersion: 5 });
+    expect(applyMigrations({ nerThreshold: 0.6 }, 2)).toEqual({ nerThreshold: 0.6, schemaVersion: 5 });
+    expect(applyMigrations({ nerThreshold: 0.6 }, 3)).toEqual({ nerThreshold: 0.6, schemaVersion: 5 });
+    expect(applyMigrations({ nerThreshold: 0.6 }, 4)).toEqual({ nerThreshold: 0.6, schemaVersion: 5 });
+    expect(applyMigrations({ nerThreshold: 0.6 }, 5)).toEqual({ nerThreshold: 0.6 });
   });
   it('миграция 2 → 3 (политика 0.4, К1): pii/ids включаются в настройках и профилях, commercial выключен у всех, подсказка один раз', async () => {
     const stored = {
@@ -85,7 +86,7 @@ describe('settings', () => {
     delete stored.orgPolicyHintPending;
     const { settings, changed } = migrateSettings(stored);
     expect(changed).toBe(true);
-    expect(settings.schemaVersion).toBe(4); // 2 → 3 → 4
+    expect(settings.schemaVersion).toBe(5); // 2 → 3 → 4 → 5
     expect(settings.categories).toMatchObject({ PERSON: true, INN: true, COMPANY: true, AMOUNT: true });
     expect(settings.commercial).toBe(false);
     expect(settings.orgPolicyHintPending).toBe(true);
@@ -93,7 +94,7 @@ describe('settings', () => {
     // у текущей версии подсказка не возвращается
     expect(migrateSettings({ ...settings, orgPolicyHintPending: false }).settings.orgPolicyHintPending).toBe(false);
     // частичный объект без categories (патч импорта) — только версия
-    expect(applyMigrations({ mode: 'mask' }, 2)).toEqual({ mode: 'mask', schemaVersion: 4 });
+    expect(applyMigrations({ mode: 'mask' }, 2)).toEqual({ mode: 'mask', schemaVersion: 5 });
     // импорт старого конфига: pii/ids включены, подсказка (состояние браузера) не импортируется
     const { parseConfigFile, CONFIG_KIND, NOT_EXPORTED } = await import('../../src/options/config-io.js');
     const r = parseConfigFile(JSON.stringify({ kind: CONFIG_KIND, version: 1, schemaVersion: 2, settings: { categories: { INN: false } } }));
@@ -120,7 +121,7 @@ describe('settings', () => {
     };
     const { settings, changed } = migrateSettings(stored);
     expect(changed).toBe(true);
-    expect(settings.schemaVersion).toBe(4);
+    expect(settings.schemaVersion).toBe(5); // 3 → 4 → 5
     // прежние значения не тронуты; новые pii/ids — true, новые commercial — defaultOn
     expect(settings.categories).toMatchObject({ COMPANY: false, CONTRACT: false, PASSPORT_DEPT: true, VIN: true, COURT_CASE: true, CADASTRAL: true });
     expect(settings.categories).toMatchObject({ TENDER: true, ORDER_NO: true, INVOICE_NO: true, CLIENT_NO: true, IP_REG: true });

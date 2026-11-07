@@ -116,7 +116,12 @@ describe('распознавание ключа восстановления', (
     const cyr = utf8(JSON.stringify({ ...MAPPING, pad: 'Ж'.repeat(40000) }));
     expect(looksLikeKeyText(sniffDecode(cyr.subarray(0, KEY_SNIFF_BYTES - 1)))).toBe(true);
     expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ.docx'))).toBe(false);
-    expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ.zip'))).toBe(false);
+    // 0.5.2 (FR-04б): неподдерживаемый файл теперь перехватывается и получает «Загрузить как есть» — его начало тоже проверяется,
+    // переименованный в .zip/.dat/без расширения ключ остаётся заблокированным; форматы Office и PDF по-прежнему не читаются
+    expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ.zip'))).toBe(true);
+    expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ'))).toBe(true);
+    expect(await sniffRecoveryKey(file(utf8(KEY_TEXT), 'ключ.pdf'))).toBe(false);
+    expect(await sniffRecoveryKey(file(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]), 'фото.png'))).toBe(false);
     expect(await sniffRecoveryKey(file(utf8(JSON.stringify({ entries: [{ id: 1 }] })), 'x.json'))).toBe(false);
   });
 

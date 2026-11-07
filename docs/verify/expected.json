@@ -1,0 +1,275 @@
+{
+  "note": "Вымышленные данные. mayMiss — трудный случай: расширение может пропустить, замаскируйте вручную. Сгенерировано scripts/gen-verify-docs.mjs.",
+  "docs": [
+    {
+      "file": "01-dogovor.docx",
+      "title": "Договор оказания услуг (Word)",
+      "expect": [
+        {
+          "value": "Белов Андрей Викторович",
+          "category": "PERSON"
+        },
+        {
+          "value": "Белов А. В.",
+          "category": "PERSON"
+        },
+        {
+          "value": "Кравцова Ирина Олеговна",
+          "category": "PERSON"
+        },
+        {
+          "value": "Кравцова И. О.",
+          "category": "PERSON"
+        },
+        {
+          "value": "45 12 345678",
+          "category": "PASSPORT"
+        },
+        {
+          "value": "ГУ МВД России по г. Москве",
+          "category": "PASSPORT_ISSUER"
+        },
+        {
+          "value": "12.03.2015",
+          "category": "PASSPORT_DATE"
+        },
+        {
+          "value": "770-045",
+          "category": "PASSPORT_DEPT"
+        },
+        {
+          "value": "г. Москва, ул. Садовая, д. 14, кв. 27",
+          "category": "ADDRESS"
+        },
+        {
+          "value": "+7 (916) 555-12-34",
+          "category": "PHONE"
+        },
+        {
+          "value": "a.belov@example.com",
+          "category": "EMAIL"
+        },
+        {
+          "value": "112-233-445 95",
+          "category": "SNILS"
+        },
+        {
+          "value": "770123456703",
+          "category": "INN"
+        },
+        {
+          "value": "7709123453",
+          "category": "INN"
+        },
+        {
+          "value": "1027700123450",
+          "category": "OGRN"
+        },
+        {
+          "value": "40702810700000012345",
+          "category": "ACCOUNT"
+        },
+        {
+          "value": "30101810300000000901",
+          "category": "ACCOUNT"
+        },
+        {
+          "value": "044525901",
+          "category": "BIK"
+        }
+      ],
+      "stays": [
+        "ООО «Вектор Плюс»",
+        "17/26"
+      ],
+      "size": 4053
+    },
+    {
+      "file": "02-reestr-klientov.xlsx",
+      "title": "Реестр клиентов (Excel)",
+      "expect": [
+        {
+          "value": "Гусева Анна Сергеевна",
+          "category": "PERSON"
+        },
+        {
+          "value": "03.02.1979",
+          "category": "BIRTHDATE"
+        },
+        {
+          "value": "+7 (903) 111-22-33",
+          "category": "PHONE"
+        },
+        {
+          "value": "a.guseva@example.com",
+          "category": "EMAIL"
+        },
+        {
+          "value": "500111222355",
+          "category": "INN"
+        },
+        {
+          "value": "123-456-789 64",
+          "category": "SNILS"
+        },
+        {
+          "value": "Ершов Павел Ильич",
+          "category": "PERSON"
+        },
+        {
+          "value": "21.11.1985",
+          "category": "BIRTHDATE"
+        },
+        {
+          "value": "+7 (903) 222-33-44",
+          "category": "PHONE"
+        },
+        {
+          "value": "p.ershov@example.com",
+          "category": "EMAIL"
+        },
+        {
+          "value": "500222333460",
+          "category": "INN"
+        },
+        {
+          "value": "234-567-891 00",
+          "category": "SNILS"
+        },
+        {
+          "value": "Тихонова Вера Николаевна",
+          "category": "PERSON"
+        },
+        {
+          "value": "09.07.1992",
+          "category": "BIRTHDATE"
+        },
+        {
+          "value": "+7 (903) 333-44-55",
+          "category": "PHONE"
+        },
+        {
+          "value": "v.tikhonova@example.com",
+          "category": "EMAIL"
+        },
+        {
+          "value": "500333444574",
+          "category": "INN"
+        },
+        {
+          "value": "345-678-912 26",
+          "category": "SNILS"
+        },
+        {
+          "value": "Фомин Глеб Аркадьевич",
+          "category": "PERSON"
+        },
+        {
+          "value": "30.12.1968",
+          "category": "BIRTHDATE"
+        },
+        {
+          "value": "+7 (903) 444-55-66",
+          "category": "PHONE"
+        },
+        {
+          "value": "g.fomin@example.com",
+          "category": "EMAIL"
+        },
+        {
+          "value": "500444555689",
+          "category": "INN"
+        },
+        {
+          "value": "456-789-123 44",
+          "category": "SNILS"
+        }
+      ],
+      "stays": [
+        "ФИО",
+        "Дата рождения",
+        "Телефон",
+        "E-mail",
+        "ИНН",
+        "СНИЛС"
+      ],
+      "size": 4982
+    },
+    {
+      "file": "03-spravka.pdf",
+      "title": "Справка с места работы (PDF с текстовым слоем)",
+      "expect": [
+        {
+          "value": "Соколовой Марине Андреевне",
+          "category": "PERSON"
+        },
+        {
+          "value": "14.05.1988",
+          "category": "BIRTHDATE"
+        },
+        {
+          "value": "46 09 876543",
+          "category": "PASSPORT"
+        },
+        {
+          "value": "г. Тверь, ул. Озёрная, д. 3, кв. 41",
+          "category": "ADDRESS"
+        },
+        {
+          "value": "+7 (495) 123-45-67",
+          "category": "PHONE"
+        },
+        {
+          "value": "kadry@example.org",
+          "category": "EMAIL"
+        },
+        {
+          "value": "Мельникова Ольга Петровна",
+          "category": "PERSON"
+        }
+      ],
+      "stays": [
+        "ООО «Северный ветер»"
+      ],
+      "size": 24485
+    },
+    {
+      "file": "04-pasport-foto.png",
+      "title": "«Фото паспорта» (картинка — формат не проверяется)",
+      "expect": [],
+      "unsupported": true,
+      "stays": [],
+      "size": 24821
+    },
+    {
+      "file": "05-trudnye-sluchai.docx",
+      "title": "Служебная записка с трудными случаями (Word)",
+      "expect": [
+        {
+          "value": "Захарова Елена Павловна",
+          "category": "PERSON"
+        },
+        {
+          "value": "+7 (921) 444-33-22",
+          "category": "PHONE"
+        },
+        {
+          "value": "logist@example.net",
+          "category": "EMAIL"
+        },
+        {
+          "value": "Лагунов",
+          "category": "PERSON",
+          "mayMiss": true
+        },
+        {
+          "value": "Tenzing Norbu",
+          "category": "PERSON",
+          "mayMiss": true
+        }
+      ],
+      "stays": [],
+      "size": 3399
+    }
+  ]
+}

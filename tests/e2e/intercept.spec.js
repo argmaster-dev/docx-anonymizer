@@ -134,9 +134,10 @@ test.describe('перехват на сайте', () => {
     expect(a).toEqual(c);
   });
 
-  // 0.5 (WP12-B): .txt теперь обрабатывается — «необрабатываемый» файл здесь архив .zip
-  test('файл без .docx проходит без панели', async ({ context, extensionId }) => {
-    const page = await setup(context, extensionId);
+  // 0.5 (WP12-B): .txt теперь обрабатывается — «необрабатываемый» файл здесь архив .zip.
+  // 0.5.2 (FR-04б, FR-04в): без панели проходит только расширение из списка «не спрашивать»; без списка — предупреждение (guard-052.spec.js)
+  test('файл из списка «не спрашивать» проходит без панели', async ({ context, extensionId }) => {
+    const page = await setup(context, extensionId, { extra: { skipExtensions: ['zip'] } });
     await page.setInputFiles('#single', { name: 'архив.zip', mimeType: 'application/zip', buffer: Buffer.from('привет') });
     await expect.poll(async () => (await dump(page)).length).toBe(1);
     expect(await page.evaluate(() => document.querySelector('docx-anonymizer-root'))).toBeNull();

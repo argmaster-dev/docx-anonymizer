@@ -50,6 +50,18 @@ export function fileKind(file) {
   return null;
 }
 
+/** Расширение имени без точки, строчными; '' — имени без расширения. */
+export const extOf = (file) => /\.([^./\\]+)$/.exec(file?.name || '')?.[1].toLowerCase() || '';
+
+/**
+ * Файл из списка «не спрашивать» (0.5.2, FR-04в): уходит на сайт без панели, как до 0.5.2. Поддерживаемый формат — никогда, даже если
+ * список в хранилище поправлен вручную: ключ восстановления (.json, .txt, *.mapping.json) не должен уйти без проверки.
+ */
+export function isSkipped(file, settings) {
+  const ext = extOf(file);
+  return !!ext && fileKind(file) === null && (settings?.skipExtensions || []).includes(ext);
+}
+
 /** Обрабатывает ли расширение файл при этих настройках: PDF — если pdfMode не 'off' (FR-04, версия 0.3), остальные виды — всегда. */
 export function isSupported(file, settings) {
   const kind = fileKind(file);
@@ -65,11 +77,13 @@ export const isKeyFileName = (file) => /\.mapping\.json$/i.test(file?.name || ''
 
 /**
  * Перехваченный текстовый файл похож на ключ восстановления — по первым KEY_SNIFF_BYTES байтам, без хоста (0.5.1, ревью):
- * те же правила по тексту, что у хоста (core/recovery-key-sniff.js); кодировка — sniffDecode. Бинарные форматы не читаются.
+ * те же правила по тексту, что у хоста (core/recovery-key-sniff.js); кодировка — sniffDecode. Форматы Office и PDF не читаются;
+ * неподдерживаемые (0.5.2, FR-04б) — читаются: переименованный в «.dat» ключ не получит «Загрузить как есть».
  * @param {File} file
  */
 export async function sniffRecoveryKey(file) {
-  if (fileKind(file) !== 'text') return false;
+  const kind = fileKind(file);
+  if (kind && kind !== 'text') return false;
   try {
     return looksLikeKeyText(sniffDecode(new Uint8Array(await file.slice(0, KEY_SNIFF_BYTES).arrayBuffer())));
   } catch {

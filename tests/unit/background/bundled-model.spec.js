@@ -291,7 +291,7 @@ describe('background: встроенная модель NER', () => {
       });
       chrome.runtime.onInstalled.fire({ reason: 'install' });
       await flush();
-      expect(order, String(!!bundled)).toEqual(bundled ? ['set:4:0.7', MSG.MODEL_INSTALL] : ['set:4:0.7']); // схема 4 — 0.5 (WP12-C)
+      expect(order, String(!!bundled)).toEqual(bundled ? ['set:5:0.7', MSG.MODEL_INSTALL] : ['set:5:0.7']); // схема 4 — 0.5 (WP12-C), 5 — 0.5.2 (skipExtensions)
       if (!bundled) expect(offscreen.ensureOffscreen).not.toHaveBeenCalled();
       offscreen.ensureOffscreen.mockClear();
     }

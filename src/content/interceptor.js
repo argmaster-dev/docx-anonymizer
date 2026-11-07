@@ -1,20 +1,26 @@
 // Перехват выбора файла (FR-01), drag&drop (FR-02) и вставки (FR-03). FR-05: подмена через DataTransfer.
 // Обработчики вешаются на window в фазе capture — раньше обработчиков страницы (content script на document_start).
-import { isDocx, fileSignature } from './files.js';
+// С 0.5.2 (FR-04б) перехватывается любой файл: неподдерживаемый не уходит без выбора человека; без панели проходят только
+// файлы, которые мы сами подставили, и расширения из списка «не спрашивать» (FR-04в).
+import { fileSignature } from './files.js';
 
 const isFileInput = (n) => !!n && n.tagName === 'INPUT' && /** @type {HTMLInputElement} */ (n).type === 'file';
 
 /**
- * @param {{run: (files: File[]) => Promise<{action: string, files: File[]}>}} flow
- * @param {{win?: Window, isSupported?: (file: File) => boolean}} [env]
- *   isSupported — какие файлы обрабатывать (content.js: DOCX и PDF по pdfMode, версия 0.3); по умолчанию — только DOCX
+ * @param {{run: (files: File[], pass: boolean[]) => Promise<{action: string, files: File[]}>}} flow
+ *   pass[i] — файл уходит без панели (наш результат или список «не спрашивать»)
+ * @param {{win?: Window, isSkipped?: (file: File) => boolean}} [env]
+ *   isSkipped — список «не спрашивать» (content.js: isSkipped по настройкам, читаются в момент события); по умолчанию — пусто
  */
 export function createInterceptor(flow, env = {}) {
   const win = env.win || window;
-  const supported = env.isSupported || isDocx;
+  const skipped = env.isSkipped || (() => false);
   const doc = win.document;
   let bypass = false; // наши собственные события не перехватываем повторно (FR-05)
   const produced = new Set(); // сигнатуры файлов, которые мы сами подставили
+  // исходные файлы, которые мы сами отдали сайту («как есть», «оригинал», файлы мимо панели): если сайт перешлёт те же объекты
+  // в своё поле выбора, панель не откроется второй раз. Повторный выбор того же файла с диска даёт новые объекты — спросим снова
+  const handed = new WeakSet();
   const held = new WeakSet(); // inputs, по которым идёт обработка
   const hooked = new WeakSet();
   const roots = [];
@@ -23,7 +29,11 @@ export function createInterceptor(flow, env = {}) {
   const pendingNodes = new Set();
   let attached = false;
 
-  const needsProcessing = (files) => files.some(supported) && !files.filter(supported).every((f) => produced.has(fileSignature(f)));
+  /** Что уходит без панели; null — перехватывать нечего. */
+  function plan(files) {
+    const pass = files.map((f) => handed.has(f) || produced.has(fileSignature(f)) || skipped(f));
+    return pass.every(Boolean) ? null : pass;
+  }
 
   function withBypass(fn) {
     bypass = true;
@@ -49,7 +59,9 @@ export function createInterceptor(flow, env = {}) {
 
   function remember(originals, res) {
     // по членству, а не по индексу: ключ восстановления выпадает из списка (0.5.1), индексы результата сдвигаются
-    for (const f of res.files) if (!originals.includes(f)) produced.add(fileSignature(f));
+    for (const f of res.files)
+      if (originals.includes(f)) handed.add(f);
+      else produced.add(fileSignature(f));
   }
 
   /* ---------- input[type=file] ---------- */
@@ -67,24 +79,23 @@ export function createInterceptor(flow, env = {}) {
       return;
     }
     const files = Array.from(input.files || []);
-    if (!needsProcessing(files)) return;
+    const pass = plan(files);
+    if (!pass) return;
     e.stopImmediatePropagation();
     held.add(input);
+    // 0.5.2 (FR-01а): поле очищается сразу — сайт, читающий input.files напрямую, пока идёт обработка, видит пустое поле;
+    // повторный выбор того же файла после «Отмены» снова вызовет change
+    input.value = '';
     flow
-      .run(files)
+      .run(files, pass)
       .then((res) => {
-        if (res.action === 'cancel') {
-          input.value = ''; // повторный выбор того же файла снова вызовет change
-          return;
-        }
-        if (res.action === 'anonymized') remember(files, res);
-        // «оригинал» без ключа восстановления (0.5.1) — список тоже меняется: ключ не должен остаться в поле
-        if (res.action === 'anonymized' || res.files.length !== files.length) setInputFiles(input, res.files);
+        if (res.action === 'cancel') return;
+        remember(files, res);
+        // результат подставляется явно при любом решении: обезличенные файлы, «как есть», «оригинал» (без ключа восстановления)
+        setInputFiles(input, res.files);
         fireInputEvents(input);
       })
-      .catch(() => {
-        input.value = '';
-      })
+      .catch(() => {})
       .finally(() => held.delete(input));
   }
 
@@ -92,16 +103,17 @@ export function createInterceptor(flow, env = {}) {
   function onDrop(e) {
     if (bypass) return;
     const files = Array.from(e.dataTransfer?.files || []);
-    if (!needsProcessing(files)) return;
+    const pass = plan(files);
+    if (!pass) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     const target = e.composedPath?.()[0] ?? e.target;
     const init = { clientX: e.clientX, clientY: e.clientY, screenX: e.screenX, screenY: e.screenY, bubbles: true, cancelable: true, composed: true };
     flow
-      .run(files)
+      .run(files, pass)
       .then((res) => {
         if (res.action === 'cancel') return;
-        if (res.action === 'anonymized') remember(files, res);
+        remember(files, res);
         if (isFileInput(target)) {
           setInputFiles(target, res.files);
           fireInputEvents(target);
@@ -118,15 +130,16 @@ export function createInterceptor(flow, env = {}) {
   function onPaste(e) {
     if (bypass) return;
     const files = Array.from(e.clipboardData?.files || []);
-    if (!needsProcessing(files)) return;
+    const pass = plan(files);
+    if (!pass) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     const target = e.composedPath?.()[0] ?? e.target;
     flow
-      .run(files)
+      .run(files, pass)
       .then((res) => {
         if (res.action === 'cancel') return;
-        if (res.action === 'anonymized') remember(files, res);
+        remember(files, res);
         const dt = new win.DataTransfer();
         for (const f of res.files) dt.items.add(f);
         withBypass(() => target.dispatchEvent(new win.ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true, composed: true })));

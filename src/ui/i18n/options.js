@@ -92,9 +92,16 @@ export const OPTIONS_DICT = {
     pdf_mode: 'PDF с текстовым слоем',
     pdf_mode_markdown: 'Отправлять текстом Markdown (.anon.md)',
     pdf_mode_text: 'Отправлять простым текстом (.anon.txt)',
-    pdf_mode_off: 'Не перехватывать PDF',
+    pdf_mode_off: 'Не обезличивать PDF (спрашивать, загружать ли как есть)',
     pdf_mode_hint:
       'В чат уходит извлечённый текст с плейсхолдерами, а не PDF: подставить «[ФИО_1]» во вшитые шрифты PDF нельзя. Сканы без текстового слоя не обрабатываются — их можно загрузить как есть.',
+    // 0.5.2 (FR-04в): список «не спрашивать»
+    skip_ext: 'Не спрашивать о файлах с расширениями',
+    skip_ext_placeholder: 'например: png, jpg',
+    skip_ext_hint:
+      'Файлы, которые расширение не проверяет (картинки, архивы, .doc, .rtf), уходят в чат только после «Загрузить как есть» в панели. Перечислите через запятую расширения, о которых не спрашивать: такие файлы будут уходить сразу и без проверки. Поддерживаемые форматы (.docx, .xlsx, .pptx, .pdf, .txt, .md, .csv, .json, .log) добавить нельзя — они проверяются всегда.',
+    skip_ext_supported: 'Эти форматы расширение проверяет, их нельзя добавить в список: {list}',
+    skip_ext_invalid: 'Не похоже на расширение файла: {list}',
     ui_language: 'Язык интерфейса',
     ui_auto: 'Как в браузере',
 
@@ -322,9 +329,16 @@ export const OPTIONS_DICT = {
     pdf_mode: 'PDF with a text layer',
     pdf_mode_markdown: 'Send as Markdown text (.anon.md)',
     pdf_mode_text: 'Send as plain text (.anon.txt)',
-    pdf_mode_off: 'Do not intercept PDF',
+    pdf_mode_off: 'Do not anonymize PDF (ask whether to upload as is)',
     pdf_mode_hint:
       'The chat receives the extracted text with placeholders, not the PDF: “[NAME_1]” cannot be typeset in the fonts embedded in a PDF. Scans without a text layer are not processed — you can upload them as is.',
+    // 0.5.2 (FR-04c): the "don't ask" list
+    skip_ext: "Don't ask about files with these extensions",
+    skip_ext_placeholder: 'for example: png, jpg',
+    skip_ext_hint:
+      'Files the extension does not check (images, archives, .doc, .rtf) go to the chat only after "Upload as is" in the panel. List the extensions not to ask about, separated by commas: such files will go right away, without any check. Supported formats (.docx, .xlsx, .pptx, .pdf, .txt, .md, .csv, .json, .log) cannot be added — they are always checked.',
+    skip_ext_supported: 'The extension checks these formats, they cannot be added to the list: {list}',
+    skip_ext_invalid: 'Does not look like a file extension: {list}',
     ui_language: 'Interface language',
     ui_auto: 'Same as the browser',
 
