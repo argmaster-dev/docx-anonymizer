@@ -18,8 +18,10 @@
 # Безопасность (доработка по ревью 0.5.2): три задания с разными правами.
 #   build   — contents: read. Здесь и только здесь выполняется сторонний код (npm ci с install-скриптами зависимостей, тесты, сборка),
 #             поэтому у задания нет ни id-token (OIDC-токена для подписи), ни права писать в репозиторий. Результат — artifact.
-#   attest  — id-token: write, attestations: write, contents: read. Ни checkout, ни npm: download-artifact → sha256sum -c → actions/attest.
-#   release — только по тегу, contents: write. Ни checkout, ни npm: download-artifact → sha256sum -c → gh release create --draft.
+#   attest  — id-token: write, attestations: write, contents: read. Ни checkout, ни npm: download-artifact → сверка → actions/attest.
+#   release — только по тегу, contents: write. Ни checkout, ни npm: download-artifact → сверка → gh release create --draft.
+#   Сверка: эталон — SHA256SUMS из выхода задания build (base64, outputs.sums), а не файл из того же artifact: SHA256SUMS artifact
+#   должен совпасть с эталоном байт в байт (cmp), файлы — с его хешами (sha256sum -c); подмена artifact целиком не проходит.
 # Подпись аттестации — сертификат Sigstore на workflow (SAN …/.github/workflows/release.yml@<ref>), а не на задание: проверка
 # gh attestation verify --signer-workflow argmaster-dev/docx-anonymizer/.github/workflows/release.yml --source-ref refs/tags/v<версия>
 # та же, что при одном задании. Токен checkout не сохраняется в .git/config, GH_TOKEN — только в шагах с gh. Сторонние actions
@@ -54,6 +56,9 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       artifact: ${{ steps.version.outputs.artifact }}
+      # SHA256SUMS в base64 — эталон для attest и release: файлы и SHA256SUMS из artifact сверяются с ним, а не сами с собой
+      # (подмена artifact целиком иначе прошла бы проверку)
+      sums: ${{ steps.pack.outputs.sums }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -94,6 +99,7 @@ jobs:
           gh release download "$MODEL_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$MODEL_FILE" --dir release
           sha256sum "release/$MODEL_FILE"
       - name: npm run pack
+        id: pack
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
@@ -105,6 +111,7 @@ jobs:
           sha256sum "docx-anonymizer-$VERSION.zip" "docx-anonymizer-$VERSION-full.zip" "$MODEL_FILE" > SHA256SUMS
           cat SHA256SUMS
           cat SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+          echo "sums=$(base64 -w0 SHA256SUMS)" >> "$GITHUB_OUTPUT"
       # файлы лягут в корень artifact (общий каталог release/ отбрасывается)
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -130,9 +137,16 @@ jobs:
         with:
           name: ${{ needs.build.outputs.artifact }}
           path: release
-      - name: Verify SHA256SUMS
+      # эталон — выход задания build: SHA256SUMS из artifact должен совпасть с ним байт в байт, файлы — с его хешами
+      - name: Verify against build outputs
         working-directory: release
-        run: sha256sum -c SHA256SUMS
+        env:
+          SUMS: ${{ needs.build.outputs.sums }}
+        run: |
+          test -n "$SUMS"
+          printf '%s' "$SUMS" | base64 -d > "$RUNNER_TEMP/SHA256SUMS.expected"
+          cmp "$RUNNER_TEMP/SHA256SUMS.expected" SHA256SUMS
+          sha256sum -c "$RUNNER_TEMP/SHA256SUMS.expected"
       # Аттестация только архивов расширения: их собрало задание build. Пакет модели собран локально (см. шапку) — его
       # подлинность подтверждает SHA-256 в KNOWN_PACKS, а не аттестация.
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -154,9 +168,16 @@ jobs:
         with:
           name: ${{ needs.build.outputs.artifact }}
           path: release
-      - name: Verify SHA256SUMS
+      # эталон — выход задания build: SHA256SUMS из artifact должен совпасть с ним байт в байт, файлы — с его хешами
+      - name: Verify against build outputs
         working-directory: release
-        run: sha256sum -c SHA256SUMS
+        env:
+          SUMS: ${{ needs.build.outputs.sums }}
+        run: |
+          test -n "$SUMS"
+          printf '%s' "$SUMS" | base64 -d > "$RUNNER_TEMP/SHA256SUMS.expected"
+          cmp "$RUNNER_TEMP/SHA256SUMS.expected" SHA256SUMS
+          sha256sum -c "$RUNNER_TEMP/SHA256SUMS.expected"
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}

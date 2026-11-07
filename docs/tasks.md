@@ -1684,6 +1684,8 @@ WP14-B (отдельный клон) — 109 passed, 7 skipped.
 изменилась: subject — файлы архивов, подпись — сертификат Sigstore на workflow (SAN `…/.github/workflows/release.yml@<ref>`), а не на задание; команда
 README `gh attestation verify … --signer-workflow argmaster-dev/docx-anonymizer/.github/workflows/release.yml --source-ref refs/tags/v<версия>` остаётся верной,
 README не менялся. `actionlint` 1.7.12 (docker `rhysd/actionlint`, с shellcheck) — 0 ошибок в `release.yml` и `ci.yml`.
+По повторному ревью: эталон хешей — выход задания `build` (`sums` — `SHA256SUMS` в base64); `attest` и `release` сверяют `SHA256SUMS` из artifact с эталоном
+(`cmp`) и файлы — с хешами эталона (`sha256sum -c`), а не artifact сам с собой: подмена artifact целиком не проходит. actionlint — 0 ошибок.
 
 
 ## Бэклог 0.6 (решения владельца 07.11.2026)
