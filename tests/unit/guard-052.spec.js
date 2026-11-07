@@ -285,6 +285,28 @@ describe('интерсептор 0.5.2: любой файл, пустое пол
     expect(t.calls).toHaveLength(3);
   });
 
+  it('«Отмена» второй выборки после подстановки первой (повторное ревью 0.5.2): в поле остаётся результат первой, событий заново нет', async () => {
+    const t = setup();
+    const a = f('a.jpg');
+    t.choose([a]);
+    t.choose([f('b.jpg')]);
+    t.decide({ action: 'anonymized', files: [a] }, 0);
+    await tick();
+    expect(t.got).toEqual([['a.jpg']]);
+    t.decide({ action: 'cancel', files: [] }, 1);
+    await tick();
+    expect(t.input.files).toEqual([a]);
+    expect(t.got).toEqual([['a.jpg']]);
+    // сбой следующей выборки — тоже результат первой
+    t.choose([f('c.png')]);
+    expect(t.input.files).toHaveLength(0);
+    t.decide(Promise.reject(new Error('сбой')));
+    await tick();
+    await tick();
+    expect(t.input.files).toEqual([a]);
+    expect(t.got).toEqual([['a.jpg']]);
+  });
+
   it('сбой сценария — поле остаётся пустым, сайт ничего не получил', async () => {
     const t = setup();
     t.choose([f('архив.zip')]);

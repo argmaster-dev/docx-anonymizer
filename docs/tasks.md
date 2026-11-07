@@ -1621,6 +1621,11 @@ e2e `tests/e2e/guard-052.spec.js` — 13 тестов: К2 на выборе/п�
 лёгкий `docx-anonymizer-0.5.2.zip` — 6 624 716 байт, sha256 `bd205581b71a09ac5670b37c659fcd849c4a24a3177517320ed9b38964d0570f`; полный
 `docx-anonymizer-0.5.2-full.zip` — 36 236 341 байт, sha256 `1e6b23b7bcc0838f10048c64c6a08c3c1450baf5c643190f899db455e43b6bf5`.
 
+**Повторное ревью (низкая):** «Отмена» или сбой второй выборки после подстановки результата первой стирали его из поля — теперь `restore(input)` возвращает
+последний одобренный результат этого поля (`approved: WeakMap`, без повторных `input`/`change`), без него — очищает. Проба `rev052/probe/held2.mjs`, случай A:
+после отмены второй в поле `a.jpg`. Unit `guard-052.spec.js` (отмена и сбой). lint — чисто; `npm test` — 3245 passed | 113 skipped | 2 todo (3360);
+e2e `guard-052` + `intercept` — 37 passed, 1 skipped. `content.js` — **168 147 байт** (запас 813). Архивы после этой правки не пересобирались.
+
 ## WP14-B — релиз из GitHub Actions с аттестацией, воспроизводимость, README «Как проверить релиз» (версия 0.5.2)
 
 Цели Ц6–Ц8, критерии К10–К12. Зона: `.nvmrc`, `engines`, `scripts/pack.mjs`/`build.mjs` (только ради воспроизводимости), `.github/workflows/release.yml`

@@ -22,6 +22,7 @@ export function createInterceptor(flow, env = {}) {
   // в своё поле выбора, панель не откроется второй раз. Повторный выбор того же файла с диска даёт новые объекты — спросим снова
   const handed = new WeakSet();
   const held = new WeakMap(); // input → число выборок в обработке (вторая выборка в то же поле ждёт в очереди flow)
+  const approved = new WeakMap(); // input → последний одобренный результат, уже отданный сайту (повторное ревью 0.5.2)
   const hooked = new WeakSet();
   const roots = [];
   let observer = null;
@@ -64,6 +65,16 @@ export function createInterceptor(flow, env = {}) {
       else produced.add(fileSignature(f));
   }
 
+  /**
+   * «Отмена» или сбой выборки: в поле — последний одобренный результат (сайт его уже получил; событий заново не шлём), без него — пусто.
+   * Иначе отмена второй выборки стирала бы из поля результат первой, уже подставленный (повторное ревью 0.5.2).
+   */
+  function restore(input) {
+    const prev = approved.get(input);
+    if (prev) setInputFiles(input, prev);
+    else input.value = '';
+  }
+
   /* ---------- input[type=file] ---------- */
   function onInputEvent(e) {
     if (bypass) return;
@@ -91,18 +102,14 @@ export function createInterceptor(flow, env = {}) {
     flow
       .run(files, pass)
       .then((res) => {
-        if (res.action === 'cancel') {
-          input.value = ''; // «Отмена» — в поле ничего (в том числе файлов, выбранных во время обработки)
-          return;
-        }
+        if (res.action === 'cancel') return restore(input);
         remember(files, res);
         // результат подставляется явно при любом решении: обезличенные файлы, «как есть», «оригинал» (без ключа восстановления)
         setInputFiles(input, res.files);
+        approved.set(input, res.files);
         fireInputEvents(input);
       })
-      .catch(() => {
-        input.value = '';
-      })
+      .catch(() => restore(input))
       .finally(() => {
         const n = held.get(input) - 1;
         if (n > 0) held.set(input, n);
