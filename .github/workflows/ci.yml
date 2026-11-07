@@ -11,6 +11,9 @@
 # Версия 0.5 (WP12-A): actions — мажорные версии на рантайме Node 24 (checkout v7, setup-node v7, upload-artifact v7; сверено
 #   по релизам 26.10.2026), Node для сборки и тестов — LTS 24 (26 становится LTS 28.10.2026), раннер закреплён: ubuntu-24.04
 #   вместо ubuntu-latest (образ не сменится сам при переводе ubuntu-latest на новую версию Ubuntu).
+# Версия 0.5.2 (WP14-B, Ц6 docs/concept-0.5.2.md): Node — точная версия из .nvmrc (та же, что у release.yml и в engines
+#   package.json), чтобы архив, собранный здесь, в release.yml и у человека по README «Как проверить релиз», совпадал байт в байт.
+#   Архивы релиза собирает release.yml по тегу; архив здесь — проверка сборки, не релиз.
 name: CI
 
 on:
@@ -37,7 +40,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
       # xmllint — проверка XML результата в tests/integration/{sample,fixtures-docs}.spec.js (без него эти проверки пропускаются)
       - name: Install xmllint
@@ -67,7 +70,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       - name: Install Playwright Chromium

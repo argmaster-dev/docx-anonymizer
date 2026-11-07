@@ -1,0 +1,134 @@
+# Релиз (с версии 0.5.2, WP14-B, Ц7 docs/concept-0.5.2.md, К10–К11): архивы релиза собирает GitHub Actions, а не автор у себя,
+# и подписывает аттестацией происхождения (artifact attestations). «Архив собран из этого коммита этим workflow» подтверждает
+# GitHub: gh attestation verify <архив> --repo argmaster-dev/docx-anonymizer (README, «Как проверить релиз»).
+#
+# Запуск:
+#   - тег v* — lint, unit/integration, лёгкий и полный архив, SHA256SUMS, аттестация, ЧЕРНОВИК релиза с архивами, SHA256SUMS и пакетом
+#     модели. Публикует релиз владелец вручную. Тег ставится только на коммит с зелёным CI (ci.yml): e2e здесь не гоняются.
+#   - workflow_dispatch на ветке — то же без релиза: архивы и SHA256SUMS выкладываются artifact'ом запуска (проверить К10/К11 до тега).
+#
+# Пакет модели NER в CI не собирается (Python и GPU, npm run pack:model — локально): он скачивается из релиза модели (MODEL_TAG,
+# MODEL_FILE ниже) и передаётся в pack.mjs явно (--model=): build.mjs сверяет SHA-256 zip с KNOWN_PACKS (src/core/ner/known-packs.js)
+# и роняет сборку при несовпадении — подменённый пакет в полный архив не попадёт.
+#
+# Воспроизводимость (Ц6, К10): Node — из .nvmrc, зависимости — npm ci по package-lock.json, архив детерминирован (scripts/pack.mjs:
+# фиксированные порядок и время записей; .gitattributes: LF при любом core.autocrlf). Тот же коммит у человека даёт тот же SHA-256.
+#
+# Безопасность: права только у job и только нужные (contents: write — черновик релиза и скачивание пакета модели; id-token: write и
+# attestations: write — аттестация); токен checkout не сохраняется в .git/config, GH_TOKEN — только в шагах с gh. Сторонние actions
+# закреплены полным SHA коммита (версия — в комментарии; сверено по тегам через gh api 07.11.2026). Аттестация — actions/attest
+# (с v4 actions/attest-build-provenance — обёртка над ним, новым workflow рекомендован actions/attest; без входов predicate/sbom он
+# создаёт ту же SLSA build provenance). Кэш npm не используется: релизная сборка не берёт ничего из кэша, общего с другими запусками.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+env:
+  # Релиз, в котором лежит пакет модели, и имя файла (модель 1.2.1, опубликована с 0.5.1; sha256 — в KNOWN_PACKS)
+  MODEL_TAG: v0.5.1
+  MODEL_FILE: docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.1.zip
+
+jobs:
+  release:
+    name: lint, test, pack, attest, draft release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Version
+        id: version
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # тег обязан совпадать с версией package.json: по ней называются архивы и manifest.json
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::тег $GITHUB_REF_NAME не совпадает с версией package.json ($version)"
+            exit 1
+          fi
+          node --version
+          npm --version
+      # xmllint — проверка XML результата в tests/integration/{sample,fixtures-docs}.spec.js (как в ci.yml)
+      - name: Install xmllint
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+      - run: npm ci
+      - run: npm run lint
+      - name: npm test
+        run: npm test
+        env:
+          SKIP_LIBREOFFICE: '1'
+          CI: '1'
+      - name: Download model pack
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p release
+          gh release download "$MODEL_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$MODEL_FILE" --dir release
+          sha256sum "release/$MODEL_FILE"
+      - name: npm run pack
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          # --model= явно: неизвестный пакет роняет build.mjs (а не молча даёт только лёгкий архив, как поиск в release/)
+          npm run pack -- "--model=release/$MODEL_FILE"
+          cd release
+          test -f "docx-anonymizer-$VERSION.zip"
+          test -f "docx-anonymizer-$VERSION-full.zip"
+          sha256sum "docx-anonymizer-$VERSION.zip" "docx-anonymizer-$VERSION-full.zip" "$MODEL_FILE" > SHA256SUMS
+          cat SHA256SUMS
+          cat SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
+      # Аттестация только архивов расширения: их собрал этот workflow. Пакет модели собран локально (см. шапку) — его
+      # подлинность подтверждает SHA-256 в KNOWN_PACKS, а не аттестация.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            release/docx-anonymizer-${{ steps.version.outputs.version }}.zip
+            release/docx-anonymizer-${{ steps.version.outputs.version }}-full.zip
+      - name: Upload artifact (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ steps.version.outputs.version }}-${{ github.sha }}
+          path: |
+            release/docx-anonymizer-${{ steps.version.outputs.version }}.zip
+            release/docx-anonymizer-${{ steps.version.outputs.version }}-full.zip
+            release/SHA256SUMS
+          if-no-files-found: error
+      - name: Draft release (tag)
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          {
+            echo "Черновик собран GitHub Actions (release.yml) из коммита $GITHUB_SHA."
+            echo
+            echo "Как проверить архив: README, раздел «Как проверить релиз» — SHA-256 из SHA256SUMS,"
+            echo "\`gh attestation verify <архив> --repo $GITHUB_REPOSITORY\`, сборка из исходников тега."
+            echo
+            echo '```'
+            cat release/SHA256SUMS
+            echo '```'
+          } > release-notes.md
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "DOCX Anonymizer $VERSION" --notes-file release-notes.md \
+            "release/docx-anonymizer-$VERSION.zip" "release/docx-anonymizer-$VERSION-full.zip" \
+            release/SHA256SUMS "release/$MODEL_FILE"

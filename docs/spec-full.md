@@ -930,6 +930,15 @@ docx-anonymizer/
 оба воспроизводимы; запись `models/*.zip` в архиве — без сжатия (`level: 0`). Модели по-прежнему нет в git и в CI: там собирается только лёгкий архив.
 Порядок релиза: `npm run pack:model` → sha256 в `src/core/ner/known-packs.js` → `npm run pack` → в Releases три файла (лёгкий, полный, пакет модели).
 
+**Версия 0.5.2 (WP14-B, `docs/concept-0.5.2.md` Ц6–Ц8): релиз из GitHub Actions.** Архивы релиза собирает `.github/workflows/release.yml` по тегу `v*`
+(как задумано в «Упаковка и релиз» ниже): `npm ci` → lint → `npm test` → пакет модели из релиза GitHub (константы `MODEL_TAG`/`MODEL_FILE`) →
+`npm run pack -- --model=<zip>` (пакет не из `KNOWN_PACKS` роняет сборку) → `SHA256SUMS` → аттестация происхождения обоих архивов (`actions/attest`, SLSA
+build provenance) → черновик релиза (лёгкий, полный, пакет модели, `SHA256SUMS`); публикует владелец. `workflow_dispatch` — то же без релиза, архивы —
+артефакт запуска. e2e не гоняются: тег ставится на коммит с зелёным `ci.yml`. Локальная сборка архивов для релиза не используется. Воспроизводимость между
+машинами: Node — `.nvmrc` (24.22.2; `engines` ^24.22.0, `ci.yml` и `release.yml` — `node-version-file`), `.gitattributes` (`* text=auto eol=lf`: checkout
+с `core.autocrlf=true` иначе даёт CRLF и роняет сборку), esbuild `preserveSymlinks` (пути модулей в комментариях бандла не зависят от ссылки на
+`node_modules`). Проверка релиза пользователем — README, «Как проверить релиз». Пакет модели по-прежнему собирается локально.
+
 **Линтер:** ESLint 9 (flat config) + `eslint-plugin-security` + кастомные правила: запрет литералов с кириллицей вне `_locales` и фикстур; запрет `console.log` с переменными, кроме белого списка; запрет `fetch`/`XMLHttpRequest`/`WebSocket` вне `tools/`.
 
 **Упаковка и релиз:** `npm run package` → `dist/docx-anonymizer-<version>.zip` с `manifest.json` в корне, без sourcemaps, тестов и `tools/`; `version` берётся из `package.json` и дублируется в манифест при сборке. Релиз = git-тег `v<version>` + архив и его sha256 в GitHub Releases (workflow собирает архив из тега, чтобы любой мог сверить сборку с исходниками). Структура соответствует требованиям Web Store на случай будущей публикации.

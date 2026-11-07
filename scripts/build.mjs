@@ -65,6 +65,10 @@ const common = {
   minify: false,
   legalComments: 'none',
   charset: 'utf8',
+  // Пути модулей в комментариях бандла («// node_modules/fflate/…») — по пути импорта, а не по настоящему пути файла: иначе
+  // node_modules-ссылка на другой каталог (или раскладка pnpm) даёт «// ../<каталог>/node_modules/…» и другой архив
+  // (версия 0.5.2, WP14-B, Ц6 docs/concept-0.5.2.md; при обычном npm ci ссылок нет и вывод тот же)
+  preserveSymlinks: true,
   // __BUNDLED_MODEL__ — описание встроенного пакета модели или null (лёгкая сборка); читают background, options, popup (WP10-C)
   define: { __VERSION__: JSON.stringify(pkg.version), __BUNDLED_MODEL__: JSON.stringify(bundled) },
   logLevel: 'warning',

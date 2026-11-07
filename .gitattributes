@@ -1,0 +1,13 @@
+# Переводы строк в рабочем каталоге — LF на любой ОС (версия 0.5.2, WP14-B, Ц6 docs/concept-0.5.2.md). Без этого Git для Windows
+# (core.autocrlf=true по умолчанию) выдаёт LICENSE, HTML, локали и словари с CRLF: архив релиза получается другим, а вырезание
+# блока «Проверка конвейера (dev)» в scripts/build.mjs не находит его и роняет сборку. Файлы, закоммиченные с CRLF (CSV-фикстуры),
+# text=auto не трогает. Проверка — tests/integration/pack.spec.js («переводы строк»).
+* text=auto eol=lf
+*.png binary
+*.zip binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
+*.pdf binary
+*.wasm binary
+*.onnx binary

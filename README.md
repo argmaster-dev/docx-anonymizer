@@ -29,7 +29,9 @@
 
 **Privacy.** Zero network requests: the manifest's CSP is `connect-src 'self'`, ESLint forbids `fetch`/`XMLHttpRequest`/`WebSocket`/`EventSource`/`sendBeacon` in the source (one exception: `src/offscreen/package-fetch.js` reads the bundled model zip from the extension's own package, `chrome-extension://`), and an end-to-end test captures traffic of every browser target (pages, service worker, offscreen document and its worker) to prove nothing leaves the machine. Document contents and the replacement map live only in memory. Site access is granted per site on request (`optional_host_permissions`); nothing is injected elsewhere.
 
-**Install.** Chrome or Edge 132+. Node.js 22+, `npm ci`, `npm run build`, then load `dist/` as an unpacked extension at `chrome://extensions`. Or take a release archive: `docx-anonymizer-<version>-full.zip` (≈ 36 MB, with the NER model, installs itself) or the lite `docx-anonymizer-<version>.zip` (≈ 6 MB). A package for the Chrome Web Store (Edge Add-ons materials are for reference only; `npm run pack:store`, texts, screenshots and the privacy policy in [`docs/store/`](docs/store/checklist.md)) is prepared but not submitted. The extension gets no site access at install time: enable interception for a site from the extension menu and accept Chrome's access prompt.
+**Install.** Chrome or Edge 132+. Node.js from `.nvmrc` (24), `npm ci`, `npm run build`, then load `dist/` as an unpacked extension at `chrome://extensions`. Or take a release archive (built by GitHub Actions since 0.5.2, see below): `docx-anonymizer-<version>-full.zip` (≈ 36 MB, with the NER model, installs itself) or the lite `docx-anonymizer-<version>.zip` (≈ 6 MB). A package for the Chrome Web Store (Edge Add-ons materials are for reference only; `npm run pack:store`, texts, screenshots and the privacy policy in [`docs/store/`](docs/store/checklist.md)) is prepared but not submitted. The extension gets no site access at install time: enable interception for a site from the extension menu and accept Chrome's access prompt.
+
+**Verifying a release (0.5.2+).** Release archives are built by GitHub Actions (`.github/workflows/release.yml`) from the tagged commit, not on the author's machine. Three levels, from simple to strict: (1) compare the file's SHA-256 with `SHA256SUMS` in the release (`sha256sum -c SHA256SUMS --ignore-missing`; Windows: `Get-FileHash <file> -Algorithm SHA256`); (2) check the build provenance attestation signed in the repository's GitHub Actions: `gh attestation verify docx-anonymizer-<version>.zip --repo argmaster-dev/docx-anonymizer` (GitHub CLI 2.49+, logged in) — it names the workflow, tag and commit; (3) rebuild it: `git checkout v<version>`, Node from `.nvmrc`, `npm ci && npm run pack` prints the same SHA-256 for the lite archive; for the full one put the model package from the release into `release/` first. Time zone, locale, umask, directory path and `core.autocrlf` do not change the result (checked on a Linux workstation against a clean `node:24.22.2-bookworm` container; not checked on Windows or macOS). The model package has no attestation — it is built locally; its SHA-256 is pinned in `src/core/ner/known-packs.js`. No-network claims can be checked in the same tag: ESLint rules in `eslint.config.js` and the e2e test `tests/e2e/nfr.spec.js`, which records requests of every browser target over CDP. Details — section «Как проверить релиз».
 
 **Update.** No auto-update: unpacked extensions are updated by hand. Unzip the new release over the same folder (or into a new one) and press "Update" at `chrome://extensions` (for a new folder: remove the old entry, load the new one). The extension ID is pinned by the `key` field in `manifest.json`, so settings, granted site access and the installed NER model survive an update from any folder; a new model package in the full archive installs itself on the first run. Versions 0.2 and older had no key: upgrading from them means a fresh install.
 
@@ -37,7 +39,7 @@
 
 **Limits.** No scans or images (OCR is planned for 0.6), no PDF → PDF; PDF layout is tested on Chromium and LibreOffice PDFs; health data and special categories (religion, ethnicity, political views, criminal record) are found only by an explicit label or column header; all quality numbers come from synthetic data and a genre corpus written by one author — no real-world documents are in the measurements, so always review the result; AI files are restored from `.docx`/`.docm`/`.xlsx`/`.xlsm`/`.pptx`/`.pptm`/`.csv`/`.json`/`.md`/`.txt`, not PDF; embedded OLE objects are not anonymized (warned about or removed); single surnames of third parties without a label are found only by the NER model; the voice assistant name "Алиса" (Alice) is left unmasked only in an unambiguous context ("Яндекс Алиса", "voice assistant Алиса", a list of AI products) and is masked when a verb or "and + a name" follows it in the same clause; placeholder-like markers such as "⟦ORG_1⟧" or "⟦ORG_1.INN⟧" (category code, number and an optional requisite field from a closed list) are not turned into entities by the model, any other value in such brackets ("⟦ИВАНОВ⟧", "⟦ФИО_1.ПЕТРОВ⟧") is masked; Russian case restoration skips ambiguous prepositions. The UI is Russian-first with full English localization.
 
-**Development.** `npm test` (Vitest, ~3 300 tests), `npm run e2e` (Playwright, Chromium with the extension), `npm run lint`, `npm run pack` (reproducible lite and full release archives), `npm run pack:store` (store package without the `key` field, checked against store requirements), `npm run store:shots` (store and README screenshots), `npm run pack:model`, `npm run gen-pdf-fixtures`, `npm run gen-genre-fixtures` / `gen-heldout-fixtures` (genre corpus and held-out set), `npm run eval-genres` (precision/recall per genre, category and mode; `NER_MODEL_DIR=…` adds the model, `PRIVATE_FIXTURES=1` adds your own documents from the git-ignored `tests/fixtures/private/`, printing counts only), `tools/ner-train` (Python/uv training pipeline). License: Apache 2.0 since 0.5.1 (`LICENSE`, `NOTICE`; versions 0.1–0.5.0 and model pack 1.2.0 were released under MIT and stay under it); the names and icons are covered by [`TRADEMARKS.md`](TRADEMARKS.md); dictionaries, ONNX Runtime Web (MIT), fflate (MIT), pdf.js (Apache-2.0) and the model's base `rubert-tiny2` (MIT) carry their own notices.
+**Development.** `npm test` (Vitest, ~3 300 tests), `npm run e2e` (Playwright, Chromium with the extension), `npm run lint`, `npm run pack` (reproducible lite and full release archives — locally for checking; releases are built by `release.yml` on a `v*` tag), `npm run pack:store` (store package without the `key` field, checked against store requirements), `npm run store:shots` (store and README screenshots), `npm run pack:model`, `npm run gen-pdf-fixtures`, `npm run gen-genre-fixtures` / `gen-heldout-fixtures` (genre corpus and held-out set), `npm run eval-genres` (precision/recall per genre, category and mode; `NER_MODEL_DIR=…` adds the model, `PRIVATE_FIXTURES=1` adds your own documents from the git-ignored `tests/fixtures/private/`, printing counts only), `tools/ner-train` (Python/uv training pipeline). License: Apache 2.0 since 0.5.1 (`LICENSE`, `NOTICE`; versions 0.1–0.5.0 and model pack 1.2.0 were released under MIT and stay under it); the names and icons are covered by [`TRADEMARKS.md`](TRADEMARKS.md); dictionaries, ONNX Runtime Web (MIT), fflate (MIT), pdf.js (Apache-2.0) and the model's base `rubert-tiny2` (MIT) carry their own notices.
 
 **What's new in 0.5.1.** A recovery key (`*.mapping.json`, renamed or password-protected) attached to a chat is refused instead of uploaded; AI answers in `.txt`/`.md`/`.log` encoded in Windows-1251 or UTF-16 are restored and saved in the same encoding; a link to the [@sitimlab](https://t.me/sitimlab) Telegram channel in the extension menu; the code and the fine-tuned NER model are now licensed under Apache 2.0 (model pack 1.2.1 — the same weights as 1.2.0), with `NOTICE` and [`TRADEMARKS.md`](TRADEMARKS.md).
 
@@ -87,7 +89,7 @@
 
 Расширение пока не опубликовано в магазинах, оно ставится как распакованное. Пакет для Chrome Web Store (материалы для Edge Add-ons — справочно, подача не планируется), тексты листинга, скриншоты и политика конфиденциальности подготовлены ([`docs/store/`](docs/store/checklist.md), `npm run pack:store`), подача — отдельное решение. Нужен Chrome или Edge версии 132 и новее.
 
-1. Возьмите сборку: соберите её сами — Node.js 22+, `npm ci`, `npm run build`, появится каталог `dist/` — или распакуйте в отдельную папку архив релиза (`npm run pack`, см. ниже; архивы выкладываются в [GitHub Releases](https://github.com/argmaster-dev/docx-anonymizer/releases)). Архивов два:
+1. Возьмите сборку: соберите её сами — Node.js из `.nvmrc` (24), `npm ci`, `npm run build`, появится каталог `dist/` — или распакуйте в отдельную папку архив релиза из [GitHub Releases](https://github.com/argmaster-dev/docx-anonymizer/releases) (с 0.5.2 его собирает GitHub Actions; как убедиться, что архив собран из исходников, — [«Как проверить релиз»](#как-проверить-релиз)). Архивов два:
    - **полный** `docx-anonymizer-<версия>-full.zip` (≈ 36 МБ) — с моделью NER: при первом запуске она ставится сама, ничего скачивать и импортировать не нужно;
    - **лёгкий** `docx-anonymizer-<версия>.zip` (≈ 6 МБ) — без модели: всё работает правилами и словарями, модель можно добавить позже (раздел «Распознавание имён моделью»).
 2. Chrome → `chrome://extensions` → включите «Режим разработчика».
@@ -126,9 +128,9 @@
 
 ### Архив релиза
 
-`npm run pack` собирает расширение и пакует его в `release/docx-anonymizer-<версия>.zip` — лёгкий архив (≈ 6,3 МБ, `manifest.json` — в корне архива; сеть не нужна, `dist/` не затрагивается). Если в `release/` есть пакет модели из списка проверенных (`npm run pack:model`, см. «Распознавание имён моделью»; при нескольких берётся пакет с наибольшей версией, zip, которых нет в списке, пропускаются с предупреждением) или он указан явно (`npm run pack -- --model=<zip>`), рядом появляется полный `release/docx-anonymizer-<версия>-full.zip` (≈ 36 МБ): то же расширение плюс `models/<zip пакета>` (байт в байт, без повторного сжатия) и `models/index.json`. В полный архив попадает только пакет из списка проверенных (`src/core/ner/known-packs.js`), иначе сборка падает. Оба архива воспроизводимы: один и тот же код даёт побайтно один и тот же файл, в том числе на машинах с разными часовыми поясами; команда печатает точный размер и sha256 каждого (здесь размеры округлены, чтобы не устаревать с каждым изменением кода). Большая часть лёгкого архива — WebAssembly ONNX Runtime (`vendor/ort-wasm-simd-threaded.wasm`, 13,6 МБ, в архиве ≈ 3,6 МБ) и pdf.js. В CI модели нет — там собирается только лёгкий архив.
+`npm run pack` собирает расширение и пакует его в `release/docx-anonymizer-<версия>.zip` — лёгкий архив (≈ 6,3 МБ, `manifest.json` — в корне архива; сеть не нужна, `dist/` не затрагивается). Если в `release/` есть пакет модели из списка проверенных (`npm run pack:model`, см. «Распознавание имён моделью»; при нескольких берётся пакет с наибольшей версией, zip, которых нет в списке, пропускаются с предупреждением) или он указан явно (`npm run pack -- --model=<zip>`), рядом появляется полный `release/docx-anonymizer-<версия>-full.zip` (≈ 36 МБ): то же расширение плюс `models/<zip пакета>` (байт в байт, без повторного сжатия) и `models/index.json`. В полный архив попадает только пакет из списка проверенных (`src/core/ner/known-packs.js`), иначе сборка падает. Оба архива воспроизводимы: один и тот же код даёт побайтно один и тот же файл на другой машине — с другими часовым поясом, локалью, umask, путём к каталогу и `core.autocrlf` (`.gitattributes` оставляет LF), — если Node взят из `.nvmrc`, а зависимости поставлены `npm ci`; команда печатает точный размер и sha256 каждого (здесь размеры округлены, чтобы не устаревать с каждым изменением кода). Большая часть лёгкого архива — WebAssembly ONNX Runtime (`vendor/ort-wasm-simd-threaded.wasm`, 13,6 МБ, в архиве ≈ 3,6 МБ) и pdf.js. В CI (`ci.yml`) модели нет — там собирается только лёгкий архив, для проверки.
 
-Порядок релиза: `npm run pack:model -- --id=<id>` → sha256 пакета в `KNOWN_PACKS` (`src/core/ner/known-packs.js`) → `npm run pack` → в Releases выкладываются три файла: полный архив, лёгкий архив и пакет модели (для тех, у кого лёгкий).
+Порядок релиза (с 0.5.2): архивы собирает GitHub Actions, локальная сборка для релиза не используется. Пакет модели по-прежнему собирается локально (`npm run pack:model -- --id=<id>`, нужны Python и GPU), его sha256 вносится в `KNOWN_PACKS` (`src/core/ner/known-packs.js`), пакет выкладывается в релиз; новый пакет — это и новые константы `MODEL_TAG`/`MODEL_FILE` в `.github/workflows/release.yml`. Тег `v<версия>` на коммит с зелёным CI запускает `release.yml`: `npm ci`, lint, unit- и интеграционные тесты, скачивание пакета модели из релиза, `npm run pack -- --model=…` (пакет не из `KNOWN_PACKS` роняет сборку), `SHA256SUMS`, аттестация происхождения обоих архивов и черновик релиза с четырьмя файлами: полный архив, лёгкий архив, пакет модели (для тех, у кого лёгкий) и `SHA256SUMS`. Публикует черновик владелец. Ручной запуск `release.yml` (`workflow_dispatch`) на ветке делает то же без релиза — архивы и `SHA256SUMS` остаются артефактом запуска. Локальный `npm run pack` — для проверки ([«Как проверить релиз»](#как-проверить-релиз)).
 
 **Пакет для магазинов.** `npm run pack:store` собирает `release/docx-anonymizer-<версия>-store.zip` — полный архив с последним проверенным пакетом модели (сейчас 1.2.1; без него команда падает), но с манифестом **без поля `key`**: магазин назначает свой идентификатор. После сборки пакет проверяется по требованиям Chrome Web Store и Edge Add-ons (манифест в корне, MV3, описание ≤ 132 символов, нет `key`/`update_url`/`host_permissions`, нет внешних скриптов, модель — ровно один проверенный пакет, размер ≤ 45 МБ); при нарушении команда завершается с ошибкой. `-- --lite` — пакет без модели, только чтобы создать продукт в Edge, если полный не загружается через браузер. Чек-лист подачи, тексты листинга, политика конфиденциальности, изображения и заметка о загрузке в Edge — [`docs/store/`](docs/store/checklist.md); скриншоты и плитки пересоздаёт `npm run store:shots`.
 
@@ -316,6 +318,48 @@ PDF с текстовым слоем перехватывается так же,
 - Пакет модели NER (встроенный из полного архива или импортированный вами) хранится в хранилище браузера на этом компьютере; документы и карта замен — нет. Встроенная модель копируется из файлов самого расширения (`chrome-extension://`), это не сетевой запрос.
 - Доступ к сайтам выдаёте вы сами, по одному сайту; без доступа расширение на сайте ничего не делает.
 
+## Как проверить релиз
+
+С версии 0.5.2 архивы релиза собирает GitHub Actions (`.github/workflows/release.yml`) из коммита, на который поставлен тег, а не автор на своём компьютере. Проверить архив можно на трёх уровнях, от простого к строгому. Уровни 1 и 2 действуют с 0.5.2: в более ранних релизах нет `SHA256SUMS` и аттестаций.
+
+1. **SHA-256.** В релизе лежит `SHA256SUMS` — хеши лёгкого и полного архива и пакета модели. Хеш скачанного файла должен совпасть со строкой из него:
+
+   ```sh
+   sha256sum -c SHA256SUMS --ignore-missing     # Linux, в папке со скачанными файлами
+   shasum -a 256 docx-anonymizer-<версия>.zip   # macOS
+   ```
+
+   ```powershell
+   Get-FileHash .\docx-anonymizer-<версия>.zip -Algorithm SHA256   # Windows PowerShell; регистр букв в хеше не важен
+   ```
+
+   Совпадение значит, что файл скачан целым и это тот самый файл релиза. Из чего он собран, показывают уровни 2 и 3.
+
+2. **Аттестация происхождения.** Нужен GitHub CLI 2.49 или новее с входом в аккаунт (`gh auth login`):
+
+   ```sh
+   gh attestation verify docx-anonymizer-<версия>.zip --repo argmaster-dev/docx-anonymizer
+   gh attestation verify docx-anonymizer-<версия>-full.zip --repo argmaster-dev/docx-anonymizer \
+     --signer-workflow argmaster-dev/docx-anonymizer/.github/workflows/release.yml --source-ref refs/tags/v<версия>
+   ```
+
+   Проверка проходит, только если для SHA-256 этого файла есть аттестация, подписанная в GitHub Actions репозитория `argmaster-dev/docx-anonymizer` (Sigstore); вывод называет workflow, тег и коммит, из которых собран архив. Подпись ставит GitHub при запуске workflow, а что делает workflow, видно в файле `release.yml` на том же коммите. Пакет модели аттестации не имеет: он собирается локально (Python, GPU), а его подлинность задаёт SHA-256 в `src/core/ner/known-packs.js` — с ним сверяются полный архив при сборке и расширение при импорте пакета.
+
+3. **Собрать самому.**
+
+   ```sh
+   git clone https://github.com/argmaster-dev/docx-anonymizer.git
+   cd docx-anonymizer
+   git checkout v<версия>
+   nvm install          # Node из .nvmrc; можно поставить ту же версию любым другим способом
+   npm ci
+   npm run pack
+   ```
+
+   `npm run pack` печатает sha256 лёгкого архива `release/docx-anonymizer-<версия>.zip` — он совпадает со строкой в `SHA256SUMS` релиза. Для полного архива до `npm run pack` положите в `release/` пакет модели из того же релиза (`docx-anonymizer-ner-….zip`): рядом соберётся `release/docx-anonymizer-<версия>-full.zip` с хешем из `SHA256SUMS`. Сеть нужна только для `git clone` и `npm ci`. Часовой пояс, локаль, umask, путь к каталогу и `core.autocrlf` на результат не влияют; одинаковые архивы на рабочей машине с Linux и в чистом контейнере `node:24.22.2-bookworm` проверены, на Windows и macOS — нет.
+
+Отсутствие сетевых запросов проверяется по исходникам того же тега: правила ESLint в `eslint.config.js` запрещают в `src/` `fetch`, `XMLHttpRequest`, `WebSocket`, `EventSource` и `navigator.sendBeacon` (единственный `fetch` — `src/offscreen/package-fetch.js`, он читает файлы из пакета самого расширения), а e2e-тест `tests/e2e/nfr.spec.js` через CDP браузера (`tests/e2e/helpers/network.js`) записывает запросы всех целей — страниц, service worker, offscreen-документа и его воркера — и падает при любом http(s)-запросе наружу (`npm run e2e`). Подробнее — [«Приватность»](#приватность).
+
 ## Ограничения
 
 - NER-модель — **необязательный** пакет (в полном архиве уже есть, в лёгком — нет): без него имена и названия находятся правилами — по меткам («в лице», «ИНН:»), шаблонам, базе знаний сторон из реквизитов и словарям имён и фамилий. Модель тоже ошибается (см. числа выше): проверяйте результат.
@@ -342,7 +386,7 @@ PDF с текстовым слоем перехватывается так же,
 
 [![CI](https://github.com/argmaster-dev/docx-anonymizer/actions/workflows/ci.yml/badge.svg)](https://github.com/argmaster-dev/docx-anonymizer/actions/workflows/ci.yml)
 
-CI (`.github/workflows/ci.yml`) запускается при push и pull request в `main`: lint, тесты, сборка и лёгкий архив релиза, затем e2e в headless Chromium. Пакета модели в CI нет, поэтому полный архив и тесты с моделью идут только локально (ниже).
+CI (`.github/workflows/ci.yml`) запускается при push и pull request в `main`: lint, тесты, сборка и лёгкий архив (проверка сборки), затем e2e в headless Chromium. Пакета модели в CI нет, поэтому тесты с моделью идут только локально (ниже). Архивы релиза собирает `.github/workflows/release.yml` по тегу `v*` (или вручную, `workflow_dispatch`, без релиза) — см. [«Архив релиза»](#архив-релиза). Node для CI, релиза и локальной сборки — из `.nvmrc`.
 
 | Команда | Что делает |
 |---|---|
@@ -351,7 +395,7 @@ CI (`.github/workflows/ci.yml`) запускается при push и pull reque
 | `npm run lint` | ESLint |
 | `npm run build` / `build:dev` | сборка в `dist/` (dev — с sourcemaps) |
 | `npm run build:e2e` | сборка для e2e в `dist-e2e/`: в манифест добавлен `host_permissions: <all_urls>`, потому что нативный диалог разрешений Playwright нажать не может; `npm run build:e2e -- --with-model=<zip>` — полная e2e-сборка с моделью (`--with-model` принимает и `npm run build`; только пакет из `KNOWN_PACKS`) |
-| `npm run pack` | архивы релиза: лёгкий `release/docx-anonymizer-<версия>.zip` и, если есть пакет модели в `release/` (или `-- --model=<zip>`), полный `…-full.zip` |
+| `npm run pack` | архивы релиза: лёгкий `release/docx-anonymizer-<версия>.zip` и, если есть пакет модели в `release/` (или `-- --model=<zip>`), полный `…-full.zip`; локально — для проверки, релиз собирает `release.yml` |
 | `npm run pack:store` | пакет для Chrome Web Store и Edge Add-ons `release/docx-anonymizer-<версия>-store.zip`: полный архив с моделью, манифест без `key`, проверка требований магазинов (`-- --lite` — без модели, только для создания продукта в Edge) |
 | `npm run store:shots` | скриншоты магазинов `docs/store/images/` (1280×800 ru/en, промо-плитки, значок, логотип) и README `docs/screenshots/` — e2e-сборка с моделью из `release/` и Playwright на нейтральной локальной странице с синтетическими фикстурами (`SHOTS_ONLY=store\|promo\|readme`; «до и после» — через LibreOffice и `pdftoppm`) |
 | `npm run pack:model -- --id=<id>` | пакет модели NER `release/docx-anonymizer-ner-<id>-<версия>.zip` из `models-src/<id>/` (детерминированный, печатает sha256) |

@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { packRelease, FIXED_TIME, findModelZip, latestKnownPack, latestModelZipPath } from '../../scripts/pack.mjs';
 import { KNOWN_PACKS, findKnownPack } from '../../src/core/ner/known-packs.js';
 import { compareVersions } from '../../src/core/ner/pack.js';
@@ -256,11 +257,43 @@ describe('архив релиза', () => {
     expect([FIXED_TIME.getFullYear(), FIXED_TIME.getMonth(), FIXED_TIME.getDate(), FIXED_TIME.getHours()]).toEqual([2000, 0, 1, 12]);
   });
 
-  it('архив воспроизводим: повторная сборка даёт те же байты', () => {
-    const again = packRelease({ outDir: join(out, 'again') }).lite;
-    expect(again.sha256).toBe(first.sha256);
-    expect(again.size).toBe(first.size);
-  }, 60000);
+  // С 0.5.2 (WP14-B, Ц6, К10) повторная сборка идёт отдельным процессом в другом окружении: часовой пояс, локаль, umask и
+  // текущий каталог не те, что у первой (архив релиза собирает раннер GitHub, а сверяет любой человек у себя)
+  it('архив воспроизводим: повторная сборка (другие TZ, LANG, umask, cwd) даёт те же байты', () => {
+    const dir = join(out, 'again');
+    mkdirSync(dir);
+    const env = { ...process.env, TZ: 'Pacific/Kiritimati', LANG: 'C', LC_ALL: 'C' };
+    // только лёгкий архив (CLI pack.mjs взял бы и пакет модели из release/)
+    const code = `import { packRelease } from ${JSON.stringify(pathToFileURL(join(process.cwd(), 'scripts/pack.mjs')).href)}; packRelease({ outDir: process.argv[1] });`;
+    const args = ['--input-type=module', '-e', code, dir];
+    if (process.platform === 'win32') execFileSync(process.execPath, args, { cwd: dir, env, stdio: 'pipe' });
+    else execFileSync('sh', ['-c', 'umask 077 && exec "$@"', 'sh', process.execPath, ...args], { cwd: dir, env, stdio: 'pipe' });
+    const again = readFileSync(join(dir, first.name));
+    expect(createHash('sha256').update(again).digest('hex')).toBe(first.sha256);
+    expect(again.length).toBe(first.size);
+  }, 90000);
+
+  // Источники расхождений между машинами (WP14-B, Ц6): CR из checkout с autocrlf, абсолютные пути сборщика и временного каталога,
+  // пути модулей вне корня репозитория (node_modules-ссылка). Сравнение локальной сборки и сборки в чистом контейнере — docs/tasks.md.
+  it('архив не зависит от машины: без CR, без путей к репозиторию и временному каталогу, пути модулей — от корня (К10 0.5.2)', () => {
+    const text = Object.keys(zip).filter((n) => /\.(?:m?js|html|css|json|txt|md)$|(?:^|\/)(?:LICENSE|NOTICE)[^/]*$/.test(n));
+    expect(text.length).toBeGreaterThan(30);
+    for (const n of text) {
+      const s = strFromU8(zip[n]);
+      expect(s.includes('\r'), `${n}: CR`).toBe(false);
+      expect(s.includes(process.cwd()), `${n}: путь к репозиторию`).toBe(false);
+      expect(s.includes('docx-anon-pack-'), `${n}: временный каталог сборки`).toBe(false);
+      if (n.endsWith('.js')) expect(s, `${n}: путь модуля вне корня`).not.toMatch(/^\s*\/\/ \.\.\//m);
+    }
+  });
+
+  it('переводы строк: .gitattributes оставляет LF в файлах сборки при любом core.autocrlf (Git для Windows; К10 0.5.2)', () => {
+    expect(readFileSync('.gitattributes', 'utf8')).toMatch(/^\* text=auto eol=lf$/m);
+    if (!existsSync('.git')) return; // исходники не из git — проверяется только сам файл
+    const files = ['LICENSE', 'NOTICE', 'src/popup/popup.html', 'src/_locales/ru/messages.json', 'vendor/dict/ru-surnames.txt'];
+    const attrs = execFileSync('git', ['check-attr', 'eol', '--', ...files], { encoding: 'utf8' });
+    for (const f of files) expect(attrs, f).toContain(`${f}: eol: lf`);
+  });
 });
 
 // Выбор пакета модели для полного архива (версия 0.4, WP11-C3): --model= главнее; из release/ — zip с sha из KNOWN_PACKS и
