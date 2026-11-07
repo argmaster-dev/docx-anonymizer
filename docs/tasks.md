@@ -1560,6 +1560,51 @@ CSS zoom). 4) Реплика пользователя убрана из `chat-de
 Цели Ц6–Ц8, критерии К10–К12. Зона: `.nvmrc`, `engines`, `scripts/pack.mjs`/`build.mjs` (только ради воспроизводимости), `.github/workflows/release.yml`
 (новый), `.github/workflows/ci.yml` — не трогать без нужды, README — раздел «Как проверить релиз» (ru и англ.), тесты сборки.
 
+**Сделано** (коммит `8c73a63`):
+1. **Node закреплён (Ц6):** `.nvmrc` = `24.22.2` (LTS Krypton, 27.10.2026); `engines` `^24.22.0` в `package.json` и корне `package-lock.json` (на Node 22
+   `npm ci` только предупреждает `EBADENGINE`); `ci.yml` — `node-version-file: .nvmrc` в обоих заданиях (больше ничего в `ci.yml` не менялось).
+2. **Источники расхождений между машинами (Ц6).** Сборка в чистом контейнере совпала с локальной сразу; искал дальше и нашёл два:
+   - checkout с `core.autocrlf=true` (по умолчанию в Git для Windows) — LICENSE, HTML, локали, словари с CRLF, и `build.mjs` **падает** (не находит блок
+     «Проверка конвейера (dev)» в `popup.html`). Исправлено `.gitattributes` (`* text=auto eol=lf`, бинарные типы явно): та же сборка с autocrlf даёт тот
+     же sha256. Пять CSV-фикстур, закоммиченных с CRLF, `text=auto` не трогает (`git status` чистый);
+   - `node_modules` — ссылка на другой каталог (или раскладка pnpm): esbuild пишет в комментарии бандла настоящий путь `// ../<каталог>/node_modules/…`,
+     меняются `worker.js`, `options.js`, `restore.js` и имена модулей `chunks/`. Исправлено `preserveSymlinks: true` в `scripts/build.mjs`; при обычном
+     `npm ci` вывод байт в байт прежний.
+   - Не влияют (проверено): порядок файлов (`readdirSync().sort()` — по кодовым единицам, не по локали), mtime (`FIXED_TIME`), права/umask (fflate не
+     пишет атрибуты файлов), TZ, LANG, путь к каталогу (кириллица и пробел), версия Node 22.22.1 / 24.22.2 и npm 9 / 11 (zlib не используется — fflate).
+3. **`.github/workflows/release.yml` (Ц7):** тег `v*` и `workflow_dispatch`; одно задание на `ubuntu-24.04`, `permissions: {}` на уровне workflow, у задания
+   `contents: write`, `id-token: write`, `attestations: write`. Шаги: checkout (`persist-credentials: false`) → setup-node по `.nvmrc` (без кэша npm) →
+   проверка «тег = `v<версия package.json>`» → xmllint → `npm ci` → lint → `npm test` (`SKIP_LIBREOFFICE`, `CI`) → `gh release download` пакета модели
+   (`MODEL_TAG: v0.5.1`, `MODEL_FILE: docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.1.zip`) → `npm run pack -- --model=release/$MODEL_FILE` (явный
+   `--model=`: `build.mjs` сверяет **sha256** zip с `KNOWN_PACKS` и падает; поиск в `release/` без него молча собрал бы только лёгкий) → проверка наличия
+   обоих архивов → `SHA256SUMS` (лёгкий, полный, пакет модели; в сводку запуска) → `actions/attest` на оба архива → для dispatch `upload-artifact`
+   (архивы + `SHA256SUMS`), для тега `gh release create --draft --verify-tag` с четырьмя файлами. e2e не гоняются. Actions закреплены SHA (сверено
+   `gh api …/git/ref/tags/…`): checkout `3d3c42e5…` v7.0.1, setup-node `949feb24…` v7.1.0, attest `1e69f48a…` v4.2.2, upload-artifact `cf430e03…` v7.0.2.
+   **Отклонение:** вместо `actions/attest-build-provenance` — `actions/attest`: с v4 первый — обёртка над вторым, README upstream рекомендует новым workflow
+   `actions/attest`; без входов predicate/sbom он создаёт ту же SLSA build provenance. Пакет модели не аттестуется (собран не этим workflow).
+   `actionlint` 1.7.12 (с shellcheck, docker `rhysd/actionlint`): 0 ошибок в `release.yml` и `ci.yml`.
+4. **README (Ц8):** раздел «Как проверить релиз» после «Приватность» — SHA-256 (`sha256sum -c SHA256SUMS --ignore-missing`, `shasum -a 256`, `Get-FileHash`),
+   `gh attestation verify` (простая форма и строгая с `--signer-workflow`/`--source-ref`), сборка из тега (`nvm install`, `npm ci`, `npm run pack`; для полного —
+   пакет модели в `release/`), абзац о сетевых запросах (ESLint в `eslint.config.js`, e2e `tests/e2e/nfr.spec.js` + `helpers/network.js`). Английская сводка —
+   «Verifying a release (0.5.2+)», Install (Node из `.nvmrc`), Development. «Установка» шаг 1, «Архив релиза» (новый порядок релиза), «Разработка» — релиз
+   собирает GitHub Actions, локальный `npm run pack` — для проверки. `docs/spec-full.md` (абзац 0.5.2 после «Порядок релиза»), `docs/contracts.md` (строка
+   карты кода).
+
+**Тесты:** `tests/integration/pack.spec.js` — повторная сборка теперь отдельным процессом с `TZ=Pacific/Kiritimati`, `LANG=C`, `umask 077`, другим cwd
+(ожидание то же — тот же sha256); новый «архив не зависит от машины» (в текстовых файлах архива нет CR, пути к репозиторию, временного каталога
+`docx-anon-pack-`, путей модулей `// ../`); новый «переводы строк» (`.gitattributes` с `* text=auto eol=lf`, `git check-attr eol` = lf для LICENSE, NOTICE,
+`popup.html`, локали, словаря). `npm run lint` чисто; `npm test` — 99 passed | 2 skipped файлов, 3229 passed | 113 skipped | 2 todo; e2e на `HEAD` + изменения
+WP14-B (отдельный клон) — 109 passed, 7 skipped.
+
+**Числа** (коммит `8c73a63`, версия в нём ещё 0.5.1):
+- локально: Linux, Node 22.22.1 / npm 9.2.0, клон с `core.autocrlf=true` в каталоге с кириллицей и пробелом, `TZ=America/Los_Angeles`, `LANG=ru_RU.UTF-8`,
+  umask 0002; контейнер: `node:24.22.2-bookworm`, Node 24.22.2 / npm 11.19.1, `git clone` в `/tmp/build/repo`, `TZ=Pacific/Kiritimati`, `LANG=C`, umask 077,
+  другой HOME. **Совпали:** лёгкий 6 629 814 байт `3dde62bb739044e9057e17d8813fae55497781b3da09cc3d36f50ba3c174a10d`, полный (модель 1.2.1)
+  36 241 405 байт `46bda17a25359b1755a000bb4446cbaf0bd7f9eb643a5e6cf0e5b75b0b3b913c`. Тот же sha256 у лёгкого архива 0.5.1, скачанного из релиза GitHub `v0.5.1`
+  (собран локально 05.11.2026), — код сборки с тех пор не менялся.
+- Без `.gitattributes`: клон с autocrlf — сборка падает; с symlink `node_modules` без `preserveSymlinks` — лёгкий `1fbd22a9…` вместо `3dde62bb…`.
+- Сравнение с раннером GitHub (К10) и `gh attestation verify` (К11) — после ручного запуска `release.yml` координатором.
+
 
 ## Бэклог 0.6 (решения владельца 07.11.2026)
 
