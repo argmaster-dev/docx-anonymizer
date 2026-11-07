@@ -1641,6 +1641,20 @@ WP14-B (отдельный клон) — 109 passed, 7 skipped.
 - Без `.gitattributes`: клон с autocrlf — сборка падает; с symlink `node_modules` без `preserveSymlinks` — лёгкий `1fbd22a9…` вместо `3dde62bb…`.
 - Сравнение с раннером GitHub (К10) и `gh attestation verify` (К11) — после ручного запуска `release.yml` координатором.
 
+**Доработка по ревью 0.5.2 (находка 3).** В `release.yml` одно задание с `contents: write`, `id-token: write`, `attestations: write` выполняло
+`npm ci` и тесты: install-скрипт скомпрометированной зависимости получил бы OIDC-токен и мог подписать любой файл от имени `release.yml`. Теперь три задания:
+- `build` — `contents: read`: checkout без сохранения токена, Node из `.nvmrc`, проверка тега, xmllint, `npm ci`, lint, `npm test`, пакет модели
+  (`gh release download`, хватает `contents: read` — репозиторий публичный), `npm run pack -- --model=…`, `SHA256SUMS`, `upload-artifact` (оба архива,
+  пакет модели, `SHA256SUMS`); версия и имя артефакта — выходы задания;
+- `attest` (`needs: build`) — `contents: read`, `id-token: write`, `attestations: write`; без checkout и npm: `download-artifact` → `sha256sum -c SHA256SUMS`
+  → `actions/attest` на оба архива; для `workflow_dispatch` на этом всё — файлы уже лежат артефактом;
+- `release` (`needs: [build, attest]`, только по тегу) — `contents: write`; без checkout и npm: `download-artifact` → `sha256sum -c` →
+  `gh release create --draft --verify-tag --repo $GITHUB_REPOSITORY`.
+`actions/download-artifact` закреплён SHA `9000827ccba6bdab643e8b6fd33ac0654aef8333` (v8.0.2, `gh api …/git/ref/tags/v8.0.2`). Привязка аттестации не
+изменилась: subject — файлы архивов, подпись — сертификат Sigstore на workflow (SAN `…/.github/workflows/release.yml@<ref>`), а не на задание; команда
+README `gh attestation verify … --signer-workflow argmaster-dev/docx-anonymizer/.github/workflows/release.yml --source-ref refs/tags/v<версия>` остаётся верной,
+README не менялся. `actionlint` 1.7.12 (docker `rhysd/actionlint`, с shellcheck) — 0 ошибок в `release.yml` и `ci.yml`.
+
 
 ## Бэклог 0.6 (решения владельца 07.11.2026)
 

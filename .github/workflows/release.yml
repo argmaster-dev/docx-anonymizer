@@ -5,7 +5,8 @@
 # Запуск:
 #   - тег v* — lint, unit/integration, лёгкий и полный архив, SHA256SUMS, аттестация, ЧЕРНОВИК релиза с архивами, SHA256SUMS и пакетом
 #     модели. Публикует релиз владелец вручную. Тег ставится только на коммит с зелёным CI (ci.yml): e2e здесь не гоняются.
-#   - workflow_dispatch на ветке — то же без релиза: архивы и SHA256SUMS выкладываются artifact'ом запуска (проверить К10/К11 до тега).
+#   - workflow_dispatch на ветке — сборка и аттестация без релиза: архивы, SHA256SUMS и пакет модели — artifact запуска (проверить
+#     К10/К11 до тега).
 #
 # Пакет модели NER в CI не собирается (Python и GPU, npm run pack:model — локально): он скачивается из релиза модели (MODEL_TAG,
 # MODEL_FILE ниже) и передаётся в pack.mjs явно (--model=): build.mjs сверяет SHA-256 zip с KNOWN_PACKS (src/core/ner/known-packs.js)
@@ -14,8 +15,14 @@
 # Воспроизводимость (Ц6, К10): Node — из .nvmrc, зависимости — npm ci по package-lock.json, архив детерминирован (scripts/pack.mjs:
 # фиксированные порядок и время записей; .gitattributes: LF при любом core.autocrlf). Тот же коммит у человека даёт тот же SHA-256.
 #
-# Безопасность: права только у job и только нужные (contents: write — черновик релиза и скачивание пакета модели; id-token: write и
-# attestations: write — аттестация); токен checkout не сохраняется в .git/config, GH_TOKEN — только в шагах с gh. Сторонние actions
+# Безопасность (доработка по ревью 0.5.2): три задания с разными правами.
+#   build   — contents: read. Здесь и только здесь выполняется сторонний код (npm ci с install-скриптами зависимостей, тесты, сборка),
+#             поэтому у задания нет ни id-token (OIDC-токена для подписи), ни права писать в репозиторий. Результат — artifact.
+#   attest  — id-token: write, attestations: write, contents: read. Ни checkout, ни npm: download-artifact → sha256sum -c → actions/attest.
+#   release — только по тегу, contents: write. Ни checkout, ни npm: download-artifact → sha256sum -c → gh release create --draft.
+# Подпись аттестации — сертификат Sigstore на workflow (SAN …/.github/workflows/release.yml@<ref>), а не на задание: проверка
+# gh attestation verify --signer-workflow argmaster-dev/docx-anonymizer/.github/workflows/release.yml --source-ref refs/tags/v<версия>
+# та же, что при одном задании. Токен checkout не сохраняется в .git/config, GH_TOKEN — только в шагах с gh. Сторонние actions
 # закреплены полным SHA коммита (версия — в комментарии; сверено по тегам через gh api 07.11.2026). Аттестация — actions/attest
 # (с v4 actions/attest-build-provenance — обёртка над ним, новым workflow рекомендован actions/attest; без входов predicate/sbom он
 # создаёт ту же SLSA build provenance). Кэш npm не используется: релизная сборка не берёт ничего из кэша, общего с другими запусками.
@@ -38,14 +45,15 @@ env:
   MODEL_FILE: docx-anonymizer-ner-rubert-tiny2-ner-ruen-1.2.1.zip
 
 jobs:
-  release:
-    name: lint, test, pack, attest, draft release
+  build:
+    name: lint, test, pack
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      artifact: ${{ steps.version.outputs.artifact }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -59,6 +67,7 @@ jobs:
         run: |
           version="$(node -p 'require("./package.json").version')"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "artifact=release-$version-$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           # тег обязан совпадать с версией package.json: по ней называются архивы и manifest.json
           if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "v$version" ]; then
             echo "::error::тег $GITHUB_REF_NAME не совпадает с версией package.json ($version)"
@@ -76,6 +85,7 @@ jobs:
         env:
           SKIP_LIBREOFFICE: '1'
           CI: '1'
+      # репозиторий публичный: для скачивания из релиза хватает токена с contents: read
       - name: Download model pack
         env:
           GH_TOKEN: ${{ github.token }}
@@ -95,28 +105,62 @@ jobs:
           sha256sum "docx-anonymizer-$VERSION.zip" "docx-anonymizer-$VERSION-full.zip" "$MODEL_FILE" > SHA256SUMS
           cat SHA256SUMS
           cat SHA256SUMS >> "$GITHUB_STEP_SUMMARY"
-      # Аттестация только архивов расширения: их собрал этот workflow. Пакет модели собран локально (см. шапку) — его
+      # файлы лягут в корень artifact (общий каталог release/ отбрасывается)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.version.outputs.artifact }}
+          path: |
+            release/docx-anonymizer-${{ steps.version.outputs.version }}.zip
+            release/docx-anonymizer-${{ steps.version.outputs.version }}-full.zip
+            release/${{ env.MODEL_FILE }}
+            release/SHA256SUMS
+          if-no-files-found: error
+
+  attest:
+    name: attest
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.build.outputs.artifact }}
+          path: release
+      - name: Verify SHA256SUMS
+        working-directory: release
+        run: sha256sum -c SHA256SUMS
+      # Аттестация только архивов расширения: их собрало задание build. Пакет модели собран локально (см. шапку) — его
       # подлинность подтверждает SHA-256 в KNOWN_PACKS, а не аттестация.
       - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:
           subject-path: |
-            release/docx-anonymizer-${{ steps.version.outputs.version }}.zip
-            release/docx-anonymizer-${{ steps.version.outputs.version }}-full.zip
-      - name: Upload artifact (workflow_dispatch)
-        if: github.event_name == 'workflow_dispatch'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+            release/docx-anonymizer-${{ needs.build.outputs.version }}.zip
+            release/docx-anonymizer-${{ needs.build.outputs.version }}-full.zip
+
+  release:
+    name: draft release
+    needs: [build, attest]
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: release-${{ steps.version.outputs.version }}-${{ github.sha }}
-          path: |
-            release/docx-anonymizer-${{ steps.version.outputs.version }}.zip
-            release/docx-anonymizer-${{ steps.version.outputs.version }}-full.zip
-            release/SHA256SUMS
-          if-no-files-found: error
-      - name: Draft release (tag)
-        if: github.event_name == 'push' && github.ref_type == 'tag'
+          name: ${{ needs.build.outputs.artifact }}
+          path: release
+      - name: Verify SHA256SUMS
+        working-directory: release
+        run: sha256sum -c SHA256SUMS
+      - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
           {
             echo "Черновик собран GitHub Actions (release.yml) из коммита $GITHUB_SHA."
