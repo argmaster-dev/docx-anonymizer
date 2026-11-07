@@ -80,7 +80,7 @@ popup / content / options / restore ──port "docx"──► background (route
 | `src/ui/components/dom.js` | `h`, `clear` — построение DOM без `innerHTML` | 0.1 |
 | `schemas/` | `mapping` (с 0.5 — `oneOf`: открытая карта `$defs/mapping` или зашифрованный ключ `$defs/encrypted`), `protocol`, `model-pack` (JSON Schema draft 2020-12) | WP5; WP8; WP12-D |
 | `scripts/build.mjs`, `pack.mjs` | сборка `dist/` (`--e2e` → `dist-e2e/`, `--with-model=<zip>` — полная), архивы релиза: лёгкий и `-full` (§6.8) | фундамент; WP6, WP8, WP10-C |
-| `.github/workflows/release.yml`, `.nvmrc`, `.gitattributes` | релиз по тегу `v*`: lint, тесты, пакет модели из релиза GitHub, `npm run pack -- --model=`, `SHA256SUMS`, аттестация происхождения архивов, черновик релиза (`workflow_dispatch` — без релиза, архивы артефактом); Node для CI, релиза и локальной сборки — `.nvmrc`; LF в рабочем каталоге при любом `core.autocrlf` (воспроизводимость архива, `tests/integration/pack.spec.js`) | WP14-B |
+| `.github/workflows/release.yml`, `.nvmrc`, `.gitattributes` | релиз по тегу `v*` тремя заданиями: `build` (`contents: read`, без OIDC — lint, тесты, пакет модели из релиза GitHub, `npm run pack -- --model=`, `SHA256SUMS`, artifact), `attest` (`id-token`/`attestations: write`, без checkout и npm — download-artifact, `sha256sum -c`, аттестация происхождения архивов), `release` (только по тегу, единственное с `contents: write` — черновик релиза); `workflow_dispatch` — `build` и `attest`, архивы артефактом; Node для CI, релиза и локальной сборки — `.nvmrc`; LF в рабочем каталоге при любом `core.autocrlf` (воспроизводимость архива, `tests/integration/pack.spec.js`) | WP14-B |
 | `scripts/pack-store.mjs` | пакет для Chrome Web Store и Edge Add-ons (`npm run pack:store`): `packOne` из `pack.mjs` с доводкой `prepare` — манифест без `key`/`update_url` (`storeManifest`), полный архив с последним пакетом из `KNOWN_PACKS`; `checkStorePackage` — проверки требований магазинов; `--lite` — без модели (только создать продукт в Edge). Чек-лист — `docs/store/checklist.md` | WP12-F |
 | `scripts/store-shots.mjs`, `tests/shots/`, `playwright.shots.config.js` | снимки магазинов `docs/store/images/` и README `docs/screenshots/` (`npm run store:shots`): e2e-сборка с моделью, нейтральная страница `tests/shots/pages/chat-demo.html`, синтетические фикстуры; в `npm run e2e` не входят | WP12-F |
 | `scripts/make-dicts.mjs` | генератор словарей ФИО из закреплённых коммитов (`npm run dicts`, `--check`) → `vendor/dict/` | WP7; WP12-A |
@@ -1611,12 +1611,15 @@ Apache 2.0, все пути `vendor/…` из NOTICE есть в архиве), 
 **Перехват** (`content/interceptor.js`): `createInterceptor(flow, {win?, isSkipped?})` — `isSkipped(file)` (content.js: `isSkipped(f, settings)` из `files.js`,
 настройки читаются в момент события; по умолчанию — ничего). `plan(files) → pass[] | null`: `pass[i]` — файл уходит без панели (объект в `handed` — исходный файл,
 который мы сами отдали сайту; сигнатура в `produced` — наш обезличенный результат; `isSkipped`); все `true` (или файлов нет) — `null`, событие не трогаем.
-Иначе `flow.run(files, pass)`. Путь `input`: `stopImmediatePropagation`, `held`, **`input.value = ''` сразу** (FR-01а); после решения `remember(files, res)`
-(исходные объекты → `handed: WeakSet<File>`, новые → `produced` по сигнатуре) и **всегда** `setInputFiles(input, res.files)` + `input`/`change` в `withBypass`;
-`cancel` и сбой — поле остаётся пустым. Пути `drop`/`paste` — как раньше, `remember` при любом решении.
+Иначе `flow.run(files, pass)`. Путь `input`: `stopImmediatePropagation`, `held: WeakMap<input, число выборок в обработке>`, **`input.value = ''` сразу**
+(FR-01а); после решения `remember(files, res)` (исходные объекты → `handed: WeakSet<File>`, новые → `produced` по сигнатуре) и **всегда**
+`setInputFiles(input, res.files)` + `input`/`change` в `withBypass`; `cancel` и сбой — явно `input.value = ''`. Поле в `held` с пустым `input.files` — второе
+событие той же выборки (`input` → `change`), гасится; с непустым — новая выборка, пока открыта панель (ревью 0.5.2): тоже забирается из поля сразу и встаёт
+в очередь `flow.run` за текущей. Пути `drop`/`paste` — как раньше, `remember` при любом решении.
 **Файлы** (`content/files.js`): `extOf(file)` — расширение строчными без точки (`''` — без расширения); `isSkipped(file, settings)` — есть расширение, `fileKind(file) === null`
 и оно в `settings.skipExtensions` (поддерживаемый формат и PDF — никогда, даже при списке, поправленном мимо валидатора); `sniffRecoveryKey` читает начало
-текстовых **и неподдерживаемых** файлов (`fileKind` `null` или `'text'`).
+текстовых **и неподдерживаемых** файлов (`fileKind` `null` или `'text'`) и PDF без сигнатуры `%PDF-` в первых 1024 байтах (ревью 0.5.2: иначе при
+`pdfMode: 'off'` — «как есть», при включённом — `PDF_INVALID` с «как есть»); DOCX/XLSX/PPTX не читаются.
 **Сценарий** (`content/flow.js`): `run(originals, pass = [])`; `procIdx` — файлы панели (`!pass[i]`), `unsup` — из них `!isSupported` (в том числе PDF при `pdfMode: 'off'`),
 `anaIdx` — остальные (анализ, батч — при `anaIdx.length > 1`, сбой `BATCH_BEGIN` — только по ним). `failUnsupported(i)` → `panel.setError(k, {code: 'UNSUPPORTED',
 message, retry: false, note: 'unsupportedNote', optional: true})`; текст — `unsupportedPdfOff` (PDF), `unsupportedExt {ext}`, `unsupportedNoExt` (`ui/i18n/panel.js`);
@@ -1630,7 +1633,9 @@ message, retry: false, note: 'unsupportedNote', optional: true})`; текст �
 **Контрольные документы** (`docs/verify/`, генератор `scripts/gen-verify-docs.mjs`, `--check` — прогон через конвейер ядра, `NER_MODEL_DIR` — с моделью):
 `01-dogovor.docx`, `02-reestr-klientov.xlsx`, `03-spravka.pdf` (Chromium `page.pdf`), `04-pasport-foto.png` (скриншот Chromium), `05-trudnye-sluchai.docx`;
 `expected.json` — `{docs: [{file, title, expect: [{value, category, mayMiss?}], stays: [], unsupported?}]}`; README — таблицы масок и инструкция.
-**Бюджет** `content.js` (`tests/integration/pack.spec.js`, 165 КиБ = 168 960 байт): 167 588 байт (0.5.1 — 168 389): комментарии внутри литералов `settings.js`
+Воспроизводимо: DOCX/XLSX — свой ZIP с фиксированной датой; в PDF `/CreationDate` и `/ModDate` заменяются фиксированной датой той же длины (`fixPdfDates`,
+`/ID` Chromium не пишет), при той же версии Playwright все пять файлов совпадают байт в байт.
+**Бюджет** `content.js` (`tests/integration/pack.spec.js`, 165 КиБ = 168 960 байт): 167 962 байта после доработки по ревью (первая сдача — 167 588; 0.5.1 — 168 389): комментарии внутри литералов `settings.js`
 (MIGRATIONS, defaultSettings, VALIDATORS) перенесены в JSDoc над ними — esbuild без minify сохраняет комментарии в литералах и в вызовах.
 **Тесты:** unit `tests/unit/guard-052.spec.js` (валидатор, разбор, `isSkipped`, миграция 4 → 5, экспорт, интерсептор на поддельном `window`: пустое поле,
 явная подстановка «оригинала» и «как есть», `handed`); e2e `tests/e2e/guard-052.spec.js` (К2 на трёх путях × 5 видов файлов, PDF при `off`, К3, К5,
